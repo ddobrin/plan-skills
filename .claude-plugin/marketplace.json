@@ -1,14 +1,14 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
-  "name": "plan-commands",
-  "description": "Role-based agent swarm and adversarial validation skills that drive features through a spec → plan → execute → audit → ship lifecycle.",
+  "name": "plan-skills",
+  "description": "Role-based Agent Swarm and adversarial validation skills that drive features through a spec → plan → execute → audit → ship lifecycle.",
   "owner": {
     "name": "ddobrin"
   },
   "plugins": [
     {
       "name": "plan",
-      "description": "A swarm of role-based skills (product-owner, architect, engineer, simplifier, auditor) plus adversarial spec/plan/implementation validators that drive a feature, bug fix, or refactor through a gated spec → plan → execute → audit → commit lifecycle.",
+      "description": "A Swarm of role-based skills (product-owner, architect, engineer, simplifier, auditor) plus adversarial spec/plan/implementation validators that drive a feature, bug fix, or refactor through a gated spec → plan → execute → audit → commit lifecycle.",
       "author": {
         "name": "ddobrin"
       },
