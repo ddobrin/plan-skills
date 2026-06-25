@@ -10,7 +10,7 @@ These 9 skills are designed to be used together. A single orchestrator (`starter
 
 | Family | Skills | Purpose |
 |---|---|---|
-| **Swarm roles** | `starter`, `product-owner`, `architect`, `engineer`, `simplifier`, `auditor` | Perform the lifecycle — discover, spec, plan, build, refine, verify. |
+| **Swarm roles** | `starter`, `product-owner` (or `visual-product-owner`), `architect` (or `visual-architect`), `engineer`, `simplifier`, `auditor` | Perform the lifecycle — discover, spec, plan, build, refine, verify. |
 | **Adversarial validators** | `spec-validator`, `plan-validator`, `implementation-validator` | Attack each artifact at its phase boundary with an independent 3-skeptic panel; keep only findings confirmed by a 2-of-3 majority. |
 
 ---
@@ -72,12 +72,28 @@ Translates raw, ambiguous human ideas into rigorous, testable specifications, an
 - **Signature move — the "Grill Loop":** interrogates the user (≤3 Socratic questions at a time) about edge cases, limits, error states, and UX until ambiguity is resolved. No clear acceptance criteria → not a spec.
 - **Constraints:** writes no code and no architecture — defines *what* and *why*, never *how*; never guesses an unspecified edge case.
 
+#### 2·alt. `visual-product-owner` — The Visual Product Owner (Spec author + Renderer)
+A **drop-in alternative to `product-owner`** for specs that deserve a human-optimized review surface. Runs the identical Grill Loop and writes the same `spec.md`, then renders that spec as a self-contained, browsable HTML document.
+
+- **Produces:** the same `plans/active_milestones/{moniker}/spec.md` (structure-identical, so `spec-validator`/`architect` consume it unchanged) and the same `plans/00-ROADMAP.md` update **plus** `plans/active_milestones/{moniker}/visual-spec.html`.
+- **The visual file:** a single, zero-build HTML page (opens via `file://`) with eight spec-native surfaces — overview, user-story cards, color-coded Given/When/Then acceptance criteria, user-flow diagrams, edge-cases/constraints, wireframes/prototype, open questions, and author comments. Diagrams use Mermaid + a raw-source fallback; both via pinned CDN with SRI.
+- **Use it instead of `product-owner`** at the Phase-1 spec step when the spec review benefits from visuals (UX-heavy or acceptance-criteria-dense work). The HTML is a **derived view** of `spec.md` — if they disagree, `spec.md` wins.
+- **Constraints:** same as `product-owner` (no code, no architecture, no guessing) plus: must always still emit `spec.md`; self-contained single file; the visual shows *what & why* only (no file maps, code, or system internals — those are the Architect's); comments are static author callouts, not a live system.
+
 #### 3. `architect` — The Chief Software Architect (Planner)
 Reads the spec, investigates the actual codebase, and produces a detailed, micro-stepped implementation plan. **Read-only on source code.**
 
 - **Produces:** `plans/active_milestones/{moniker}/plan.md` (optionally `data-model.md` / `api-contracts.md`).
 - **Plan shape:** tasks grouped into **parallel execution groups** (tasks in a group must touch independent files); every task includes a test/"characterize behavior" step before any refactor — *"if there is no test, there is no refactoring."*
 - **Constraints:** never edits source; never commits; verification steps must name exact commands, not "ensure it works".
+
+#### 3·alt. `visual-architect` — The Visual Architect (Planner + Renderer)
+A **drop-in alternative to `architect`** for plans that deserve a human-optimized review surface. Does the identical planning work, then renders the plan as a self-contained, browsable HTML document.
+
+- **Produces:** the same `plans/active_milestones/{moniker}/plan.md` (structure-identical, so `plan-validator`/`engineer`/`auditor` consume it unchanged) **plus** `plans/active_milestones/{moniker}/visual-plan.html`.
+- **The visual file:** a single, zero-build HTML page (opens via `file://`) with nine surfaces — overview, architecture diagrams, file map, annotated code, OpenAPI-style API cards, schema map, wireframes/prototype, open questions, and author comments. Diagrams use Mermaid + a raw-source fallback; code uses highlight.js; both via pinned CDN with SRI.
+- **Use it instead of `architect`** at the Phase-2 planning step when the human review gate benefits from visuals (architecture-heavy or ambiguous work). The HTML is a **derived view** of `plan.md` — if they disagree, `plan.md` wins.
+- **Constraints:** same as `architect` (read-only source, never commits) plus: must always still emit `plan.md`; self-contained single file; comments are static author callouts, not a live system.
 
 #### 4. `engineer` — The Expert Builder
 Implements the plan exactly, one atomic step at a time, under strict Test-Driven Development.
@@ -134,8 +150,10 @@ The swarm communicates through files under `plans/`. Knowing this layout is the 
 | `plans/00-ROADMAP.md` | `product-owner` | Master roadmap — releases, milestones, and their status. |
 | `plans/active_milestones/{moniker}/context.md` | `product-owner` | The context report, moved in once the milestone is opened. |
 | `plans/active_milestones/{moniker}/spec.md` | `product-owner` | The specification (Gherkin acceptance criteria). |
+| `plans/active_milestones/{moniker}/visual-spec.html` | `visual-product-owner` | Self-contained, browsable companion to `spec.md` for spec review (zero build; opens in any browser). |
 | `plans/active_milestones/{moniker}/plan.md` | `architect` | Micro-stepped plan with parallel execution groups; engineer checks off todos here. |
 | `plans/active_milestones/{moniker}/data-model.md` · `api-contracts.md` | `architect` | Optional supporting design artifacts. |
+| `plans/active_milestones/{moniker}/visual-plan.html` | `visual-architect` | Self-contained, browsable companion to `plan.md` for the human review gate (zero build; opens in any browser). |
 | `plans/audit/AUDIT_[Plan_Name].md` | `auditor` | Evidence-based audit report (the `plans/audit/` dir is git-ignored). |
 
 ---
