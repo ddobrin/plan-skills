@@ -87,10 +87,23 @@ you tally on raw text, nothing reaches quorum. Normalize to `file:line::id` befo
 
 > **Tuning the gate:** 2-of-3 is the default. For a security-critical change, drop to **any-one** so a single skeptic's real catch isn't lost. When fix-churn is expensive, raise to **unanimous**.
 
-### 7. Act
+### 7. Persist the review
+Write the aggregated result as a Markdown report to
+`plans/active_milestones/{moniker}/adversarial-reviews/implementation-validation.md`
+(create the folder if it does not exist). `{moniker}` is the active milestone whose
+`plan.md`/`spec.md` this diff implements — the orchestrator knows it; if the diff belongs
+to no milestone, write to `plans/adversarial-reviews/implementation-validation.md` and say
+so. **Always write this file, even on a clean pass** — "zero confirmed defects, here is
+what was attacked" is the evidence the gate produced, and the **severity calibration**
+table is the highest-value thing this stage emits. A re-validation after fixes goes to
+`implementation-validation-r2.md`, `-r3.md`, … so each round is preserved. Fill the **The
+Review Document** template below verbatim.
+
+### 8. Act
 - Fix **confirmed** defects (and **failed claims**) at their calibrated severity, highest first.
 - Surface **unconfirmed** findings for human eyeballing.
 - Report the calibration explicitly: "3 findings claimed Critical; all 3 confirmed real but downgraded to High because impact is conditional on concurrent requests." This is the single most useful sentence the panel produces — see Calibration Note.
+- Tick the **Actions Taken** checklist in the review file as you fix each defect.
 
 ## Finding-Hunt Template (default)
 
@@ -198,6 +211,77 @@ The orchestrator aggregates skeptic JSON into:
   "failed_claims": [ { "claim": "...", "refuted_by": 2, "severity": "high" } ],
   "calibration": [ { "id": "...", "claimedSeverity": "critical", "correctedSeverity": "high", "why": "conditional on concurrency" } ]
 }
+```
+
+## The Review Document
+
+This is what step 7 writes to
+`plans/active_milestones/{moniker}/adversarial-reviews/implementation-validation.md`. It is
+the human-readable face of the JSON above — a reviewer should grasp what is broken, at what
+*corrected* severity, without opening an agent transcript. Use `date +%Y-%m-%d` for the
+date. Severity icons: 🔴 critical · 🟠 high · 🟡 medium · ⚪ low. The **Severity
+Calibration** table is the centerpiece — never omit it when any severity was revised. Drop
+the **Failed Claims** section in finding-hunt mode. Keep the other sections even when empty
+(write `_None._`).
+
+```markdown
+# Implementation Adversarial Review — {change title}
+
+> `implementation-validator` · 3 independent skeptics, no shared scratchpad · default-to-reject (`isReal=false` / `refuted=true`) · {2-of-3} majority gate · severity calibration
+
+| Field | Value |
+|---|---|
+| Milestone | `{moniker}` |
+| Diff | `{BASE_SHA}..{HEAD_SHA}` |
+| Date | {YYYY-MM-DD} |
+| Mode | {finding-hunt · claim-refutation} |
+| Gate | {2-of-3 · any-one · unanimous} |
+| Result | **{N} confirmed defects · {F} failed claims · {M} unconfirmed** — highest corrected severity **{high}** |
+
+## Verdict
+
+{1–3 plain-language sentences. Lead with the calibration headline, e.g. "3 findings claimed Critical; all confirmed real but downgraded to High — impact is gated on concurrent requests, not every run."}
+
+## Confirmed Defects (≥ 2 votes)
+
+> Fix at the **corrected** severity, highest first.
+
+### 🔴 `{id}` — {one-line title}  · severity {high} · {votes}/3
+- **Location:** `{file}:{location}`
+- **Attack:** {the input / sequence / edge case that triggers it}
+- **Evidence:** `{file:line}` — {the specific code that proves it}
+- **Why it breaks:** {reasoning}
+- **Fix:** {concrete remediation}
+
+_(repeat per confirmed defect)_
+
+## Severity Calibration
+
+| `id` | claimed | corrected | why |
+|---|---|---|---|
+| `{id}` | 🔴 critical | 🟠 high | {impact gated on concurrent requests, not every run} |
+
+## Failed Claims  _(claim-refutation mode only)_
+
+| claim | refuted by | severity | attack |
+|---|---|---|---|
+| "{claim}" | {2}/3 | 🟠 high | {input that falsified it} |
+
+## Unconfirmed (FYI · 1 vote)
+
+| `id` | severity | location | note |
+|---|---|---|---|
+| `{id}` | ⚪ low | `{file}:{loc}` | surfaced, not blocking |
+
+## Attacks That Failed
+
+- {short note per serious attack that found no defect} — corroborates robustness here.
+
+## Actions Taken
+
+- [x] Fixed `{id}` at {corrected severity}
+- [ ] Surfaced calibration delta to user: "{the headline sentence}"
+- [ ] Re-validated after fixes → `implementation-validation-r2.md` _(or: not needed)_
 ```
 
 ## Worked Example

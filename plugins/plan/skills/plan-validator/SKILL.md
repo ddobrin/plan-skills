@@ -77,10 +77,22 @@ ordering bug should collapse to one entry, not three.
 
 > **Tuning the gate:** 2-of-3 is the default. Drop to **any-one** for a high-risk plan (irreversible migrations, prod data); raise to **unanimous** when re-planning churn is costly.
 
-### 7. Act
+### 7. Persist the review
+Write the aggregated result as a Markdown report to
+`plans/active_milestones/{moniker}/adversarial-reviews/plan-validation.md` (create the
+folder if it does not exist). Derive `{moniker}` from the plan's path — the plan you
+reviewed lives at `plans/active_milestones/{moniker}/plan.md`; if you were handed a bare
+plan with no milestone, write to `plans/adversarial-reviews/plan-validation.md` and say so.
+**Always write this file, even on a clean pass** — "zero confirmed findings, here are the
+assumptions verified" is the evidence the gate produced. A re-run after a material reorder
+goes to `plan-validation-r2.md`, `-r3.md`, … so every round is preserved. Fill the **The
+Review Document** template below verbatim.
+
+### 8. Act
 - For each **confirmed** finding, apply its `fix` to the plan (reorder steps, add a missing prerequisite step, add a rollback/verify step, correct an assumption).
 - List **unconfirmed** findings for the user.
 - If you reordered or added steps materially, re-run the panel once.
+- Tick the **Actions Taken** checklist in the review file as you apply each fix.
 
 ## Skeptic Prompt Template
 
@@ -151,6 +163,64 @@ Each skeptic returns the JSON above. The orchestrator aggregates into:
   "unconfirmed": [ { "id": "...", "votes": 1, "...": "..." } ],
   "first_domino": "id voted most often as the earliest blocking failure"
 }
+```
+
+## The Review Document
+
+This is what step 7 writes to
+`plans/active_milestones/{moniker}/adversarial-reviews/plan-validation.md`. It is the
+human-readable face of the JSON above — a reviewer should grasp where the plan breaks
+without opening an agent transcript. Use `date +%Y-%m-%d` for the date. Severity icons:
+🔴 high · 🟠 medium · 🟡 low. The **First domino** is the headline; lead with it. Every
+confirmed finding must carry its `file:line` evidence — an uncited prediction is a guess,
+not a finding. Keep every section, even when empty (write `_None._`).
+
+```markdown
+# Plan Adversarial Review — {plan title}
+
+> `plan-validator` · 3 independent skeptics, no shared scratchpad · default-to-reject · skeptics READ the codebase · {2-of-3} majority gate
+
+| Field | Value |
+|---|---|
+| Milestone | `{moniker}` |
+| Artifact | `plans/active_milestones/{moniker}/plan.md` |
+| Date | {YYYY-MM-DD} |
+| Gate | {2-of-3 · any-one · unanimous} |
+| Result | **{N} confirmed · {M} unconfirmed** — highest severity **{high}** |
+| 🁢 First domino | `{id}` — {earliest failure that invalidates the steps after it, or `none`} |
+
+## Verdict
+
+{1–3 plain-language sentences: will the plan survive execution, and which step topples first?}
+
+## Confirmed Findings (≥ 2 votes)
+
+> Apply each **Fix** to the plan — reorder steps, insert a prerequisite, add a rollback/verify, or correct the assumption.
+
+### 🔴 `{id}` — {one-line name}  · {category} · {votes}/3 · confidence {high}
+- **Step:** {step number / title this concerns}
+- **Failure:** {the concrete scenario in which the plan breaks}
+- **Evidence:** `{file:line}` you read _(or verbatim plan text)_
+- **Fix:** {the concrete change to the plan that prevents the failure}
+
+_(repeat per confirmed finding; the First domino first)_
+
+## Unconfirmed (FYI · 1 vote)
+
+| `id` | severity | step | note |
+|---|---|---|---|
+| `{id}` | 🟠 medium | {step} | surfaced for the user |
+
+## Checks That Passed
+
+- {assumption the skeptics verified that DID hold} — `{file:line}`
+
+## Actions Taken
+
+- [x] Reordered: inserted step {2b} before step {3} (`{id}`)
+- [x] Corrected step {3} target to `{realName()}` (`{id}`)
+- [ ] Surfaced `{id}` (unconfirmed) to the user
+- [ ] Re-ran panel on revision → `plan-validation-r2.md` _(or: not needed)_
 ```
 
 ## Worked Example

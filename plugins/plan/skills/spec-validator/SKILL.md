@@ -81,10 +81,22 @@ quorum.
 
 > **Tuning the gate:** 2-of-3 is the default. For a high-stakes or security-sensitive spec, drop to **any-one** (1 of 3) for maximum recall and triage the noise yourself. When fix-churn is expensive, raise to **unanimous** (3 of 3).
 
-### 7. Act
+### 7. Persist the review
+Write the aggregated result as a Markdown report to
+`plans/active_milestones/{moniker}/adversarial-reviews/spec-validation.md` (create the
+folder if it does not exist). Derive `{moniker}` from the spec's path — the spec you
+reviewed lives at `plans/active_milestones/{moniker}/spec.md`; if you were handed a bare
+spec with no milestone, write to `plans/adversarial-reviews/spec-validation.md` and say so.
+**Always write this file, even on a clean pass** — "zero confirmed findings, here is what
+was attacked" is itself the evidence the gate produced. A re-run after a material revision
+goes to `spec-validation-r2.md`, `-r3.md`, … so every round is preserved for comparison.
+Fill the **The Review Document** template below verbatim.
+
+### 8. Act
 - For each **confirmed** finding, apply its `tightening` to the spec (or surface it to the user if it changes intent).
 - List **unconfirmed** findings so the user can eyeball the tail.
 - If you rewrote the spec materially, re-run the panel once on the revision.
+- Tick the **Actions Taken** checklist in the review file as you apply each fix.
 
 ## Skeptic Prompt Template
 
@@ -148,6 +160,61 @@ Each skeptic returns the JSON above. The orchestrator (you) aggregates into:
   "confirmed": [ { "id": "...", "votes": 3, "severity": "high", "clause": "...", "tightening": "..." } ],
   "unconfirmed": [ { "id": "...", "votes": 1, "...": "..." } ]
 }
+```
+
+## The Review Document
+
+This is what step 7 writes to
+`plans/active_milestones/{moniker}/adversarial-reviews/spec-validation.md`. It is the
+human-readable face of the JSON above — a reviewer should grasp the verdict without ever
+opening an agent transcript. Use `date +%Y-%m-%d` for the date. Severity icons: 🔴 high ·
+🟠 medium · 🟡 low. Order confirmed findings highest-severity first. Keep every section,
+even when empty (write `_None._`).
+
+```markdown
+# Spec Adversarial Review — {spec title}
+
+> `spec-validator` · 3 independent skeptics, no shared scratchpad · default-to-reject · {2-of-3} majority gate
+
+| Field | Value |
+|---|---|
+| Milestone | `{moniker}` |
+| Artifact | `plans/active_milestones/{moniker}/spec.md` |
+| Date | {YYYY-MM-DD} |
+| Gate | {2-of-3 · any-one · unanimous} |
+| Result | **{N} confirmed · {M} unconfirmed** — highest severity **{high}** |
+
+## Verdict
+
+{1–3 plain-language sentences: is the spec ready to plan against, or what blocks it?}
+
+## Confirmed Findings (≥ 2 votes)
+
+> Fold each **Tightening** into the spec before any plan is drafted.
+
+### 🔴 `{id}` — {one-line name}  · {votes}/3
+- **Clause:** "{verbatim quote, or `<MISSING>`}"
+- **Malicious reading:** {the damaging interpretation this permits}
+- **Harm:** {user-facing or downstream consequence}
+- **Tightening:** {the concrete reworded / added requirement that closes it}
+
+_(repeat per confirmed finding)_
+
+## Unconfirmed (FYI · 1 vote)
+
+| `id` | severity | clause | note |
+|---|---|---|---|
+| `{id}` | 🟠 medium | "{clause}" | surfaced for the author to confirm intent |
+
+## Attacks That Failed
+
+- {short note per serious attack that found no hole} — corroborates the spec holds here.
+
+## Actions Taken
+
+- [x] Folded `{id}` tightening into spec §{n}
+- [ ] Surfaced `{id}` (unconfirmed) to the user
+- [ ] Re-ran panel on revision → `spec-validation-r2.md` _(or: not needed)_
 ```
 
 ## Worked Example

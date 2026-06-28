@@ -2,7 +2,7 @@
 
 A swarm of role-based agents and adversarial validation gates that drive a feature, bug fix, or refactor through a disciplined **spec → plan → execute → audit → commit** lifecycle.
 
-These 9 skills are designed to be used together. A single orchestrator (`starter`) dispatches the role agents in sequence, stops for human approval at defined gates, and treats files in `plans/` — not chat messages — as the single source of truth. Three independent *validator* skills slot in at the boundary between each phase to attack the artifact (spec, plan, or diff) before the next phase consumes it.
+These 10 skills are designed to be used together. A single orchestrator (`starter`) dispatches the role agents in sequence, stops for human approval at defined gates, and treats files in `plans/` — not chat messages — as the single source of truth. Three independent *validator* skills slot in at the boundary between each phase to attack the artifact (spec, plan, or diff) before the next phase consumes it.
 
 ---
 
@@ -10,7 +10,7 @@ These 9 skills are designed to be used together. A single orchestrator (`starter
 
 | Family | Skills | Purpose |
 |---|---|---|
-| **Swarm roles** | `starter`, `product-owner` (or `visual-product-owner`), `architect` (or `visual-architect`), `engineer`, `simplifier`, `auditor` | Perform the lifecycle — discover, spec, plan, build, refine, verify. |
+| **Swarm roles** | `starter`, `product-owner` (or `visual-product-owner`), `architect` (or `visual-architect`), `engineer`, `simplifier`, `auditor`, `visual-implementation-recap` | Perform the lifecycle — discover, spec, plan, build, refine, verify, and recap the result. |
 | **Adversarial validators** | `spec-validator`, `plan-validator`, `implementation-validator` | Attack each artifact at its phase boundary with an independent 3-skeptic panel; keep only findings confirmed by a 2-of-3 majority. |
 
 ---
@@ -115,23 +115,31 @@ Skeptically verifies the engineer's work against the plan, with evidence, and is
 - **Produces:** a formal report at `plans/audit/AUDIT_[Plan_Name].md`.
 - **Constraints:** never fixes code (reports only, hands fixes back to the engineer); no new capability without tests = automatic FAIL; commits/merges only on a **passing audit AND explicit user approval**.
 
+#### 7. `visual-implementation-recap` — The Implementation Recap (Renderer)
+An **additive** renderer — **not** a drop-in replacement for any role, and never a substitute for the audit. After the engineer implements `plan.md` and the auditor returns a green audit, it renders everything the milestone changed into a self-contained, browsable HTML document for the human commit gate.
+
+- **Produces:** `plans/active_milestones/{moniker}/visual-recap.html` (purely additive — nothing else in the swarm changes).
+- **The visual file:** a single, zero-build HTML page (opens via `file://`) with nine recap surfaces — overview + metrics, tasks completed, a changed-files tree with diffstat, annotated diffs (the centerpiece), architecture, API & schema changes, before/after UI, the audit verdict with evidence, and author notes. Diffs render with pure CSS; diagrams use Mermaid + a raw-source fallback; both libraries load via pinned CDN with SRI.
+- **Grounded & read-only:** every diff line, file, and stat is taken verbatim from the real `git diff` + `plan.md` + the audit report (`AUDIT_[Plan_Name].md`) — true by construction, never invented; secrets are redacted; clipped diffs say so. Read-only on source; **never commits** (that stays the auditor's job after approval).
+- **Use it** at the commit gate, after a green audit, when the reviewer benefits from seeing the whole change at altitude rather than prose plus a raw diff.
+
 ### Adversarial Validators
 
-All three share the same machinery: dispatch **3 independent skeptic agents in parallel** (no shared scratchpad), each framed to *break* the artifact with a **default-to-reject** posture, then keep only findings confirmed by a **2-of-3 majority** (1-vote findings are surfaced as "Unconfirmed (FYI)", never silently dropped). Each skeptic returns a single fenced JSON block; the orchestrator dedups by a stable kebab-case `id` before tallying. The gate is tunable: drop to **any-one** for high-stakes work, raise to **unanimous** when re-work is costly.
+All three share the same machinery: dispatch **3 independent skeptic agents in parallel** (no shared scratchpad), each framed to *break* the artifact with a **default-to-reject** posture, then keep only findings confirmed by a **2-of-3 majority** (1-vote findings are surfaced as "Unconfirmed (FYI)", never silently dropped). Each skeptic returns a single fenced JSON block; the orchestrator dedups by a stable kebab-case `id` before tallying. The gate is tunable: drop to **any-one** for high-stakes work, raise to **unanimous** when re-work is costly. Every panel then writes a **human-readable Markdown report** to `plans/active_milestones/{moniker}/adversarial-reviews/{stage}-validation.md` — written on every run (even a clean pass), with re-runs preserved as `-r2`/`-r3` — so the verdict is browsable without opening an agent transcript.
 
-#### 7. `spec-validator` — Attack the Spec
+#### 8. `spec-validator` — Attack the Spec
 Runs **after a spec is drafted, before a plan is written** — defects are cheapest to fix here.
 
 - **Attack surface:** ambiguity, missing requirements (errors, empty/huge inputs, concurrency, auth, limits, units, time), contradictions, untestable acceptance criteria, and *malicious compliance* (the laziest implementation that passes every criterion yet is useless).
 - **Output:** confirmed findings each carry a `tightening` — a concrete reworded/added requirement to fold back into the spec.
 
-#### 8. `plan-validator` — Attack the Plan
+#### 9. `plan-validator` — Attack the Plan
 Runs **after a plan is written, before execution**. Unlike spec skeptics, these **read the codebase** to check the plan's assumptions against reality.
 
 - **Attack surface:** ordering/dependency bugs ("step 4 edits what step 2 forgot to create"), false assumptions about existing code (a named function/field/signature that doesn't exist — *open the file and check*), unverifiable "verify" steps, missing rollback, missing migration/compat, hidden coupling.
 - **Output:** each finding cites `file:line` evidence and a `fix`; the panel names the **`first_domino`** — the earliest failure that invalidates later steps.
 
-#### 9. `implementation-validator` — Attack the Diff
+#### 10. `implementation-validator` — Attack the Diff
 Runs **after code is written, before merge**. Reasons about the code (it does *not* launch the app).
 
 - **Two modes:** *finding-hunt* (default — hunt the diff for defects, default `isReal=false`) and *claim-refutation* (try to refute explicit acceptance claims, default `refuted=true`).
@@ -154,7 +162,9 @@ The swarm communicates through files under `plans/`. Knowing this layout is the 
 | `plans/active_milestones/{moniker}/plan.md` | `architect` | Micro-stepped plan with parallel execution groups; engineer checks off todos here. |
 | `plans/active_milestones/{moniker}/data-model.md` · `api-contracts.md` | `architect` | Optional supporting design artifacts. |
 | `plans/active_milestones/{moniker}/visual-plan.html` | `visual-architect` | Self-contained, browsable companion to `plan.md` for the human review gate (zero build; opens in any browser). |
+| `plans/active_milestones/{moniker}/adversarial-reviews/{spec,plan,implementation}-validation.md` | `spec-validator` · `plan-validator` · `implementation-validator` | Human-readable Markdown report from each skeptic panel — verdict, confirmed findings (with `file:line` evidence and fixes), unconfirmed tail, and (for implementation) the severity-calibration table. Written every run, even on a clean pass; re-runs append `-r2`, `-r3`. |
 | `plans/audit/AUDIT_[Plan_Name].md` | `auditor` | Evidence-based audit report (the `plans/audit/` dir is git-ignored). |
+| `plans/active_milestones/{moniker}/visual-recap.html` | `visual-implementation-recap` | Self-contained, browsable recap of everything the milestone changed — diffstat, annotated diffs, task/audit status — for the human commit gate (zero build; opens in any browser). |
 
 ---
 
@@ -170,7 +180,7 @@ A typical end-to-end run:
 6. **🛑 Human review gate** — the user reviews `spec.md` + `plan.md` and types "approve".
 7. **`engineer`** (up to ~4 in parallel per group) implements each group under TDD; **`simplifier`** optionally refines; **`auditor`** verifies each group and writes an audit report.
 8. **`implementation-validator`** attacks the diff before merge; confirmed defects (at calibrated severity) are fixed.
-9. **🛑 Commit gate** — only on a green audit **and** explicit user approval.
+9. **🛑 Commit gate** — `visual-implementation-recap` renders `visual-recap.html` so the human can review every change at altitude; commit only on a green audit **and** explicit user approval.
 10. **`product-owner`** marks the release "Shipped" and activates the next.
 
 ---
