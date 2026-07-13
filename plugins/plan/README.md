@@ -2,7 +2,7 @@
 
 A swarm of role-based agents and adversarial validation gates that drive a feature, bug fix, or refactor through a disciplined **spec → plan → execute → audit → commit** lifecycle.
 
-These 10 skills are designed to be used together. A single orchestrator (`starter`) dispatches the role agents in sequence, stops for human approval at defined gates, and treats files in `plans/` — not chat messages — as the single source of truth. Three independent *validator* skills slot in at the boundary between each phase to attack the artifact (spec, plan, or diff) before the next phase consumes it.
+These skills are designed to be used together. A single orchestrator (`starter`) dispatches the role agents in sequence, stops for human approval at defined gates, and treats files in `plans/` — not chat messages — as the single source of truth. Three independent *validator* skills slot in at the boundary between each phase to attack the artifact (spec, plan, or diff) before the next phase consumes it.
 
 ---
 
@@ -12,6 +12,7 @@ These 10 skills are designed to be used together. A single orchestrator (`starte
 |---|---|---|
 | **Swarm roles** | `starter`, `product-owner` (or `visual-product-owner`), `architect` (or `visual-architect`), `engineer`, `simplifier`, `auditor`, `visual-implementation-recap` | Perform the lifecycle — discover, spec, plan, build, refine, verify, and recap the result. |
 | **Adversarial validators** | `spec-validator`, `plan-validator`, `implementation-validator` | Attack each artifact at its phase boundary with an independent 3-skeptic panel; keep only findings confirmed by a 2-of-3 majority. |
+| **Deliberative panel** | `spec-deliberator` | Improve a drafted spec via delegates holding deliberately disjoint context bundles who deliberate to consensus — the generative counterpart to the validators. |
 
 ---
 
@@ -29,6 +30,10 @@ These 10 skills are designed to be used together. A single orchestrator (`starte
   │
   ▼  Phase 1  product-owner   ── "Grill Loop" ─► spec.md + 00-ROADMAP.md
   │                                                  │
+  │                              ┌───────────────────▼───────────────────┐
+  │                              │ spec-deliberator (optional — enrich   │
+  │                              │ spec with siloed stakeholder context) │
+  │                              └───────────────────┬───────────────────┘
   │                                    ╔═════════════▼═════════════╗
   │                                    ║   spec-validator (gate)   ║
   │                                    ╚═══════════════════════════╝
@@ -123,6 +128,15 @@ An **additive** renderer — **not** a drop-in replacement for any role, and nev
 - **Grounded & read-only:** every diff line, file, and stat is taken verbatim from the real `git diff` + `plan.md` + the audit report (`AUDIT_[Plan_Name].md`) — true by construction, never invented; secrets are redacted; clipped diffs say so. Read-only on source; **never commits** (that stays the auditor's job after approval).
 - **Use it** at the commit gate, after a green audit, when the reviewer benefits from seeing the whole change at altitude rather than prose plus a raw diff.
 
+### Deliberative Panel
+
+#### `spec-deliberator` — Deliberate the Spec
+Runs **after a spec is drafted, before `spec-validator`**, when the spec depends on knowledge siloed across stakeholders, docs, or repos. The structural inverse of the validators: delegates get *disjoint* context bundles (validators get identical full context), communication is the mechanism (validators forbid it), and the output is consensus on one revised spec (not a majority vote on findings).
+
+- **Machinery:** 3 delegates (product · engineering · ops/security by default), each seeded with a private context bundle passing the **asymmetry test** (name a fact only that delegate knows that could change the spec — or fall back to centralized revision, which beats a clone panel). Sequential turns relayed **verbatim** by the orchestrator, same agents continued across rounds, hard cap 4 rounds. Acceptance must be *earned* — each accepting delegate states what it verified or what changed its mind, the guard against round-1 sycophancy.
+- **Output:** the revised `spec.md` plus a deliberation record at `deliberations/spec-deliberation.md` (bundles, disclosures, edits with rationale, disputes, round log). Hard-constraint disputes escalate to the user; the revised spec still goes through `spec-validator`.
+- **Hybrid:** a 2-delegate mini-panel over a validator run's *unconfirmed 1-vote findings* adjudicates exactly where independent judgment ran out.
+
 ### Adversarial Validators
 
 All three share the same machinery: dispatch **3 independent skeptic agents in parallel** (no shared scratchpad), each framed to *break* the artifact with a **default-to-reject** posture, then keep only findings confirmed by a **2-of-3 majority** (1-vote findings are surfaced as "Unconfirmed (FYI)", never silently dropped). Each skeptic returns a single fenced JSON block; the orchestrator dedups by a stable kebab-case `id` before tallying. The gate is tunable: drop to **any-one** for high-stakes work, raise to **unanimous** when re-work is costly. Every panel then writes a **human-readable Markdown report** to `plans/active_milestones/{moniker}/adversarial-reviews/{stage}-validation.md` — written on every run (even a clean pass), with re-runs preserved as `-r2`/`-r3` — so the verdict is browsable without opening an agent transcript.
@@ -171,6 +185,7 @@ The swarm communicates through files under `plans/`. Knowing this layout is the 
 | `plans/active_milestones/{moniker}/context.md` | `product-owner` | The context report, moved in once the milestone is opened. |
 | `plans/active_milestones/{moniker}/spec.md` | `product-owner` | The specification (Gherkin acceptance criteria). |
 | `plans/active_milestones/{moniker}/visual-spec.html` | `visual-product-owner` | Self-contained, browsable companion to `spec.md` for spec review (zero build; opens in any browser). |
+| `plans/active_milestones/{moniker}/deliberations/spec-deliberation.md` | `spec-deliberator` | Deliberation record — panel & private bundles, key disclosures, applied edits with rationale and acceptance bases, disputes (converged/arbitrated/escalated), round log. Written every run, even on "no changes"; re-runs append `-r2`; the hybrid tail-panel writes `-tail`. |
 | `plans/active_milestones/{moniker}/plan.md` | `architect` | Micro-stepped plan with parallel execution groups; engineer checks off todos here. |
 | `plans/active_milestones/{moniker}/data-model.md` · `api-contracts.md` | `architect` | Optional supporting design artifacts. |
 | `plans/active_milestones/{moniker}/visual-plan.html` | `visual-architect` | Self-contained, browsable companion to `plan.md` for the human review gate (zero build; opens in any browser). |
@@ -187,6 +202,7 @@ A typical end-to-end run:
 
 1. **`starter`** receives the request and dispatches a codebase investigation → `plans/research/`.
 2. **`product-owner`** reads the context report, runs the Grill Loop, and writes `spec.md` + roadmap entry.
+   - *(optional)* **`spec-deliberator`** convenes a delegate panel with disjoint context bundles to enrich the spec with siloed constraints before it faces the gate.
 3. **`spec-validator`** attacks the spec; confirmed `tightening`s are folded back in.
 4. **`architect`** investigates the code and writes `plan.md` with parallel groups.
 5. **`plan-validator`** attacks the plan against the real codebase; the `first_domino` and confirmed fixes are applied (reorder steps, add prerequisites, correct assumptions).
