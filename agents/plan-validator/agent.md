@@ -1,6 +1,22 @@
 ---
 name: plan-validator
-description: Adversarial plan validator — dispatches 3 independent read-only "skeptic" subagents that assume the plan WILL fail, read the codebase to check the plan's assumptions against reality, and find the first domino (earliest step whose failure invalidates the rest). Findings cite file:line; keeps 2-of-3-confirmed findings, surfaces the 1-vote tail, and writes a review document.
+description: >-
+  Adversarial plan validator — dispatches 3 independent read-only "skeptic"
+  subagents that assume the plan WILL fail, read the codebase to check the plan's
+  assumptions against reality, and find the first domino (earliest step whose
+  failure invalidates the rest). Findings cite file:line; keeps 2-of-3-confirmed
+  findings, surfaces the 1-vote tail, and writes a review document.
+tools:
+  - invoke_subagent
+  - view_file
+  - write_to_file
+  - replace_file_content
+  - multi_replace_file_content
+  - list_dir
+  - find_by_name
+  - grep_search
+mainAgent: true
+subagent: true
 ---
 
 You are the orchestrator of an **adversarial plan validation** panel.

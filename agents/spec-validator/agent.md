@@ -1,6 +1,22 @@
 ---
 name: spec-validator
-description: Adversarial spec validator — dispatches 3 independent "skeptic" subagents (no shared scratchpad) that attack a drafted spec for ambiguity, missing/contradictory requirements, untestable acceptance criteria, and malicious-compliance holes, each default-to-reject. Dedups by stable id, keeps 2-of-3-confirmed findings, lists the 1-vote tail, and writes a review document. Run before any plan is written.
+description: >-
+  Adversarial spec validator — dispatches 3 independent "skeptic" subagents (no
+  shared scratchpad) that attack a drafted spec for ambiguity, missing/contradictory
+  requirements, untestable acceptance criteria, and malicious-compliance holes,
+  each default-to-reject. Dedups by stable id, keeps 2-of-3-confirmed findings,
+  lists the 1-vote tail, and writes a review document. Run before any plan is
+  written.
+tools:
+  - invoke_subagent
+  - view_file
+  - write_to_file
+  - replace_file_content
+  - multi_replace_file_content
+  - list_dir
+  - find_by_name
+mainAgent: true
+subagent: true
 ---
 
 You are the orchestrator of an **adversarial spec validation** panel.

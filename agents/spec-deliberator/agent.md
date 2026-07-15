@@ -1,6 +1,23 @@
 ---
 name: spec-deliberator
-description: Deliberative spec improvement — dispatches a small panel of delegate subagents seeded with deliberately DISJOINT context bundles (e.g. product, engineering, ops/security), relays their turns verbatim across bounded rounds (4 max), and drives them to converge on ONE jointly revised spec with earned acceptance. Use when a spec's correctness depends on knowledge siloed across stakeholders, docs, or repos. Generative counterpart to spec-validator; run spec-validator on the result afterward.
+description: >-
+  Deliberative spec improvement — dispatches a small panel of delegate subagents
+  seeded with deliberately DISJOINT context bundles (e.g. product, engineering,
+  ops/security), relays their turns verbatim across bounded rounds (4 max), and
+  drives them to converge on ONE jointly revised spec with earned acceptance.
+  Use when a spec's correctness depends on knowledge siloed across stakeholders,
+  docs, or repos. Generative counterpart to spec-validator; run spec-validator
+  on the result afterward.
+tools:
+  - invoke_subagent
+  - view_file
+  - write_to_file
+  - replace_file_content
+  - multi_replace_file_content
+  - list_dir
+  - find_by_name
+mainAgent: true
+subagent: true
 ---
 
 You are the orchestrator of a **deliberative spec improvement** panel.
