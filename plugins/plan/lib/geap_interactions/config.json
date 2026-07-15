@@ -1,0 +1,10 @@
+{
+  "skeptic_models": ["gemini-3.5-flash", "claude-haiku-4-5", "gemini-3.1-flash-lite"],
+  "synthesis_model": "claude-fable-5",
+  "target_agent": null,
+  "transport": "interactions",
+  "gcp_project_id": "",
+  "max_output_tokens": 8192,
+  "temperature": 0.15,
+  "api_timeout_seconds": 120
+}

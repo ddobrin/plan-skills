@@ -164,6 +164,12 @@ A **drop-in alternative to `spec-validator`** whose skeptics are **remote Vertex
 - **Use it instead of `spec-validator`** when the review benefits from model diversity (non-Claude opinions) or an externally-produced audit trail; requires GCP ADC (`gcloud auth application-default login`).
 - **Output:** `adversarial-reviews/geap-spec-validation.md` in the same milestone folder; exit code 0 = pass, 1 = confirmed findings.
 
+#### 8·alt2. `geap-interactions-spec-validator` — Attack the Spec, Remotely, No Python
+The **no-Python sibling of `geap-spec-validator`**: the same remote skeptic panel (configurable roster of `gemini-*`/`claude-*` models + synthesis vote), but transport is `curl` to the **Interactions API** with ADC — executed by `geap-interactions-caller` subagents, one per skeptic, with automatic per-call fallback to the Vertex AI global endpoint. The orchestrating agent counts the votes (≥ 2 of N+1).
+
+- **Use it instead of `geap-spec-validator`** when no venv/Python is available or wanted; requires only `gcloud` ADC + `jq`.
+- **Output:** `adversarial-reviews/geap-interactions-spec-validation.md` in the same milestone folder, including a per-model Transport row.
+
 #### 9. `plan-validator` — Attack the Plan
 Runs **after a plan is written, before execution**. Unlike spec skeptics, these **read the codebase** to check the plan's assumptions against reality.
 
@@ -175,6 +181,12 @@ A **drop-in alternative to `plan-validator`** running the panel on **remote Vert
 
 - **Scope caveat:** remote skeptics **cannot read the repository** — they attack the plan text only (evidence = verbatim plan quotes; unverifiable code assumptions are flagged `false-assumption`/low-confidence). For codebase-verified review, use the local `plan-validator`; the two are complementary.
 - **Output:** `adversarial-reviews/geap-plan-validation.md` in the same milestone folder; exit code 0 = pass, 1 = confirmed findings.
+
+#### 9·alt2. `geap-interactions-plan-validator` — Attack the Plan, Remotely, No Python
+The **no-Python sibling of `geap-plan-validator`**: same remote panel and `first_domino` nomination, transport via `curl` to the **Interactions API** with ADC (per-call Vertex fallback), one caller subagent per skeptic, votes counted by the orchestrating agent.
+
+- **Scope caveat:** identical to `geap-plan-validator` — remote skeptics attack the plan text only.
+- **Output:** `adversarial-reviews/geap-interactions-plan-validation.md` in the same milestone folder, including a per-model Transport row.
 
 #### 10. `implementation-validator` — Attack the Diff
 Runs **after code is written, before merge**. Reasons about the code (it does *not* launch the app).
@@ -202,6 +214,7 @@ The swarm communicates through files under `plans/`. Knowing this layout is the 
 | `plans/active_milestones/{moniker}/visual-plan.html` | `visual-architect` | Self-contained, browsable companion to `plan.md` for the human review gate (zero build; opens in any browser). |
 | `plans/active_milestones/{moniker}/adversarial-reviews/{spec,plan,implementation}-validation.md` | `spec-validator` · `plan-validator` · `implementation-validator` | Human-readable Markdown report from each skeptic panel — verdict, confirmed findings (with `file:line` evidence and fixes), unconfirmed tail, and (for implementation) the severity-calibration table. Written every run, even on a clean pass; re-runs append `-r2`, `-r3`. |
 | `plans/active_milestones/{moniker}/adversarial-reviews/geap-{spec,plan}-validation.md` | `geap-spec-validator` · `geap-plan-validator` | Report from the **remote** Vertex AI panel (3 configurable skeptic models + synthesis vote) — same review-document shape as the local validators, plus the models used and the 2-of-4 vote tally per finding. |
+| `plans/active_milestones/{moniker}/adversarial-reviews/geap-interactions-{spec,plan}-validation.md` | `geap-interactions-spec-validator` · `geap-interactions-plan-validator` | Report from the **no-Python** remote panel (Interactions API via curl/ADC, Vertex fallback) — same shape as the geap reports plus per-model transport and a Panel Health section. |
 | `plans/audit/AUDIT_[Plan_Name].md` | `auditor` | Evidence-based audit report (the `plans/audit/` dir is git-ignored). |
 | `plans/active_milestones/{moniker}/visual-recap.html` | `visual-implementation-recap` | Self-contained, browsable recap of everything the milestone changed — diffstat, annotated diffs, task/audit status — for the human commit gate (zero build; opens in any browser). |
 
