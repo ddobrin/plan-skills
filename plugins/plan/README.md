@@ -4,6 +4,8 @@ A swarm of role-based agents and adversarial validation gates that drive a featu
 
 These skills are designed to be used together. A single orchestrator (`starter`) dispatches the role agents in sequence, stops for human approval at defined gates, and treats files in `plans/` — not chat messages — as the single source of truth. Three independent *validator* skills slot in at the boundary between each phase to attack the artifact (spec, plan, or diff) before the next phase consumes it.
 
+> **Skills or subagents?** This document describes the **skills** form (invoked with the `Skill` tool). The same swarm is also packaged as **subagents** under [`agents/`](agents/README.md) — dispatched with the `Task` tool (`subagent_type`), auto-delegated from each agent's `description`, or launched with `claude --agent <name>`. The two families are kept in sync; the agents add per-role `model`, `color`, `tools`, and an `initialPrompt` bootstrap. See [`agents/README.md`](agents/README.md) for the agent-specific details.
+
 ---
 
 ## The Two Families
@@ -194,6 +196,14 @@ Runs **after code is written, before merge**. Reasons about the code (it does *n
 - **Two modes:** *finding-hunt* (default — hunt the diff for defects, default `isReal=false`) and *claim-refutation* (try to refute explicit acceptance claims, default `refuted=true`).
 - **Attack surface:** claim vs. reality, broken/swallowed failure paths, edge cases, concurrency races, resource/correctness, regressions.
 - **Signature output — severity calibration:** the panel's most valuable product isn't deletion but *corrected severity* (e.g. three reviewers call a singleton race "Critical"; it's confirmed real but downgraded to "High" because impact is gated on concurrent requests). Always surface the calibration delta.
+
+### Utility
+
+#### `teamwork-trajectory` — Visualize the Swarm
+An out-of-band **utility** skill (not part of the lifecycle) that scans the `.agents/` directory, parses each agent's briefing and hand-off records, and compiles an interactive, dark-mode HTML timeline of everything the swarm executed.
+
+- **Produces:** `.agents/trajectory.html` (self-contained, browsable).
+- **Triggers:** "generate trajectory", "visualize teamwork", "trace agents", "update trajectory dashboard".
 
 ---
 
