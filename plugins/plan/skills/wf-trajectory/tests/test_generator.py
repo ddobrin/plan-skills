@@ -46,3 +46,16 @@ def test_unknown_runid_exits_2(tmp_path):
     r = _run(project, root, "wf_does_not_exist")
     assert r.returncode == 2
     assert "wf_c8873586-bae" in r.stderr  # lists available runs
+
+
+def test_malformed_run_exits_2_with_path(tmp_path):
+    root = tmp_path / "claude"
+    project = tmp_path / "work" / "proj"
+    project.mkdir(parents=True)
+    enc = str(project).replace(os.sep, "-")
+    wdir = root / "projects" / enc / "sessX" / "workflows"
+    wdir.mkdir(parents=True)
+    (wdir / "wf_broken.json").write_text('{ "runId": "wf_broken", truncated', encoding="utf-8")
+    r = _run(project, root)
+    assert r.returncode == 2, r.stderr
+    assert "wf_broken.json" in r.stderr

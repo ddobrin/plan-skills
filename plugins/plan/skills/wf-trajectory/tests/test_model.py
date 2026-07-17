@@ -1,5 +1,6 @@
 import os
-from wf_model import parse_run, transcript_path
+import pytest
+from wf_model import parse_run, transcript_path, ParseError
 
 FIXTURE = os.path.join(os.path.dirname(__file__), "fixtures", "wf_c8873586-bae.json")
 
@@ -42,3 +43,12 @@ def test_phase_keyed_by_marker_index_preserves_detail():
     assert p.index == 1                     # marker index, not array position 0
     assert p.detail == "one skeptic per inline comment"
     assert len(p.agents) == 13              # all agents attached to the real phase
+
+
+def test_parse_run_malformed_json_raises_with_path(tmp_path):
+    bad = tmp_path / "wf_bad.json"
+    bad.write_text('{ "runId": "wf_bad", truncated', encoding="utf-8")
+    with pytest.raises(ParseError) as ei:
+        parse_run(str(bad))
+    # design §7: the error must name the offending file and be a parse error
+    assert str(bad) in str(ei.value)

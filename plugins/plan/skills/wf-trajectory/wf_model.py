@@ -7,6 +7,10 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 
+class ParseError(Exception):
+    pass
+
+
 @dataclass
 class AgentNode:
     index: int
@@ -82,8 +86,13 @@ def _agent_from_record(r: dict) -> AgentNode:
 
 
 def parse_run(json_path: str) -> RunReport:
-    with open(json_path, "r", encoding="utf-8") as f:
-        d = json.load(f)
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            d = json.load(f)
+    except (OSError, ValueError) as e:
+        # design §7: fail with a specific parse error naming the file.
+        # json.JSONDecodeError subclasses ValueError; OSError covers missing/unreadable files.
+        raise ParseError(f"Failed to parse workflow run '{json_path}': {e}") from e
 
     progress = d.get("workflowProgress", [])
     agents = [_agent_from_record(r) for r in progress if r.get("type") == "workflow_agent"]

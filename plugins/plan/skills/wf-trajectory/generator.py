@@ -6,7 +6,7 @@ import os
 import sys
 
 from wf_locator import locate_run, LocatorError
-from wf_model import parse_run
+from wf_model import parse_run, ParseError
 from wf_render import load_template, render_html
 
 OUT_DIR = "wf-trajectory"
@@ -43,7 +43,11 @@ def main(argv) -> int:
     except LocatorError as e:
         print(f"wf-trajectory: {e}", file=sys.stderr)
         return 2
-    report = parse_run(json_path)
+    try:
+        report = parse_run(json_path)
+    except ParseError as e:
+        print(f"wf-trajectory: {e}", file=sys.stderr)
+        return 2
     html_text = render_html(report, load_template())
     out_path = write_output(report, html_text)
     ensure_gitignore()
