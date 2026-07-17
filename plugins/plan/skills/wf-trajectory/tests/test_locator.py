@@ -21,7 +21,13 @@ def test_find_project_dir_longest_ancestor(tmp_path, monkeypatch):
     project = tmp_path / "work" / "proj"
     subdir = project / "src" / "deep"
     subdir.mkdir(parents=True)
+    # Register BOTH the deep project AND a competing shorter ancestor.
+    # A correct longest-ancestor walk must return the deeper `project`,
+    # not the shorter `tmp_path/work`; this makes the test falsify a
+    # broken shortest-ancestor implementation.
+    shorter = tmp_path / "work"
     _write_run(str(root), str(project), "sessA", "wf_aaa", "2026-01-01T00:00:00Z")
+    _write_run(str(root), str(shorter), "sessB", "wf_bbb", "2026-01-01T00:00:00Z")
     found = L.find_project_dir(str(subdir))
     assert found == os.path.join(str(root), "projects", str(project).replace(os.sep, "-"))
 
