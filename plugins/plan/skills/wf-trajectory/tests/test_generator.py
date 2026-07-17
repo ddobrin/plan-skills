@@ -8,12 +8,16 @@ GEN = os.path.join(SKILL_DIR, "generator.py")
 FIXTURE = os.path.join(os.path.dirname(__file__), "fixtures", "wf_c8873586-bae.json")
 
 
+def _enc(path):
+    return "".join(ch if ch.isalnum() else "-" for ch in os.path.abspath(path))
+
+
 def _seed(tmp_path):
     """Create a fake ~/.claude with the fixture under the project's encoded dir."""
     root = tmp_path / "claude"
     project = tmp_path / "work" / "proj"
     project.mkdir(parents=True)
-    enc = str(project).replace(os.sep, "-")
+    enc = _enc(str(project))
     wdir = root / "projects" / enc / "sessX" / "workflows"
     wdir.mkdir(parents=True)
     with open(FIXTURE, "r", encoding="utf-8") as f:
@@ -52,7 +56,7 @@ def test_malformed_run_exits_2_with_path(tmp_path):
     root = tmp_path / "claude"
     project = tmp_path / "work" / "proj"
     project.mkdir(parents=True)
-    enc = str(project).replace(os.sep, "-")
+    enc = _enc(str(project))
     wdir = root / "projects" / enc / "sessX" / "workflows"
     wdir.mkdir(parents=True)
     (wdir / "wf_broken.json").write_text('{ "runId": "wf_broken", truncated', encoding="utf-8")
