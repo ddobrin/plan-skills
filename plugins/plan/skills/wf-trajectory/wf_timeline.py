@@ -37,7 +37,7 @@ def _empty_bar(a) -> Bar:
     return Bar(a.agent_id, a.label, a.state, a.phase_title, 0.0, 0.0, 0.0, 0.0, a.duration_ms)
 
 
-def compute_timeline(agents) -> list:
+def compute_timeline(agents: list[AgentNode]) -> list[Bar]:
     if not agents:
         return []
     starts = [s for s in ((a.queued_at if a.queued_at is not None else a.started_at) for a in agents) if s is not None]
@@ -64,5 +64,6 @@ def compute_timeline(agents) -> list:
             q_left, q_width = pct(s), 0.0
         a_left = pct(s)
         a_width = max(pct(e) - pct(s), 0.5) if e is not None else 0.5
+        a_width = min(a_width, max(0.0, 100.0 - a_left))  # never overflow the track
         bars.append(Bar(a.agent_id, a.label, a.state, a.phase_title, q_left, q_width, a_left, a_width, a.duration_ms))
     return bars
