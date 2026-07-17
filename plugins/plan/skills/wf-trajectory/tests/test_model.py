@@ -29,3 +29,16 @@ def test_transcript_path_shape():
     a = r.agents[0]
     p = transcript_path(r, a)
     assert p.endswith(os.path.join("subagents", "workflows", r.run_id, f"agent-{a.agent_id}.jsonl"))
+
+
+def test_phase_keyed_by_marker_index_preserves_detail():
+    # Regression: phases[] is 0-based but agents/markers use a 1-based
+    # phaseIndex. Phases must be keyed by the marker index (so agents attach)
+    # AND keep the detail text from phases[] (not a synthetic empty phase).
+    r = parse_run(FIXTURE)
+    assert len(r.phases) == 1
+    p = r.phases[0]
+    assert p.title == "Verify"
+    assert p.index == 1                     # marker index, not array position 0
+    assert p.detail == "one skeptic per inline comment"
+    assert len(p.agents) == 13              # all agents attached to the real phase

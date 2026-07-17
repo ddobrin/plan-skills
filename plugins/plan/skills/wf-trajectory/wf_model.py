@@ -88,10 +88,28 @@ def parse_run(json_path: str) -> RunReport:
     progress = d.get("workflowProgress", [])
     agents = [_agent_from_record(r) for r in progress if r.get("type") == "workflow_agent"]
 
+    # Phase markers in workflowProgress share the index space that agents
+    # reference via phaseIndex; phases[] carries title/detail. Match markers to
+    # defs by title (falling back to order) and key phases by the marker index,
+    # so agents attach to the right phase and each phase keeps its detail text.
+    # No markers (older/edge runs) -> fall back to positional phase defs.
+    markers = [r for r in progress if r.get("type") == "workflow_phase"]
     phase_defs = d.get("phases", [])
+    defs_by_title: dict = {}
+    for pd in phase_defs:
+        defs_by_title.setdefault(pd.get("title"), pd)
+
     by_index: dict = {}
     phases: list = []
-    if phase_defs:
+    if markers:
+        for i, m in enumerate(markers):
+            idx = m.get("index", i)
+            mtitle = m.get("title") or f"Phase {idx}"
+            pd = defs_by_title.get(mtitle) or (phase_defs[i] if i < len(phase_defs) else {})
+            p = Phase(index=idx, title=pd.get("title", mtitle), detail=pd.get("detail", ""))
+            by_index[idx] = p
+            phases.append(p)
+    else:
         for i, pd in enumerate(phase_defs):
             p = Phase(index=i, title=pd.get("title", f"Phase {i}"), detail=pd.get("detail", ""))
             by_index[i] = p
@@ -105,9 +123,6 @@ def parse_run(json_path: str) -> RunReport:
             phases.append(p)
         p.agents.append(a)
     phases.sort(key=lambda p: p.index)
-
-    # Remove empty phases (keep only those with agents)
-    phases = [p for p in phases if p.agents]
 
     session_dir = os.path.dirname(os.path.dirname(os.path.abspath(json_path)))
     run_id = d.get("runId") or os.path.splitext(os.path.basename(json_path))[0]
