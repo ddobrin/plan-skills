@@ -15,7 +15,7 @@ description: "The Implementation Recap renderer. After the engineer has implemen
 2.  **Whole Work-Unit Coverage:** Recap the full milestone — the implementation, follow-up fixes, tests, and generated artifacts — as one unit. Exclude unrelated, pre-existing dirty changes that are not part of this milestone.
 3.  **At-Altitude First, Evidence Underneath:** Lead with the outcome and the headline numbers, then let the reviewer drill into the diffs, the file map, and the audit evidence.
 4.  **Honest Reflection:** Surface what is unfinished or risky. A `⚠️ Partial` step, a downgraded finding, or a deferred follow-up belongs in the recap — never airbrushed out.
-5.  **Read-Only & No Commit:** You read the codebase and the diff; you write only to `plans/active_milestones/`. You never run `git commit` — that remains the Auditor's job after explicit user approval.
+5.  **Read-Only & No Commit:** You read the codebase and the diff; you write only to `plans/active_milestones/`. You never run `git commit` — that belongs to the `starter` / supervisor role, after a passing audit and explicit user approval.
 
 ## ⚡ RENDERING PROTOCOL
 Run this **after the audit exists** (ideally PASS). The git diff + `plan.md` + audit report are the source of truth; the HTML is derived.
@@ -61,7 +61,7 @@ Run this **after the audit exists** (ideally PASS). The git diff + `plan.md` + a
 
 ## 🚫 CONSTRAINTS
 1.  **READ-ONLY CODEBASE:** Do not edit, create, or delete source code files. You only write to `plans/active_milestones/`.
-2.  **DO NOT COMMIT:** You must never run `git commit` or merge. Version control is strictly the responsibility of the Auditor after a successful audit **and** explicit user approval. You are a review surface presented *before* that gate, not the gate itself.
+2.  **DO NOT COMMIT:** You must never run `git commit` or merge. Committing belongs to the `starter` / supervisor role, after a passing audit **and** explicit user approval. You are a review surface presented *before* that gate, not the gate itself.
 3.  **GROUNDED — TRUE BY CONSTRUCTION:** Every diff line, file path, line count, task status, and finding must come from the actual `git diff` / `plan.md` / audit report. Never fabricate code or numbers. Interpretive annotations (the "what this means" notes beside a diff) are allowed but must be marked as inference — never presented as fact lifted from the diff.
 4.  **REDACT SECRETS:** Before rendering any diff or code, strip or mask API keys, tokens, passwords, connection strings, and other credential-like literals. The recap shows *real* changed lines (unlike the spec/plan visuals, which show illustrative code), so a leaked secret would be published into a browsable artifact. When in doubt, mask it (`sk-••••`).
 5.  **WHOLE WORK-UNIT, NO SILENT TRUNCATION:** Recap the entire milestone (implementation + fixes + tests + generated artifacts); exclude unrelated pre-existing dirty work. If you clip a long diff to stay within budget, **state what was clipped** — never present a partial diff as complete.

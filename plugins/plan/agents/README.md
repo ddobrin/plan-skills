@@ -96,7 +96,7 @@ Representative examples straight from the agents:
   │                                    ╔══════▼══════════════════════════╗
   │                                    ║ implementation-validator (gate) ║
   │                                    ╚═════════════════════════════════╝
-  │             🛑 git commit — only on green audit + explicit user "yes"
+  │             🛑 supervisor commits — only on green audit + explicit user "yes"
   │
   ▼  Phase 5  RELEASE & TAG — product-owner marks release "Shipped"
 COMMIT / TAG
@@ -113,7 +113,7 @@ COMMIT / TAG
 #### 1. `supervisor` — The Orchestrator
 `model: inherit` · `color: cyan` · `tools: all` — The Project Manager and Guardian of the Protocol. **Does no work itself**; it runs the state machine, dispatching the other agents in the correct order and enforcing the lifecycle above. (This is the agent form of the skills family's `starter`.)
 
-- **Owns:** protocol enforcement, artifact management, human gating, the git protocol.
+- **Owns:** protocol enforcement, artifact management, human gating, the git protocol. **The only role that runs `git commit`** — it holds both the conversation (`AskUserQuestion`) and `Bash`, so it is the only one that can obtain approval and then act on it.
 - **`initialPrompt` behavior:** read the roadmap, inventory every active milestone, determine the current phase, report *(milestone, next action, target agent)* — then **stop and wait** for the user before dispatching anything.
 - **Key rules:** never codes directly (delegates to `engineer`); passes *file paths*, not oral instructions; **must stop for user approval** after planning and before execution; never commits broken or unapproved code.
 
@@ -146,16 +146,16 @@ COMMIT / TAG
 #### 4. `engineer` — The Expert Builder
 **`model: claude-sonnet-5`** · `color: green` · `tools: Read, Write, Edit, Glob, Grep, Bash` — Implements the plan exactly, one atomic step at a time, under strict Test-Driven Development. (The only agent that pins a specific model — high-volume, well-scoped TDD work.)
 
-- **Doctrine:** no untested changes; Red → Green → Refactor; characterization tests + seams for legacy code (Feathers); incrementalism, deep modules, DRY, fail-fast, Boy Scout rule.
+- **Doctrine:** no untested changes; Red → Green → Refactor; characterization tests + seams for legacy code (Feathers); strict scope — implement the assigned task and nothing more.
 - **Tracks progress** by checking off todos directly in `plan.md`; uses `git mv` to preserve history.
 - **`initialPrompt` behavior:** *do not write code until you have a plan and a task* — confirm the `plan.md` and `Task [X.Y]`, recite the step to confirm scope, then proceed under TDD. Never expand scope; never commit.
 
 #### 5. `auditor` — The Quality Gatekeeper (Verifier)
-`model: inherit` · `color: yellow` · `tools: Read, Write, Edit, Glob, Grep, Bash` — Skeptically verifies the engineer's work against the plan, with evidence, and is the gate before any commit. **The only agent authorized to `git commit`** — and only on a passing audit plus explicit user approval.
+`model: inherit` · `color: yellow` · `tools: Read, Write, Edit, Glob, Grep, Bash` — Skeptically verifies the engineer's work against the plan, with evidence. It never fixes code and **never commits**: its passing report is what unblocks the `supervisor`'s commit gate. (It has no `AskUserQuestion` and no user-facing turn, so it could not obtain the approval a commit requires.)
 
 - **Verifies:** evidence-based static checks (cite `file:lines`), dynamic build + test runs, and **anti-shortcut detection** (`TODO`/`FIXME`/placeholders, deferred-work comments, skipped or gutted tests, fake/hardcoded implementations).
 - **Produces:** a formal report at `plans/audit/AUDIT_[Plan_Name].md`.
-- **`initialPrompt` behavior:** identify the plan and the just-completed tasks, verify statically then dynamically (build + tests), write the PASS/FAIL report — never fix code, commit only on green + explicit approval.
+- **`initialPrompt` behavior:** identify the plan and the just-completed tasks, verify statically then dynamically (build + tests), write the PASS/FAIL report — never fix code, never commit; hand the report back for the `supervisor` to take to the user.
 
 #### 6. `visual-implementation-recap` — The Implementation Recap (Renderer)
 `model: inherit` · `color: cyan` · `tools: Read, Write, Edit, Glob, Grep, Bash` — An **additive** renderer — **not** a drop-in replacement for any role, and never a substitute for the audit. After a green audit, it renders everything the milestone changed into `visual-recap.html` for the human commit gate.
@@ -182,7 +182,7 @@ COMMIT / TAG
 
 ### Adversarial Validators
 
-All three share the same machinery: dispatch **3 independent skeptic subagents in parallel** (no shared scratchpad), each framed to *break* the artifact with a **default-to-reject** posture, then keep only findings confirmed by a **2-of-3 majority** (1-vote findings surfaced as "Unconfirmed (FYI)", never silently dropped). Each skeptic returns a single fenced JSON block; the orchestrator dedups by a stable kebab-case `id` before tallying. The gate is tunable (any-one for high-stakes, unanimous when re-work is costly). Every panel writes a human-readable Markdown report to `plans/active_milestones/{moniker}/adversarial-reviews/{stage}-validation.md` — on every run, re-runs preserved as `-r2`/`-r3`. All three carry `tools: all` because they spawn their own skeptic subagents.
+All three share the same machinery: dispatch **3 independent skeptic subagents in parallel** (no shared scratchpad), each framed to *break* the artifact with a **default-to-reject** posture, then keep only findings confirmed by a **2-of-3 majority** (1-vote findings go to a **Single-Vote Findings (triage required)** section, never silently dropped). Each skeptic returns a single fenced JSON block; the orchestrator dedups by a stable kebab-case `id` before tallying. The gate is tunable (any-one for high-stakes, unanimous when re-work is costly). Every panel writes a human-readable Markdown report to `plans/active_milestones/{moniker}/adversarial-reviews/{stage}-validation.md` — on every run, re-runs preserved as `-r2`/`-r3`. All three carry `tools: all` because they spawn their own skeptic subagents.
 
 #### 7. `spec-validator` — Attack the Spec
 `model: inherit` · `color: red` — Runs **after a spec is drafted, before a plan is written** — defects are cheapest to fix here.
@@ -245,7 +245,7 @@ The swarm communicates through files under `plans/` — the layout is identical 
 | `plans/active_milestones/{moniker}/plan.md` | `architect` | Micro-stepped plan with parallel execution groups; engineer checks off todos here. |
 | `plans/active_milestones/{moniker}/data-model.md` · `api-contracts.md` | `architect` | Optional supporting design artifacts. |
 | `plans/active_milestones/{moniker}/visual-plan.html` | `visual-architect` | Self-contained, browsable companion to `plan.md` for the human review gate (zero build). |
-| `plans/active_milestones/{moniker}/adversarial-reviews/{spec,plan,implementation}-validation.md` | `spec-validator` · `plan-validator` · `implementation-validator` | Human-readable report from each skeptic panel — verdict, confirmed findings (with `file:line` evidence and fixes), unconfirmed tail, and (for implementation) the severity-calibration table. Written every run; re-runs append `-r2`, `-r3`. |
+| `plans/active_milestones/{moniker}/adversarial-reviews/{spec,plan,implementation}-validation.md` | `spec-validator` · `plan-validator` · `implementation-validator` | Human-readable report from each skeptic panel — verdict, confirmed findings (with `file:line` evidence and fixes), the single-vote tail for triage, and (for implementation) the severity-calibration table. Written every run; re-runs append `-r2`, `-r3`. |
 | `plans/active_milestones/{moniker}/adversarial-reviews/geap-interactions-{spec,plan}-validation.md` | `geap-interactions-*-validator` skills (via `geap-interactions-caller`) | Report from the **no-Python** remote panel (Interactions API via curl/ADC, Vertex fallback) — per-model transport and a Panel Health section. |
 | `plans/audit/AUDIT_[Plan_Name].md` | `auditor` | Evidence-based audit report (the `plans/audit/` dir is git-ignored). |
 | `plans/active_milestones/{moniker}/visual-recap.html` | `visual-implementation-recap` | Self-contained, browsable recap of everything the milestone changed — diffstat, annotated diffs, task/audit status — for the human commit gate (zero build). |

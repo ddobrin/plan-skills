@@ -1,6 +1,6 @@
 ---
 name: spec-deliberator
-description: Use when a drafted spec depends on knowledge that is siloed across stakeholders, documents, or repos — BEFORE adversarial validation — to improve the spec by deliberation rather than attack. Dispatches delegate agents with deliberately DISJOINT context bundles (product, engineering, ops/security) who deliberate over bounded rounds, relayed verbatim by the orchestrator, until they converge on a single jointly revised spec. Symptoms - "deliberate on this spec", "improve this spec from multiple perspectives", "get product/eng/security input on the spec", "the constraints live in different places", spec touches systems whose limits no single context window can hold, resolving the unconfirmed tail of a spec-validator run.
+description: Use when a drafted spec depends on knowledge that is siloed across stakeholders, documents, or repos — BEFORE adversarial validation — to improve the spec by deliberation rather than attack. Dispatches delegate agents with deliberately DISJOINT context bundles (product, engineering, ops/security) who deliberate over bounded rounds, relayed verbatim by the orchestrator, until they converge on a single jointly revised spec. Symptoms - "deliberate on this spec", "improve this spec from multiple perspectives", "get product/eng/security input on the spec", "the constraints live in different places", spec touches systems whose limits no single context window can hold, resolving the single-vote tail of a spec-validator run.
 ---
 
 # Deliberative Spec Improvement
@@ -28,9 +28,9 @@ entire mechanism.
   policy, a legacy repo's real behavior.
 - Stakeholder perspectives genuinely conflict and the spec must reconcile them
   (latency vs. cost, UX vs. security) rather than pick one silently.
-- A `spec-validator` run left **unconfirmed 1-vote findings** the author cannot
-  adjudicate alone — deliberation over exactly that disputed tail is the highest-value
-  hybrid (see **Relationship to spec-validator**).
+- A `spec-validator` run left **single-vote findings** the author cannot adjudicate
+  alone — deliberation over exactly that disputed tail is the highest-value hybrid
+  (see **Relationship to spec-validator**).
 
 ## When NOT to Use
 
@@ -92,9 +92,9 @@ the partition: **disjoint bundles, jointly covering everything the spec depends 
   centrally instead — say so to the user.
 
 ### 2. Author delegate prompts
-Fill the **Delegate Prompt Template** below once per delegate, varying only the role,
-the private bundle, and the concern list. The "acceptance requires a basis" and
-"your final message MUST be JSON" clauses are load-bearing — keep them verbatim.
+Fill the template in `references/delegate-prompt.md` once per delegate, varying only the
+role, the private bundle, and the concern list. That file also carries the orchestrator's
+**Output Contract**.
 
 ### 3. Dispatch round 1 (sequential turns)
 Turns are **sequential, not parallel** — delegate 2 must see delegate 1's utterance,
@@ -135,142 +135,16 @@ verbatim, plus the current proposal version.
   folder if needed; bare spec with no milestone → `plans/deliberations/spec-deliberation.md`
   and say so). **Always write it, even if the panel converged on "no changes"** —
   who knew what, who conceded what, and why is the audit trail. Re-runs append
-  `-r2`, `-r3`, … Fill the **Deliberation Record** template verbatim.
+  `-r2`, `-r3`, …
+
+  Fill the template in `references/deliberation-record.md`. See
+  `references/worked-example.md` for a complete run.
 
 ### 7. Hand off to validation
 Deliberation is generative, not evaluative — the delegates were building, and builders
 have blind spots that consensus does not cure. **Run `spec-validator` on the revised
 spec** before any plan is written. The panel improving a spec is not evidence the spec
 survives attack.
-
-## Delegate Prompt Template
-
-Dispatch once per delegate via the `Agent` tool. Replace `{ROLE}`, `{CONCERNS}`,
-`{PRIVATE_BUNDLE}`, `{SPEC}`, `{TRANSCRIPT}`, and `{CURRENT_PROPOSAL}`.
-
-```
-You are the {ROLE} delegate on a spec deliberation panel. The panel's shared goal is
-ONE revised spec that every delegate can accept. You share the reward: a spec that
-fails in production fails for all of you, whichever delegate's blind spot caused it.
-
-You hold PRIVATE KNOWLEDGE the other delegates do not have. Your job is to
-(a) surface every private fact that should change the spec — an undisclosed
-constraint is a defect you caused — and (b) challenge proposals that contradict
-your knowledge, citing the specific fact, not your intuition.
-
-SPEC UNDER DELIBERATION:
-{SPEC}
-
-YOUR PRIVATE BUNDLE (only you can see this):
-{PRIVATE_BUNDLE}
-
-YOUR CONCERNS: {CONCERNS}
-
-TRANSCRIPT SO FAR (verbatim, may be empty in round 1):
-{TRANSCRIPT}
-
-CURRENT PROPOSAL: version {v}, edits: {CURRENT_PROPOSAL}
-
-Rules of deliberation:
-- Ground every objection in a fact from your bundle. Cite it. "This feels risky"
-  is not a turn.
-- Do not concede to end the conversation. Accept ONLY if the proposal is consistent
-  with everything in your bundle, and state your acceptance basis: what you checked,
-  or what argument changed your mind.
-- Do not restate what the transcript already establishes; add information or
-  challenge, or accept.
-- Propose amendments as concrete spec edits, not sentiments.
-
-Your final message MUST be exactly one fenced JSON block and nothing else, matching:
-
-```json
-{
-  "utterance": "what you say to the panel this turn — arguments, disclosures, reactions",
-  "disclosures": ["each private fact you introduced into the record this turn"],
-  "amendments": [
-    {
-      "section": "spec section or heading the edit targets",
-      "edit": "the concrete replacement/added text",
-      "reason": "the private fact or transcript argument motivating it"
-    }
-  ],
-  "stance": "accept|amend|object",
-  "acceptance_basis": "REQUIRED when stance is accept: what you verified against your bundle, or what changed your mind. Empty otherwise."
-}
-```
-```
-
-## Output Contract
-
-Each turn returns the JSON above. The orchestrator (you) maintains:
-
-```json
-{
-  "proposal_versions": [ { "version": 2, "edits": ["..."], "produced_by": "engineering, round 1" } ],
-  "acceptances": { "product": 2, "engineering": 2, "ops": 1 },
-  "disputes": [ { "topic": "...", "positions": {"product": "...", "ops": "..."}, "resolution": "converged v2 | escalated" } ]
-}
-```
-
-Convergence = all delegates' accepted version equals the latest version.
-
-## The Deliberation Record
-
-Written in step 6 to `plans/active_milestones/{moniker}/deliberations/spec-deliberation.md`.
-A reader should understand what changed and *why* without opening any transcript. Use
-`date +%Y-%m-%d` for the date. Keep every section, even when empty (write `_None._`).
-
-```markdown
-# Spec Deliberation — {spec title}
-
-> `spec-deliberator` · {N} delegates with disjoint context bundles · verbatim relay · {R} rounds to convergence
-
-| Field | Value |
-|---|---|
-| Milestone | `{moniker}` |
-| Artifact | `plans/active_milestones/{moniker}/spec.md` |
-| Date | {YYYY-MM-DD} |
-| Panel | {product · engineering · ops} |
-| Outcome | **{converged on v{n} · arbitrated · escalated}** — {K} edits applied |
-
-## Verdict
-
-{1–3 sentences: what materially changed in the spec and why the panel was needed —
-which siloed fact drove the biggest edit.}
-
-## Panel & Bundles
-
-| Delegate | Private bundle (summary) | Key disclosure |
-|---|---|---|
-| product | {what only it saw} | {the fact that mattered} |
-
-## Edits Applied (converged proposal v{n})
-
-### `{section}` — {one-line description}
-- **Before:** "{original clause, or `<ABSENT>`}"
-- **After:** "{revised clause}"
-- **Driven by:** {delegate} — {the private fact or challenge that forced it}
-- **Accepted by:** all, round {r} _(bases: {one clause per delegate})_
-
-_(repeat per edit)_
-
-## Disputes
-
-| Topic | Positions | Resolution |
-|---|---|---|
-| {topic} | product: {…} / ops: {…} | {converged v{n} · arbitrated (majority) · 🛑 escalated to user} |
-
-## Round Log
-
-- **R1:** {one line per delegate: disclosed X, proposed Y / objected to Z}
-- **R2:** {…}
-
-## Handoff
-
-- [ ] Revised spec written to `spec.md`
-- [ ] `spec-validator` run on the revision → `adversarial-reviews/spec-validation.md`
-- [ ] Escalated disputes decided by user _(or: none)_
-```
 
 ## Relationship to spec-validator
 
@@ -287,37 +161,12 @@ The two skills are inverses; use them in sequence, not as alternatives.
 **Pipeline:** `product-owner` (draft) → `spec-deliberator` (enrich with siloed
 constraints) → `spec-validator` (attack) → fold tightenings → plan.
 
-**The hybrid round:** after a `spec-validator` run, its *unconfirmed 1-vote findings*
-are precisely where independent judgment ran out. Convening a mini-panel (2 delegates,
+**The hybrid round:** after a `spec-validator` run, its *single-vote findings* are
+precisely where independent judgment ran out. Convening a mini-panel (2 delegates,
 2 rounds max) over only those findings — one delegate briefed to defend the spec's
 intent, one holding the skeptic's finding — imports deliberation's reflection benefit
 at the point of maximum uncertainty without contaminating the validator's independent
 pass. Record it as `deliberations/spec-deliberation-tail.md`.
-
-## Worked Example
-
-> Spec draft: *"The export endpoint returns the user's records as a downloadable file. Exports should be fast and handle large accounts."*
-
-Bundles: **product** gets user research (exports used for tax filing; 95% of accounts
-< 10k records; CSV expected), **engineering** gets infra docs (30s gateway timeout,
-100MB response cap, sharded store), **ops** gets the data policy (row-level ACLs,
-audit logging mandatory).
-
-- **R1 — engineering** discloses the 30s timeout: "fast" and "large accounts" cannot
-  both be synchronous; proposes async-only export (v1).
-- **R1 — product** objects to v1 citing its bundle: 95% of accounts are small and
-  users export interactively at tax time; amends to sync ≤ 50k records, async above
-  (v2). Also discloses: format must be CSV with a stable header — "a file" is
-  underspecified.
-- **R1 — ops** accepts v2's shape but amends: the async worker must run under the
-  requester's ACLs, not a service account, and every export is audit-logged (v3).
-- **R2 —** engineering accepts v3 (basis: checked v3's sync threshold against the
-  response cap — 50k rows ≈ 12MB, fits); product accepts v3 (basis: interactive path
-  preserved); ops accepts v3 (basis: its own amendment). **Converged, v3, 2 rounds.**
-
-Three facts from three silos — the timeout, the tax-time workflow, the ACL rule —
-none of which any single delegate held. The revised spec then goes to
-`spec-validator`, which now has real thresholds to attack instead of "fast".
 
 ## Red Flags
 

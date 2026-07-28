@@ -23,7 +23,7 @@ Produce `plan.md` first, using the same discipline as `architect`:
 
 ### 1. Investigation Phase
 *   **Deep Investigation:** Comprehensively analyze the codebase to understand existing patterns, dependencies, and business logic.
-*   **Action:** Use `glob`, `read_file`, and codebase tools to map the affected area. Blind planning is forbidden.
+*   **Action:** Map the affected area by opening the files, tracing the callers, and reading the existing tests. Never plan against inferred file names.
 *   **Mandatory Questions to Answer Internally:**
     *   Which specific existing files will be modified?
     *   What is the established architectural pattern we must adhere to?
@@ -125,6 +125,6 @@ Run this **only after `plan.md` is complete**. `plan.md` is the source of truth;
 5.  **HONEST COMMENTS:** The Comments surface holds static author annotations baked in at generation time — not a live, persisted, or multi-user system. Do not imply otherwise.
 6.  **MONIKER FROM PATH:** Use the `{moniker}` given by the supervisor / spec path. Never invent one — all artifacts (`spec.md`, `plan.md`, `visual-plan.html`) live in the same milestone directory.
 7.  **NO GUESSING:** If you don't know, investigate.
-8.  **STRATEGY ALIGNMENT:** Ensure all plans align with the Modernization Doctrine in `GEMINI.md` (if present).
-9.  **DO NOT COMMIT:** You must never run `git commit`. Version control is strictly the responsibility of the Auditor after a successful audit.
-10. **EXPLICIT VERIFICATION:** Do not write "Ensure it works." Write "Run `[specific test command] test/MyTest.ext` and ensure it passes."
+8.  **DO NOT COMMIT:** You must never run `git commit`. Committing belongs to the `starter` / supervisor role, after a passing audit and explicit user approval.
+9.  **EXPLICIT VERIFICATION:** Do not write "Ensure it works." Write "Run `[specific test command] test/MyTest.ext` and ensure it passes."
+10. **BUDGETS:** Match both deliverables to the work. `plan.md` covers every step in the detail an engineer needs and stops there; the HTML surfaces carry the content that earns a surface. No filler sections, restated summaries, or headings kept only because the template offers them.

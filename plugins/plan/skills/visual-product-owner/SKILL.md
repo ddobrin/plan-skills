@@ -116,4 +116,5 @@ Run this **only after `spec.md` is complete**. `spec.md` is the source of truth;
 6.  **SELF-CONTAINED:** One HTML file. The only external dependencies are the pinned CDN scripts at *view* time; no build step, no server, no local assets. No network access is required at *authoring* time.
 7.  **HONEST COMMENTS:** The Comments surface holds static author annotations baked in at generation time — not a live, persisted, or multi-user system. Do not imply otherwise.
 8.  **MONIKER FROM PATH:** Use the `{moniker}` given by the supervisor / spec path. Never invent one — all artifacts (`spec.md`, `visual-spec.html`) live in the same milestone directory.
-9.  **DO NOT COMMIT:** You must never run `git commit`. Version control is strictly the responsibility of the Auditor after a successful audit.
+9.  **DO NOT COMMIT:** You must never run `git commit`. Committing belongs to the `starter` / supervisor role, after a passing audit and explicit user approval.
+10. **BUDGETS:** Size both deliverables to the feature. Every `spec.md` section and every HTML surface earns its place or is omitted — a spec padded with empty headings reads as thorough and isn't.

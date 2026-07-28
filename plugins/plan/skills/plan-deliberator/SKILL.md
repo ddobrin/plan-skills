@@ -1,6 +1,6 @@
 ---
 name: plan-deliberator
-description: Use when a drafted implementation plan spans territories no single agent can hold at once — the spec's intent, multiple subsystems of the real codebase, and the delivery pipeline — BEFORE plan-validator, to improve the plan by deliberation rather than attack. Dispatches delegate agents each assigned a different territory to deep-read and speak for, who deliberate over bounded rounds until they converge on a single jointly revised plan, negotiating the trade-offs (migration strategy, group boundaries, scope) that a validator can only flag, never decide. Symptoms - "deliberate on this plan", "improve this plan from multiple perspectives", "the plan touches three subsystems", "we need to pick a migration strategy", plan.md spans code no one context window can deep-read whole, resolving the unconfirmed tail of a plan-validator run.
+description: Use when a drafted implementation plan spans territories no single agent can hold at once — the spec's intent, multiple subsystems of the real codebase, and the delivery pipeline — BEFORE plan-validator, to improve the plan by deliberation rather than attack. Dispatches delegate agents each assigned a different territory to deep-read and speak for, who deliberate over bounded rounds until they converge on a single jointly revised plan, negotiating the trade-offs (migration strategy, group boundaries, scope) that a validator can only flag, never decide. Symptoms - "deliberate on this plan", "improve this plan from multiple perspectives", "the plan touches three subsystems", "we need to pick a migration strategy", plan.md spans code no one context window can deep-read whole, resolving the single-vote tail of a plan-validator run.
 ---
 
 # Deliberative Plan Improvement
@@ -31,8 +31,8 @@ each territory's constraints on the record.
 - The plan contains an **open or contestable trade-off**: migration strategy, execution
   group boundaries, build-vs-reuse, sequencing under a deploy window, test depth vs.
   schedule.
-- A `plan-validator` run left **unconfirmed 1-vote findings** that need adjudication,
-  not another vote (see **Relationship to plan-validator**).
+- A `plan-validator` run left **single-vote findings** that need adjudication, not
+  another vote (see **Relationship to plan-validator**).
 
 ## When NOT to Use
 
@@ -96,10 +96,9 @@ plan depends on**.
   so to the user.
 
 ### 2. Author delegate prompts
-Fill the **Delegate Prompt Template** below once per delegate, varying the territory,
-the investigation instructions, and the guard list. The "cite your territory",
-"acceptance requires a basis", and "final message MUST be JSON" clauses are
-load-bearing — keep them verbatim.
+Fill the template in `references/delegate-prompt.md` once per delegate, varying the
+territory, the investigation instructions, and the guard list. That file also carries the
+orchestrator's **Output Contract**.
 
 ### 3. Dispatch round 1 (investigate, then sequential turns)
 Turns are **sequential, not parallel** — delegate 2 must see delegate 1's utterance, or
@@ -140,157 +139,15 @@ whether `schedule()` tolerates a null") — that is the pattern working, not a s
   folder if needed; bare plan with no milestone → `plans/deliberations/plan-deliberation.md`
   and say so). **Always write it, even if the panel converged on "no changes"** — who
   investigated what, which trade-off was decided on which evidence, is the audit trail.
-  Re-runs append `-r2`, `-r3`, … Fill the **Deliberation Record** template verbatim.
+  Re-runs append `-r2`, `-r3`, …
+
+  Fill the template in `references/deliberation-record.md`. See
+  `references/worked-example.md` for a complete run.
 
 ### 7. Hand off to validation
 Deliberation is generative, not evaluative — the delegates were reshaping, and a panel
 that just negotiated a trade-off is invested in it. **Run `plan-validator` on the
 revised plan** before execution. Consensus is not adversarial survival.
-
-## Delegate Prompt Template
-
-Dispatch once per delegate via the `Agent` tool. Replace `{ROLE}`, `{TERRITORY}`,
-`{GUARDS}`, `{PLAN}`, `{SPEC_PATH}`, `{REPO_ROOT}`, `{TRANSCRIPT}`, `{CURRENT_PROPOSAL}`.
-
-```
-You are the {ROLE} delegate on a plan deliberation panel. The panel's shared goal is ONE
-revised implementation plan every delegate can accept. You share the reward: a plan that
-fails in execution fails for all of you, whichever delegate's territory hid the cause.
-
-YOUR TERRITORY (deep-read this BEFORE your first utterance; you are the panel's only
-authority on it — no other delegate will read it):
-{TERRITORY}
-
-YOUR GUARDS: {GUARDS}
-
-PLAN UNDER DELIBERATION:
-{PLAN}
-
-SPEC IT IMPLEMENTS: {SPEC_PATH}
-REPOSITORY ROOT: {REPO_ROOT}
-
-TRANSCRIPT SO FAR (verbatim, may be empty in round 1):
-{TRANSCRIPT}
-
-CURRENT PROPOSAL: version {v}, edits: {CURRENT_PROPOSAL}
-
-Rules of deliberation:
-- Investigate first, speak second. Every claim about your territory cites evidence:
-  file:line for code, a quoted clause for the spec, a named command/config for the
-  pipeline. An uncited claim is a guess and wastes the panel's round budget.
-- Surface every territory fact that should change the plan — an undisclosed constraint
-  is a defect you caused.
-- Challenge proposals that contradict your territory; concede points outside it.
-- When the plan leaves a trade-off open (migration strategy, group boundaries,
-  build-vs-reuse), state your territory's position AND its cost, so the panel can
-  decide with all constraints on the record.
-- Do not concede to end the conversation. Accept ONLY if the proposal is consistent
-  with everything you verified, and state your acceptance basis: what you checked, or
-  what argument changed your mind.
-- Propose amendments as concrete plan edits (reorder, insert step, retarget name,
-  split/merge group), not sentiments.
-
-Your final message MUST be exactly one fenced JSON block and nothing else, matching:
-
-```json
-{
-  "utterance": "what you say to the panel this turn — arguments, disclosures, reactions",
-  "disclosures": [
-    { "fact": "territory fact introduced into the record", "evidence": "file:line | spec clause | command/config" }
-  ],
-  "amendments": [
-    {
-      "target": "step number / group / section of the plan",
-      "edit": "the concrete change: reorder, insert, remove, retarget, regroup",
-      "reason": "the cited territory fact or transcript argument motivating it"
-    }
-  ],
-  "stance": "accept|amend|object",
-  "acceptance_basis": "REQUIRED when stance is accept: what you verified in your territory, or what changed your mind. Empty otherwise."
-}
-```
-```
-
-## Output Contract
-
-Each turn returns the JSON above. The orchestrator (you) maintains:
-
-```json
-{
-  "proposal_versions": [ { "version": 2, "edits": ["..."], "produced_by": "codebase, round 1" } ],
-  "acceptances": { "intent": 2, "codebase": 2, "delivery": 1 },
-  "tradeoffs_decided": [ { "topic": "backfill strategy", "chosen": "online default + lazy backfill", "over": "offline migration", "because": "delivery: no maintenance window before release; codebase: schedule() tolerates default 0 (scheduler/JobScheduler.java:88)" } ],
-  "disputes": [ { "topic": "...", "positions": {"intent": "...", "delivery": "..."}, "resolution": "converged v2 | escalated" } ]
-}
-```
-
-Convergence = all delegates' accepted version equals the latest version.
-
-## The Deliberation Record
-
-Written in step 6 to `plans/active_milestones/{moniker}/deliberations/plan-deliberation.md`.
-A reader should understand what changed in the plan and *which territory's evidence forced
-it* without opening any transcript. Use `date +%Y-%m-%d` for the date. Keep every
-section, even when empty (write `_None._`).
-
-```markdown
-# Plan Deliberation — {plan title}
-
-> `plan-deliberator` · {N} delegates with disjoint territories · evidence-grounded turns · verbatim relay · {R} rounds to convergence
-
-| Field | Value |
-|---|---|
-| Milestone | `{moniker}` |
-| Artifact | `plans/active_milestones/{moniker}/plan.md` |
-| Date | {YYYY-MM-DD} |
-| Panel | {intent · codebase · delivery} |
-| Outcome | **{converged on v{n} · arbitrated · escalated}** — {K} edits applied, {T} trade-offs decided |
-
-## Verdict
-
-{1–3 sentences: what materially changed in the plan and which territory's evidence drove
-the biggest change or decided the central trade-off.}
-
-## Panel & Territories
-
-| Delegate | Territory (what it deep-read) | Key disclosure (with evidence) |
-|---|---|---|
-| codebase | {files/subsystems} | {the fact that mattered} — `{file:line}` |
-
-## Trade-offs Decided
-
-### {topic}
-- **Chosen:** {option} — **over** {rejected option}
-- **Because:** {each territory's constraint, cited}
-- **Accepted by:** all, round {r}
-
-## Edits Applied (converged proposal v{n})
-
-### {target: step/group} — {one-line description}
-- **Before:** "{original step/ordering, or `<ABSENT>`}"
-- **After:** "{revised}"
-- **Driven by:** {delegate} — {cited territory fact}
-- **Accepted by:** all, round {r} _(bases: {one clause per delegate})_
-
-_(repeat per edit)_
-
-## Disputes
-
-| Topic | Positions | Resolution |
-|---|---|---|
-| {topic} | intent: {…} / delivery: {…} | {converged v{n} · arbitrated (majority) · 🛑 escalated to user} |
-
-## Round Log
-
-- **R1:** {one line per delegate: investigated X, disclosed Y, proposed/objected Z}
-- **R2:** {…}
-
-## Handoff
-
-- [ ] Revised plan written to `plan.md` (structure preserved: groups, test-first steps)
-- [ ] `plan-validator` run on the revision → `adversarial-reviews/plan-validation.md`
-- [ ] Escalated disputes decided by user _(or: none)_
-```
 
 ## Relationship to plan-validator
 
@@ -309,44 +166,11 @@ The two skills are inverses; use them in sequence, not as alternatives.
 evidence, decide trade-offs) → `plan-validator` (attack) → fold fixes → 🛑 human gate →
 execute.
 
-**The hybrid round:** after a `plan-validator` run, its *unconfirmed 1-vote findings*
-are where independent judgment ran out. Convene a mini-panel (2 delegates, 2 rounds
-max) over only those findings — one delegate briefed to defend the plan's approach, one
-assigned the territory the finding concerns, both citing evidence. Record it as
+**The hybrid round:** after a `plan-validator` run, its *single-vote findings* are where
+independent judgment ran out. Convene a mini-panel (2 delegates, 2 rounds max) over only
+those findings — one delegate briefed to defend the plan's approach, one assigned the
+territory the finding concerns, both citing evidence. Record it as
 `deliberations/plan-deliberation-tail.md`.
-
-## Worked Example
-
-> Plan excerpt (from `architect`): *"Step 2: add `retryCount` to the `Job` record.
-> Step 3: update `JobScheduler.dispatch()` to read `retryCount`. Step 4: migrate
-> existing rows. Groups: {2,3} parallel with {4}."*
-
-Territories: **intent** deep-reads the spec (acceptance criterion: *"failed jobs retry
-≤ 3 times; retries visible in the ops dashboard"*), **codebase** deep-reads
-`scheduler/` and `dashboard/`, **delivery** reads CI config and migration tooling.
-
-- **R1 — codebase** discloses: no `dispatch()` exists — the method is `schedule(Job)`
-  (`scheduler/JobScheduler.java:88`); also legacy rows have no `retryCount`, and
-  `schedule()` NPEs on null fields (`:104`). Amends: retarget step 3; the plan needs a
-  default *before* step 3 (v1).
-- **R1 — intent** objects to the plan's scope, citing the criterion: retries must be
-  *visible in the dashboard* — no step touches `dashboard/`. Amends: add step 5,
-  dashboard column + test (v2).
-- **R1 — delivery** discloses: there is no maintenance window before the release
-  (`deploy/RELEASES.md`), so an offline migration in step 4 cannot run; states the
-  trade-off: offline migration (simpler, needs window) vs. online default + lazy
-  backfill (no window, more code). Proposes online: step 2b "default `retryCount` to
-  0", step 4 becomes lazy backfill, groups reordered — {2, 2b} → {3, 5} ∥ {4} (v3).
-- **R2 — codebase** accepts v3 (basis: verified `schedule()` handles default 0,
-  `:104`); **intent** accepts v3 (basis: criterion now maps to steps 3+5); **delivery**
-  accepts its own v3. **Converged, v3, 2 rounds. Trade-off decided: online backfill,
-  because no-window + null-intolerant scheduler.**
-
-Compare `plan-validator`'s worked example on the same plan: it *finds*
-`dispatch-signature-missing` and `migrate-before-default` — but it cannot add the
-missing dashboard step (that requires the spec's intent) and cannot *choose* the
-backfill strategy (that requires weighing delivery constraints against code shape).
-The deliberation did both, and the revised plan then faces the validator anyway.
 
 ## Red Flags
 
