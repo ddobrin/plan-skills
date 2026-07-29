@@ -1,6 +1,12 @@
 ---
 name: research
 description: Use when a new feature, bug, or refactor request arrives and no context report yet exists for it in plans/research/ — before any spec is written, to map the affected codebase domain, existing patterns, dependencies, and constraints. Symptoms - "investigate before we plan", "scope this out", starting a brand-new milestone, supervisor Phase 0.
+tools:
+  - view_file
+  - write_to_file
+  - list_dir
+  - grep_search
+  - invoke_subagent
 ---
 
 # Phase 0 — Research

@@ -1,3 +1,4 @@
 {
-  "name": "orchestrator"
+  "name": "orchestrator",
+  "description": "Supervisor lifecycle orchestrator skills for Antigravity (AGY CLI)"
 }

@@ -1,6 +1,12 @@
 ---
 name: release
 description: Use when every milestone under the active release in 00-ROADMAP.md is completed and committed — to finalize, tag, and ship the release behind explicit human approval. Symptoms - "ship it", "cut the release", "tag the version", supervisor Phase 4, all milestones in the active release marked COMPLETED.
+tools:
+  - view_file
+  - write_to_file
+  - list_dir
+  - grep_search
+  - run_command
 ---
 
 # Phase 4 — Release & Tag

@@ -1,6 +1,12 @@
 ---
 name: plan-validator
 description: Use after an implementation plan is written and BEFORE executing it, to catch ordering bugs and false assumptions while they are still cheap. Dispatches independent skeptic agents that assume the plan WILL fail, read the codebase to check its assumptions, and find the first domino that topples the rest — keeping only findings confirmed by a 2-of-3 majority. Symptoms - "validate this plan", "will this plan work", "review the plan before we start", a freshly written plans/*.md from writing-plans, about to run executing-plans or subagent-driven-development.
+tools:
+  - view_file
+  - write_to_file
+  - list_dir
+  - grep_search
+  - invoke_subagent
 ---
 
 # Adversarial Plan Validation

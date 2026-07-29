@@ -1,6 +1,12 @@
 ---
 name: discovery
 description: Use when a context report exists for a request but no validated spec yet — to turn the idea into a rigorous, testable spec and pass it through an adversarial spec gate before any planning begins. Symptoms - "write the spec", "we have research, what's next", supervisor Phase 1, a spec.md that has not yet passed spec-validation.
+tools:
+  - view_file
+  - write_to_file
+  - list_dir
+  - grep_search
+  - invoke_subagent
 ---
 
 # Phase 1 — Discovery (Spec + Spec Gate)

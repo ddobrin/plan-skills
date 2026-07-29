@@ -1,6 +1,12 @@
 ---
 name: construction
 description: Use when a spec and plan are approved and the plan still has unchecked tasks — to implement each execution group with TDD, refine it, audit it, adversarially attack the diff, and commit per group behind human approval. Symptoms - "start building", "implement the plan", "execute group N", supervisor Phase 3, an approved plan.md with [ ] tasks remaining.
+tools:
+  - view_file
+  - write_to_file
+  - list_dir
+  - grep_search
+  - invoke_subagent
 ---
 
 # Phase 3 — Construction (Implement → Refine → Audit → Attack → Commit)

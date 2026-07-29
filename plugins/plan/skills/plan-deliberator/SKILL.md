@@ -1,6 +1,12 @@
 ---
 name: plan-deliberator
 description: Use when a drafted implementation plan spans territories no single agent can hold at once — the spec's intent, multiple subsystems of the real codebase, and the delivery pipeline — BEFORE plan-validator, to improve the plan by deliberation rather than attack. Dispatches delegate agents each assigned a different territory to deep-read and speak for, who deliberate over bounded rounds until they converge on a single jointly revised plan, negotiating the trade-offs (migration strategy, group boundaries, scope) that a validator can only flag, never decide. Symptoms - "deliberate on this plan", "improve this plan from multiple perspectives", "the plan touches three subsystems", "we need to pick a migration strategy", plan.md spans code no one context window can deep-read whole, resolving the unconfirmed tail of a plan-validator run.
+tools:
+  - view_file
+  - write_to_file
+  - list_dir
+  - grep_search
+  - invoke_subagent
 ---
 
 # Deliberative Plan Improvement

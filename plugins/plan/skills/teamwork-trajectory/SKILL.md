@@ -1,6 +1,11 @@
 ---
 name: teamwork-trajectory
 description: Automatically scans the .agents/ directory, parses agent briefing and handoff records, and compiles a stunning interactive HTML visualization timeline written directly under .agents/trajectory.html.
+tools:
+  - view_file
+  - write_to_file
+  - list_dir
+  - grep_search
 ---
 
 # Teamwork Trajectory Skill

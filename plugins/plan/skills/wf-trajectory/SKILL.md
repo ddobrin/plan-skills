@@ -1,6 +1,12 @@
 ---
 name: wf-trajectory
 description: Renders a completed Claude Code dynamic Workflow run (wf_<runId>.json) as a self-contained, offline HTML page with a run→phase→agent tree and a parallelism timeline. Trigger when the user asks to "visualize the workflow run", "render wf trajectory", "trace a workflow", or "show the last workflow execution".
+tools:
+  - view_file
+  - write_to_file
+  - list_dir
+  - grep_search
+  - run_command
 ---
 
 # Workflow Trajectory Skill

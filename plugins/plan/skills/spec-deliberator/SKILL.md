@@ -1,6 +1,12 @@
 ---
 name: spec-deliberator
 description: Use when a drafted spec depends on knowledge that is siloed across stakeholders, documents, or repos — BEFORE adversarial validation — to improve the spec by deliberation rather than attack. Dispatches delegate agents with deliberately DISJOINT context bundles (product, engineering, ops/security) who deliberate over bounded rounds, relayed verbatim by the orchestrator, until they converge on a single jointly revised spec. Symptoms - "deliberate on this spec", "improve this spec from multiple perspectives", "get product/eng/security input on the spec", "the constraints live in different places", spec touches systems whose limits no single context window can hold, resolving the unconfirmed tail of a spec-validator run.
+tools:
+  - view_file
+  - write_to_file
+  - list_dir
+  - grep_search
+  - invoke_subagent
 ---
 
 # Deliberative Spec Improvement

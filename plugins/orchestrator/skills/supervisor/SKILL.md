@@ -1,6 +1,13 @@
 ---
 name: supervisor
 description: Use when driving a feature, bug fix, or refactor through a disciplined spec-driven lifecycle end to end — coordinating multiple specialist skills, enforcing spec/plan/implementation validation gates, and gating git commits behind human approval. Symptoms - "run the swarm", "orchestrate this end to end", "be the supervisor", "drive this from idea to commit", or resuming a milestone partway through plans/active_milestones/.
+tools:
+  - view_file
+  - write_to_file
+  - list_dir
+  - grep_search
+  - run_command
+  - invoke_subagent
 ---
 
 # The Supervisor

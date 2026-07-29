@@ -1,6 +1,12 @@
 ---
 name: geap-plan-validator
 description: Remote drop-in alternative to plan-validator - runs the adversarial implementation-plan review on Vertex AI foundation models (3 configurable skeptics + a synthesis model) instead of local subagents, attacking the plan text for ordering defects, hidden assumptions, and missing failure handling. Symptoms - "run the remote plan panel", "GEAP plan validation", "validate this plan with cloud/Vertex models", "get a second opinion on this plan from other models", plan-validator requested with remote or Gemini/Claude-on-Vertex models.
+tools:
+  - view_file
+  - write_to_file
+  - list_dir
+  - grep_search
+  - run_command
 ---
 
 # GEAP Remote Plan Validation

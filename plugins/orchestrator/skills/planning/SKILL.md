@@ -1,6 +1,12 @@
 ---
 name: planning
 description: Use when a validated spec exists but no validated plan yet — to translate the spec into a micro-stepped, parallel-grouped implementation plan and pass it through an adversarial plan gate before any code is written. Symptoms - "write the plan", "how do we build this", supervisor Phase 2, a plan.md that has not yet passed plan-validation.
+tools:
+  - view_file
+  - write_to_file
+  - list_dir
+  - grep_search
+  - invoke_subagent
 ---
 
 # Phase 2 — Planning (Plan + Plan Gate)
