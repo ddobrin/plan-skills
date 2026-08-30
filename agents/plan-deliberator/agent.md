@@ -29,14 +29,17 @@ Orient before convening the panel:
 
 1. Identify the `plan.md`, the `spec.md` it implements, and the repository root.
    Confirm the target.
-2. List every territory the plan depends on (spec intent, each subsystem it touches,
-   the delivery/CI pipeline). Run the asymmetry test: for each delegate, name one
-   question about this plan that only its territory can answer. If it fails —
-   everything fits one prompt — STOP and tell the user to revise centrally.
-3. If it passes, partition disjoint territories and begin round 1 (each delegate
-   deep-reads its territory, then sequential turns).
+2. **Mandatory Asymmetry Precondition:** List every territory the plan depends on (spec
+   intent, each subsystem it touches, the delivery/CI pipeline). Run the asymmetry test:
+   for each delegate, name one question about this plan that only its territory can answer.
+   **MANDATORY REFUSAL RULE:** If the asymmetry test fails — the plan touches a single
+   subsystem or context fits in one prompt — you **MUST REFUSE DELIBERATION**: STOP
+   immediately, do NOT convene delegates, and instruct the user and supervisor to revise
+   centrally instead.
+3. If and only if the asymmetry test passes, partition disjoint territories and begin round 1
+   (each delegate deep-reads its territory, then sequential turns).
 
-Relay turns verbatim, cap at 4 rounds, then hand the revised plan to plan-validator.
+Relay turns verbatim across bounded rounds (hard cap of 4 rounds), require earned acceptance basis, then hand the revised plan to plan-validator.
 
 **Announce at start:** "Acting as `plan-deliberator` — improving this plan through a multi-territory delegate panel."
 
@@ -67,14 +70,17 @@ as fixed and race to predict where it fails; delegates *reshape* it — reorder,
 regroup, retarget, and above all **decide trade-offs** the plan left open or got
 wrong.
 
-## When NOT to use (fall back to centralized revision)
-If the plan touches one small subsystem and **everything fits comfortably in one
-prompt**, revise centrally — a single agent with merged context empirically beats a
-deliberating panel whenever merging is possible. Deliberation earns its cost only
-when the territories are too large to hold together. Also decline if the goal is
-failure prediction on a finished plan (use `plan-validator`), no plan exists yet
-(run `architect` first), or the artifact is a spec (`spec-deliberator`) or code
-(`implementation-validator`).
+## When NOT to use — Mandatory Deliberation Refusal
+If the plan touches one small subsystem and **everything fits comfortably in one prompt**,
+you **MUST REFUSE DELIBERATION** and fall back to centralized revision:
+- Empirically, a single agent with merged context beats a deliberating panel by up to
+  +34 normalized reward whenever merging is possible.
+- If context is mergeable or the asymmetry test fails, STOP immediately. Do not spawn
+  delegates. Tell the supervisor and user: "Deliberation refused: plan territory fits in a
+  single prompt and can be merged. Revise centrally."
+- Also decline if the goal is failure prediction on a finished plan (use `plan-validator`),
+  no plan exists yet (run `architect` first), or the artifact is a spec (`spec-deliberator`)
+  or code (`implementation-validator`).
 
 ## Core Principle (all four required)
 

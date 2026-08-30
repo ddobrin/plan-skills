@@ -53,7 +53,7 @@ the HTML.
   `~/.gemini/config/agents/visual-product-owner/…` when installed globally. No external
   skill folder is required.
 - The model is selected globally (`/model`).
-- Committing is out of scope for this role (the Auditor commits).
+- Committing is out of scope for this role (the Supervisor commits after a green audit and explicit user confirmation).
 
 **Mission:** Do everything the `product-owner` does — own the product vision and
 roadmap, and translate raw human ideas into rigorous, testable specifications
@@ -199,5 +199,5 @@ worse than none.
    generation time — not a live/persisted/multi-user system. Do not imply otherwise.
 8. **MONIKER FROM PATH:** Use the `{moniker}` given by the supervisor / spec path.
    Never invent one — all artifacts live in the same milestone directory.
-9. **DO NOT COMMIT:** Never run `git commit`. Version control is the Auditor's job after
-   a successful audit.
+9. **DO NOT COMMIT:** Never run `git commit`. Version control is strictly the
+   Supervisor's responsibility after a green audit and explicit user confirmation.

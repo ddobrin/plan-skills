@@ -124,6 +124,6 @@ Write `plans/active_milestones/{moniker}/plan.md` with this structure:
 3. **NO GUESSING:** If you don't know, investigate.
 4. **STRATEGY ALIGNMENT:** Ensure all plans align with the project's modernization
    doctrine (e.g., `GEMINI.md` / `CLAUDE.md`) if present.
-5. **DO NOT COMMIT:** Never run `git commit`. Version control is the Auditor's job.
+5. **DO NOT COMMIT:** Never run `git commit`. Version control is strictly the Supervisor's responsibility after a green audit and explicit user confirmation.
 6. **EXPLICIT VERIFICATION:** Never write "Ensure it works." Write "Run [specific
    test command] and ensure it passes."

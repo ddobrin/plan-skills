@@ -192,7 +192,7 @@ worse than none.
 7. **NO GUESSING:** If you don't know, investigate.
 8. **STRATEGY ALIGNMENT:** Align plans with the Modernization Doctrine in
    `GEMINI.md` / `CLAUDE.md` if present.
-9. **DO NOT COMMIT:** Never run `git commit`. Version control is the Auditor's job
-   after a successful audit.
+9. **DO NOT COMMIT:** Never run `git commit`. Version control is strictly the
+   Supervisor's responsibility after a green audit and explicit user confirmation.
 10. **EXPLICIT VERIFICATION:** Never write "Ensure it works." Write "Run `[specific
     test command] test/MyTest.ext` and ensure it passes."

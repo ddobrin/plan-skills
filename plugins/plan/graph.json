@@ -1,0 +1,503 @@
+{
+  "graph_version": "plan-swarm@2.1",
+  "description": "The single source of truth for the plan swarm's topology. Nodes, edges, gates and node contracts are declared here; the lifecycle diagrams in the READMEs are generated from this file, and `lib/graph/graph.py validate` checks it against the skills on disk. Edit this file, then regenerate — never hand-edit a rendered diagram.",
+  "state_file": "plans/active_milestones/{moniker}/state.json",
+  "node_kinds": {
+    "entry": "Where a run begins. No skill.",
+    "role": "A single agent doing the phase's work.",
+    "panel": "A lens-partitioned fan-out with a quorum join. See `panel` on the node.",
+    "deliberation": "Delegates with disjoint territories, sequential verbatim-relayed turns, converging on one revised artifact. Not an edge — a conversation.",
+    "human-gate": "Execution stops for a person. Cannot run inside a scripted workflow.",
+    "renderer": "Additive: produces a human-facing view of an artifact that already exists.",
+    "terminal": "Where a run ends."
+  },
+  "nodes": [
+    {
+      "id": "request",
+      "kind": "entry",
+      "phase": "0",
+      "label": "request",
+      "sublabel": "feature · fix · refactor",
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "research",
+      "kind": "role",
+      "phase": "0",
+      "label": "research",
+      "sublabel": "plans/research/*.md",
+      "dispatched_by": "starter",
+      "reads": [
+        "<repo>"
+      ],
+      "writes": [
+        "plans/research/{topic}_context.md"
+      ]
+    },
+    {
+      "id": "product-owner",
+      "kind": "role",
+      "phase": "1",
+      "skill": "product-owner",
+      "agent": "product-owner",
+      "alternatives": [
+        "visual-product-owner"
+      ],
+      "label": "product-owner",
+      "sublabel": "spec.md · 00-ROADMAP.md",
+      "dispatched_by": "starter",
+      "reads": [
+        "plans/research/*.md",
+        "plans/00-ROADMAP.md"
+      ],
+      "writes": [
+        "plans/00-ROADMAP.md",
+        "plans/active_milestones/{moniker}/context.md",
+        "plans/active_milestones/{moniker}/spec.md"
+      ]
+    },
+    {
+      "id": "spec-deliberator",
+      "kind": "deliberation",
+      "phase": "1",
+      "optional": true,
+      "skill": "spec-deliberator",
+      "agent": "spec-deliberator",
+      "label": "spec-deliberator",
+      "sublabel": "3 delegates · disjoint bundles",
+      "dispatched_by": "starter",
+      "run_when": "The spec depends on knowledge siloed across stakeholders, docs, or repos, and the asymmetry test passes.",
+      "reads": [
+        "plans/active_milestones/{moniker}/spec.md",
+        "plans/active_milestones/{moniker}/context.md"
+      ],
+      "writes": [
+        "plans/active_milestones/{moniker}/spec.md",
+        "plans/active_milestones/{moniker}/deliberations/spec-deliberation.md"
+      ]
+    },
+    {
+      "id": "spec-validator",
+      "kind": "panel",
+      "phase": "1",
+      "skill": "spec-validator",
+      "agent": "spec-validator",
+      "label": "spec-validator",
+      "sublabel": "2-of-3 quorum gate",
+      "dispatched_by": "starter",
+      "blocks": "architect",
+      "panel": {
+        "n": 3,
+        "gate": "majority",
+        "prompt_file": "skills/spec-validator/references/skeptic-prompt.md",
+        "lenses": [
+          "internal-consistency",
+          "missing-requirement",
+          "malicious-compliance"
+        ],
+        "asymmetry": "reading assignment: the spec against itself · the world outside the spec · the acceptance criteria alone"
+      },
+      "reads": [
+        "plans/active_milestones/{moniker}/spec.md",
+        "plans/active_milestones/{moniker}/context.md"
+      ],
+      "writes": [
+        "plans/active_milestones/{moniker}/adversarial-reviews/spec-validation.md"
+      ]
+    },
+    {
+      "id": "architect",
+      "kind": "role",
+      "phase": "2",
+      "skill": "architect",
+      "agent": "architect",
+      "alternatives": [
+        "visual-architect"
+      ],
+      "label": "architect",
+      "sublabel": "plan.md · parallel groups",
+      "dispatched_by": "starter",
+      "reads": [
+        "plans/active_milestones/{moniker}/spec.md",
+        "<repo>"
+      ],
+      "writes": [
+        "plans/active_milestones/{moniker}/plan.md",
+        "plans/active_milestones/{moniker}/data-model.md",
+        "plans/active_milestones/{moniker}/api-contracts.md"
+      ],
+      "must_not_write": [
+        "<repo source>"
+      ]
+    },
+    {
+      "id": "plan-deliberator",
+      "kind": "deliberation",
+      "phase": "2",
+      "optional": true,
+      "skill": "plan-deliberator",
+      "agent": "plan-deliberator",
+      "label": "plan-deliberator",
+      "sublabel": "intent · codebase · delivery",
+      "dispatched_by": "starter",
+      "run_when": "The plan spans more territory than one agent can deep-read, or leaves a trade-off open, and the asymmetry test passes.",
+      "reads": [
+        "plans/active_milestones/{moniker}/plan.md",
+        "plans/active_milestones/{moniker}/spec.md",
+        "<repo>"
+      ],
+      "writes": [
+        "plans/active_milestones/{moniker}/plan.md",
+        "plans/active_milestones/{moniker}/deliberations/plan-deliberation.md"
+      ]
+    },
+    {
+      "id": "plan-validator",
+      "kind": "panel",
+      "phase": "2",
+      "skill": "plan-validator",
+      "agent": "plan-validator",
+      "label": "plan-validator",
+      "sublabel": "reads the codebase · first_domino",
+      "dispatched_by": "starter",
+      "blocks": "human-review-gate",
+      "panel": {
+        "n": 3,
+        "gate": "majority",
+        "prompt_file": "skills/plan-validator/references/skeptic-prompt.md",
+        "lenses": [
+          "sequencing",
+          "ground-truth",
+          "blast-radius"
+        ],
+        "asymmetry": "reading assignment: the step graph · the source files the plan names · the callers, tests and CI it disturbs"
+      },
+      "reads": [
+        "plans/active_milestones/{moniker}/plan.md",
+        "<repo>"
+      ],
+      "writes": [
+        "plans/active_milestones/{moniker}/adversarial-reviews/plan-validation.md"
+      ]
+    },
+    {
+      "id": "human-review-gate",
+      "kind": "human-gate",
+      "phase": "3",
+      "label": "HUMAN REVIEW GATE",
+      "sublabel": "user types \"approve\"",
+      "held_by": "starter",
+      "reads": [
+        "plans/active_milestones/{moniker}/spec.md",
+        "plans/active_milestones/{moniker}/plan.md"
+      ],
+      "writes": [
+        "plans/active_milestones/{moniker}/state.json#gates.plan-approval"
+      ]
+    },
+    {
+      "id": "engineer",
+      "kind": "role",
+      "phase": "4",
+      "skill": "engineer",
+      "agent": "engineer",
+      "label": "engineer × N",
+      "sublabel": "≤ 4 concurrent · disjoint files",
+      "dispatched_by": "starter",
+      "fanout": {
+        "over": "execution group tasks",
+        "max_concurrent": 4,
+        "disjoint": "files"
+      },
+      "reads": [
+        "plans/active_milestones/{moniker}/plan.md",
+        "<repo>"
+      ],
+      "writes": [
+        "<repo source>",
+        "plans/active_milestones/{moniker}/plan.md#todos"
+      ],
+      "must_not_write": [
+        "git commit"
+      ]
+    },
+    {
+      "id": "simplifier",
+      "kind": "role",
+      "phase": "4",
+      "optional": true,
+      "skill": "simplifier",
+      "label": "simplifier",
+      "sublabel": "zero behavioral change",
+      "dispatched_by": "starter",
+      "reads": [
+        "<repo source>"
+      ],
+      "writes": [
+        "<repo source>"
+      ]
+    },
+    {
+      "id": "auditor",
+      "kind": "role",
+      "phase": "4",
+      "skill": "auditor",
+      "agent": "auditor",
+      "label": "auditor",
+      "sublabel": "AUDIT_[Plan_Name].md",
+      "dispatched_by": "starter",
+      "reads": [
+        "plans/active_milestones/{moniker}/plan.md",
+        "plans/active_milestones/{moniker}/spec.md",
+        "<repo>"
+      ],
+      "writes": [
+        "plans/audit/AUDIT_[Plan_Name].md"
+      ],
+      "must_not_write": [
+        "<repo source>",
+        "git commit"
+      ]
+    },
+    {
+      "id": "implementation-validator",
+      "kind": "panel",
+      "phase": "4",
+      "skill": "implementation-validator",
+      "agent": "implementation-validator",
+      "label": "implementation-validator",
+      "sublabel": "severity calibration",
+      "dispatched_by": "starter",
+      "blocks": "commit-gate",
+      "panel": {
+        "n": 3,
+        "gate": "majority",
+        "prompt_file": "skills/implementation-validator/references/skeptic-prompts.md",
+        "lenses": [
+          "claim-vs-reality",
+          "failure-paths",
+          "blast-radius"
+        ],
+        "asymmetry": "reading assignment: the diff against its own description · the error branches and tests · the call sites the diff never touches"
+      },
+      "reads": [
+        "<repo>",
+        "git diff BASE..HEAD"
+      ],
+      "writes": [
+        "plans/active_milestones/{moniker}/adversarial-reviews/implementation-validation.md"
+      ]
+    },
+    {
+      "id": "visual-implementation-recap",
+      "kind": "renderer",
+      "phase": "4",
+      "optional": true,
+      "skill": "visual-implementation-recap",
+      "agent": "visual-implementation-recap",
+      "label": "visual-implementation-recap",
+      "sublabel": "visual-recap.html",
+      "dispatched_by": "starter",
+      "run_when": "After a green audit, when the reviewer benefits from seeing the whole change at altitude.",
+      "reads": [
+        "git diff",
+        "plans/active_milestones/{moniker}/plan.md",
+        "plans/audit/AUDIT_[Plan_Name].md"
+      ],
+      "writes": [
+        "plans/active_milestones/{moniker}/visual-recap.html"
+      ]
+    },
+    {
+      "id": "commit-gate",
+      "kind": "human-gate",
+      "phase": "4",
+      "label": "COMMIT GATE",
+      "sublabel": "green audit + explicit \"yes\"",
+      "held_by": "starter",
+      "reads": [
+        "plans/audit/AUDIT_[Plan_Name].md",
+        "git status",
+        "git diff --stat"
+      ],
+      "writes": [
+        "git commit",
+        "plans/active_milestones/{moniker}/state.json#groups[].committed"
+      ]
+    },
+    {
+      "id": "release",
+      "kind": "terminal",
+      "phase": "5",
+      "skill": "product-owner",
+      "label": "release · tag",
+      "sublabel": "product-owner marks Shipped",
+      "held_by": "starter",
+      "reads": [
+        "plans/00-ROADMAP.md"
+      ],
+      "writes": [
+        "plans/00-ROADMAP.md",
+        "git tag"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "request",
+      "to": "research",
+      "when": "always"
+    },
+    {
+      "from": "research",
+      "to": "product-owner",
+      "when": "always"
+    },
+    {
+      "from": "product-owner",
+      "to": "spec-deliberator",
+      "when": "optional",
+      "label": "siloed context"
+    },
+    {
+      "from": "product-owner",
+      "to": "spec-validator",
+      "when": "always"
+    },
+    {
+      "from": "spec-deliberator",
+      "to": "spec-validator",
+      "when": "always"
+    },
+    {
+      "from": "spec-validator",
+      "to": "product-owner",
+      "when": "confirmed findings",
+      "label": "fold in tightenings"
+    },
+    {
+      "from": "spec-validator",
+      "to": "architect",
+      "when": "clean"
+    },
+    {
+      "from": "architect",
+      "to": "plan-deliberator",
+      "when": "optional",
+      "label": "multi-territory"
+    },
+    {
+      "from": "architect",
+      "to": "plan-validator",
+      "when": "always"
+    },
+    {
+      "from": "plan-deliberator",
+      "to": "plan-validator",
+      "when": "always"
+    },
+    {
+      "from": "plan-validator",
+      "to": "architect",
+      "when": "confirmed findings",
+      "label": "apply fixes · first_domino"
+    },
+    {
+      "from": "plan-validator",
+      "to": "human-review-gate",
+      "when": "clean"
+    },
+    {
+      "from": "human-review-gate",
+      "to": "engineer",
+      "when": "approved"
+    },
+    {
+      "from": "engineer",
+      "to": "simplifier",
+      "when": "optional"
+    },
+    {
+      "from": "engineer",
+      "to": "auditor",
+      "when": "group complete"
+    },
+    {
+      "from": "simplifier",
+      "to": "auditor",
+      "when": "always"
+    },
+    {
+      "from": "auditor",
+      "to": "engineer",
+      "when": "code failure",
+      "label": "fix the failing task"
+    },
+    {
+      "from": "auditor",
+      "to": "architect",
+      "when": "plan failure",
+      "label": "step is impossible"
+    },
+    {
+      "from": "auditor",
+      "to": "implementation-validator",
+      "when": "pass"
+    },
+    {
+      "from": "implementation-validator",
+      "to": "engineer",
+      "when": "confirmed defects",
+      "label": "fix at calibrated severity"
+    },
+    {
+      "from": "implementation-validator",
+      "to": "visual-implementation-recap",
+      "when": "optional"
+    },
+    {
+      "from": "implementation-validator",
+      "to": "commit-gate",
+      "when": "clean"
+    },
+    {
+      "from": "visual-implementation-recap",
+      "to": "commit-gate",
+      "when": "always"
+    },
+    {
+      "from": "commit-gate",
+      "to": "engineer",
+      "when": "more groups remain",
+      "label": "next execution group"
+    },
+    {
+      "from": "commit-gate",
+      "to": "release",
+      "when": "all groups complete"
+    }
+  ],
+  "gates": [
+    {
+      "id": "plan-approval",
+      "node": "human-review-gate",
+      "irreversible": false,
+      "prompt": "Spec and technical plan are ready for {moniker}. Review spec.md and plan.md. Approve to proceed to execution."
+    },
+    {
+      "id": "commit",
+      "node": "commit-gate",
+      "irreversible": true,
+      "per": "execution group",
+      "prompt": "Group {X} is verified. Proposed commit: '...'. OK to commit?"
+    }
+  ],
+  "invariants": [
+    "Only `starter` runs `git commit`; it is the only node holding a user-facing turn in which approval can be obtained.",
+    "Only `engineer` and `simplifier` write repository source.",
+    "Every `panel` node declares `n` lenses and the same number of entries in `panel.lenses`; identical prompts are a defect, not a configuration.",
+    "Human gates cannot run inside a scripted workflow — a workflow run takes no mid-run user input.",
+    "Agents are dispatched with file paths, never with a prose summary of an artifact."
+  ]
+}

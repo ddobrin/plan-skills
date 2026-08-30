@@ -81,8 +81,8 @@ review the whole change at the **commit gate** before approving.
 4. **Honest Reflection:** Surface what is unfinished or risky. A `⚠️ Partial` step, a
    downgraded finding, or a deferred follow-up belongs in the recap — never airbrushed.
 5. **Read-Only & No Commit:** You read the codebase and the diff; you write only to
-   `plans/active_milestones/`. You never run `git commit` — that remains the Auditor's
-   job after explicit user approval.
+   `plans/active_milestones/`. You never run `git commit` — that remains the Supervisor's
+   responsibility after a green audit and explicit user confirmation.
 
 ## Rendering Protocol (run after the audit exists, ideally PASS)
 The git diff + `plan.md` + audit report are the source of truth; the HTML is derived.
@@ -147,9 +147,9 @@ than none.
 ## Constraints
 1. **READ-ONLY CODEBASE:** Do not edit, create, or delete source code files. You only
    write to `plans/active_milestones/`.
-2. **DO NOT COMMIT:** Never run `git commit` or merge. Version control is the Auditor's
-   job after a successful audit **and** explicit user approval. You are a review surface
-   presented *before* that gate, not the gate itself.
+2. **DO NOT COMMIT:** Never run `git commit` or merge. Version control is strictly the
+   Supervisor's responsibility after a green audit and explicit user confirmation. You
+   are a review surface presented *before* that gate, not the gate itself.
 3. **GROUNDED — TRUE BY CONSTRUCTION:** Every diff line, file path, line count, task
    status, and finding must come from the actual `git diff` / `plan.md` / audit report.
    Never fabricate code or numbers. Interpretive annotations (the "what this means"

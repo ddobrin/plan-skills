@@ -1,12 +1,6 @@
 ---
 name: plan-validator
 description: Use after an implementation plan is written and BEFORE executing it, to catch ordering bugs and false assumptions while they are still cheap. Dispatches independent skeptic agents that assume the plan WILL fail, read the codebase to check its assumptions, and find the first domino that topples the rest — keeping only findings confirmed by a 2-of-3 majority. Symptoms - "validate this plan", "will this plan work", "review the plan before we start", a freshly written plans/*.md from writing-plans, about to run executing-plans or subagent-driven-development.
-tools:
-  - view_file
-  - write_to_file
-  - list_dir
-  - grep_search
-  - invoke_subagent
 ---
 
 # Adversarial Plan Validation
@@ -24,7 +18,7 @@ says edit `X.dispatch()` but that method does not exist."
 
 ## When to Use
 
-- A written implementation plan exists (e.g. from `superpowers:writing-plans`) and you are about to execute it.
+- A written implementation plan exists (e.g. from `architect` or `superpowers:writing-plans`) and you are about to execute it.
 - The user asks to "validate", "sanity-check", "stress-test", or "review" a plan before work starts.
 - The plan touches existing code whose shape the plan *assumes* — exactly where plans rot.
 
@@ -36,15 +30,20 @@ says edit `X.dispatch()` but that method does not exist."
 
 ## Core Principle
 
-Three things turn an ordinary review into adversarial findings. All three are required:
+Four things turn an ordinary review into adversarial findings. All four are required:
 
 1. **Adversarial framing** — the agent assumes the plan fails and hunts for the failure, rather than judging whether it "seems reasonable."
 2. **Default-to-reject** — uncertainty about whether a step is safe resolves *against* the plan. "Looks fine" is a failed review unless the agent shows what it verified.
-3. **Independent quorum** — run **N = 3** skeptics that never see each other's output, then keep only findings confirmed by a **majority (2 of 3)**.
+3. **Partitioned lenses** — the three skeptics are **not** given the same prompt. Each owns a different slice of the attack surface *and* a different reading assignment (the step graph · the source files the plan names · the callers, tests and CI it disturbs). Three identical prompts on one model produce correlated errors: the panel is shaped like three votes and carries close to one.
+4. **Independent quorum** — the lenses never see each other's output; keep only findings confirmed by a **majority (2 of 3)**, and rank **cross-lens** agreement above same-lens repetition.
 
 The difference from spec stage: plan skeptics must **verify assumptions in the source**.
 A predicted failure that the agent did not check against the actual code is a guess, not a
 finding — the template forces them to cite `file:line`.
+
+Never tell a skeptic to be conservative or to report only what matters. A review prompt
+that asks for restraint gets restraint: the model reports *less*, and what it drops is not
+reliably the noise. Recall is the skeptic's job; precision is the gate's.
 
 ## Attack Surface (what each skeptic hunts for)
 
@@ -62,12 +61,26 @@ finding — the template forces them to cite `file:line`.
 - The **repository root** the agents should read — they must be able to open the files the plan touches.
 
 ### 2. Author the skeptic prompt
-Fill the template in **Skeptic Prompt Template**. Keep the "default to reject", "verify in
-source", and "final message MUST be JSON" clauses verbatim.
+Fill the template in `references/skeptic-prompt.md`, which also carries the aggregation
+**Output Contract**.
 
-### 3. Dispatch 3 skeptics in parallel
-Make **three `Agent` calls in a single message**. Use `subagent_type: "general-purpose"`
-(it can read and grep the codebase). Each runs independently — no shared scratchpad.
+### 3. Run the asymmetry test, then dispatch one skeptic per lens
+Before dispatching, name one finding **only that lens could reach** — lens 2 opens files
+lens 1 never reads; lens 3 traces callers neither of the others visits. If you cannot name
+one for a lens, merge it and run two: a panel of near-clones is worse than an honest pair,
+because it manufactures false corroboration.
+
+Then make **three `Agent` calls in a single message**, one per lens from
+`references/skeptic-prompt.md` (Sequencing · Ground Truth · Blast Radius). Use
+`subagent_type: "general-purpose"` (it can read and grep the codebase). Each runs
+independently — no shared scratchpad.
+
+> **Panel cost.** Review accuracy holds up well below the top model tier, so a routine
+> pre-execution gate does not need the most expensive panel you can build — pass
+> `model: "sonnet"` for the skeptics and reserve the default for irreversible migrations,
+> security-sensitive plans, or a re-run after a material reorder. A panel cheap enough to
+> run every time beats a thorough one that gets skipped. (In a `Workflow` script, the same
+> lever is `effort: "low"` / `"medium"` on `agent()`; the `Agent` tool exposes `model` only.)
 
 ### 4. Collect verdicts
 Parse each agent's fenced JSON. Re-dispatch any agent that returns prose instead of JSON.
@@ -78,7 +91,15 @@ ordering bug should collapse to one entry, not three.
 
 ### 6. Apply the majority gate
 - **Confirmed:** appears in **≥ 2 of 3** outputs.
-- **Unconfirmed (1 vote):** keep under "Unconfirmed (FYI)" — never silently drop.
+- **Cross-lens vs. same-lens.** Record *which lenses* agreed. Two lenses reaching one
+  finding from different evidence is independent corroboration and ranks first. A
+  finding both raised by lenses that read the same material is weaker than its vote
+  count suggests — read the evidence, not the tally.
+- **Single vote:** appears in exactly one. These go to the **Single-Vote Findings (triage
+  required)** section and each one needs an explicit decision — fixed, accepted as a known
+  risk, or refuted with a reason. A lone finding from a current-generation skeptic is more
+  often a real defect one reviewer happened to reach than noise, so "only one agent saw it"
+  is not a reason to close it. Ordering bugs in particular are easy to miss and expensive to hit.
 - Severity: most common among agreeing skeptics; tie → higher.
 
 > **Tuning the gate:** 2-of-3 is the default. Drop to **any-one** for a high-risk plan (irreversible migrations, prod data); raise to **unanimous** when re-planning churn is costly.
@@ -91,167 +112,26 @@ reviewed lives at `plans/active_milestones/{moniker}/plan.md`; if you were hande
 plan with no milestone, write to `plans/adversarial-reviews/plan-validation.md` and say so.
 **Always write this file, even on a clean pass** — "zero confirmed findings, here are the
 assumptions verified" is the evidence the gate produced. A re-run after a material reorder
-goes to `plan-validation-r2.md`, `-r3.md`, … so every round is preserved. Fill the **The
-Review Document** template below verbatim.
+goes to `plan-validation-r2.md`, `-r3.md`, … so every round is preserved.
+
+Fill the template in `references/review-template.md`. See `references/worked-example.md`
+for a complete run.
 
 ### 8. Act
 - For each **confirmed** finding, apply its `fix` to the plan (reorder steps, add a missing prerequisite step, add a rollback/verify step, correct an assumption).
-- List **unconfirmed** findings for the user.
+- **Triage every single-vote finding** and record the decision in the review.
 - If you reordered or added steps materially, re-run the panel once.
 - Tick the **Actions Taken** checklist in the review file as you apply each fix.
-
-## Skeptic Prompt Template
-
-Dispatch this **three times, unchanged**, via the `Agent` tool. Replace only `{PLAN}`
-and `{REPO_ROOT}`.
-
-```
-You are an adversarial plan reviewer. Assume this implementation plan WILL fail. Your job
-is to predict exactly which step fails first and why, before any work is wasted. You have
-read access to the codebase — USE IT to check every assumption the plan makes.
-
-PLAN:
-{PLAN}
-
-REPOSITORY ROOT (read any file you need to verify the plan's assumptions):
-{REPO_ROOT}
-
-Attack each step across these categories:
-- Ordering/dependency: step N needs an artifact a later step produces; two steps touch
-  the same file with no merge plan.
-- False assumption about existing code: the plan names a function/file/field/table/flag/
-  signature that does not exist or differs. OPEN THE FILE AND CHECK.
-- Unverifiable step: "verify it works" with no command, test, or observable signal.
-- No rollback: a step that cannot be undone if the next step fails.
-- Missing migration/compatibility: schema or API change with no backfill/versioning/
-  backward-compat path.
-- Hidden coupling: a "simple" edit that fans out to callers the plan never mentions.
-
-Be skeptical. DEFAULT TO REJECT: if you cannot confirm a step is safe, report it. A
-predicted failure you did NOT verify in the source is a guess — either verify it and cite
-file:line, or label confidence "low".
-
-Find the FIRST domino: the earliest step whose failure invalidates the steps after it.
-
-For each finding assign a STABLE id: a short kebab-case slug (e.g.
-"step4-method-missing", "no-rollback-on-migrate"). Two reviewers finding the same problem
-should plausibly choose the same slug.
-
-Your final message MUST be exactly one fenced JSON block and nothing else, matching:
-
-```json
-{
-  "findings": [
-    {
-      "id": "kebab-case-stable-slug",
-      "step": "the plan step number and/or title this concerns",
-      "category": "ordering|false-assumption|unverifiable|no-rollback|missing-migration|hidden-coupling|other",
-      "failure": "the concrete scenario in which the plan breaks",
-      "evidence": "file:line you read, or verbatim plan text, proving it",
-      "confidence": "high|medium|low",
-      "severity": "high|medium|low",
-      "fix": "the concrete change to the plan that prevents the failure"
-    }
-  ],
-  "first_domino": "the id of the earliest finding that invalidates later steps, or null",
-  "checks_that_passed": ["short note for each assumption you verified that DID hold"]
-}
-```
-```
-
-## Output Contract
-
-Each skeptic returns the JSON above. The orchestrator aggregates into:
-
-```json
-{
-  "confirmed": [ { "id": "...", "votes": 2, "step": "...", "severity": "high", "fix": "..." } ],
-  "unconfirmed": [ { "id": "...", "votes": 1, "...": "..." } ],
-  "first_domino": "id voted most often as the earliest blocking failure"
-}
-```
-
-## The Review Document
-
-This is what step 7 writes to
-`plans/active_milestones/{moniker}/adversarial-reviews/plan-validation.md`. It is the
-human-readable face of the JSON above — a reviewer should grasp where the plan breaks
-without opening an agent transcript. Use `date +%Y-%m-%d` for the date. Severity icons:
-🔴 high · 🟠 medium · 🟡 low. The **First domino** is the headline; lead with it. Every
-confirmed finding must carry its `file:line` evidence — an uncited prediction is a guess,
-not a finding. Keep every section, even when empty (write `_None._`).
-
-```markdown
-# Plan Adversarial Review — {plan title}
-
-> `plan-validator` · 3 independent skeptics, no shared scratchpad · default-to-reject · skeptics READ the codebase · {2-of-3} majority gate
-
-| Field | Value |
-|---|---|
-| Milestone | `{moniker}` |
-| Artifact | `plans/active_milestones/{moniker}/plan.md` |
-| Date | {YYYY-MM-DD} |
-| Gate | {2-of-3 · any-one · unanimous} |
-| Result | **{N} confirmed · {M} unconfirmed** — highest severity **{high}** |
-| 🁢 First domino | `{id}` — {earliest failure that invalidates the steps after it, or `none`} |
-
-## Verdict
-
-{1–3 plain-language sentences: will the plan survive execution, and which step topples first?}
-
-## Confirmed Findings (≥ 2 votes)
-
-> Apply each **Fix** to the plan — reorder steps, insert a prerequisite, add a rollback/verify, or correct the assumption.
-
-### 🔴 `{id}` — {one-line name}  · {category} · {votes}/3 · confidence {high}
-- **Step:** {step number / title this concerns}
-- **Failure:** {the concrete scenario in which the plan breaks}
-- **Evidence:** `{file:line}` you read _(or verbatim plan text)_
-- **Fix:** {the concrete change to the plan that prevents the failure}
-
-_(repeat per confirmed finding; the First domino first)_
-
-## Unconfirmed (FYI · 1 vote)
-
-| `id` | severity | step | note |
-|---|---|---|---|
-| `{id}` | 🟠 medium | {step} | surfaced for the user |
-
-## Checks That Passed
-
-- {assumption the skeptics verified that DID hold} — `{file:line}`
-
-## Actions Taken
-
-- [x] Reordered: inserted step {2b} before step {3} (`{id}`)
-- [x] Corrected step {3} target to `{realName()}` (`{id}`)
-- [ ] Surfaced `{id}` (unconfirmed) to the user
-- [ ] Re-ran panel on revision → `plan-validation-r2.md` _(or: not needed)_
-```
-
-## Worked Example
-
-> Plan excerpt: *"Step 2: add `retryCount` to the `Job` record. Step 3: update `JobScheduler.dispatch()` to read `retryCount`. Step 4: migrate existing rows."*
-
-Three skeptics read the repo. After dedup + majority gate:
-
-**Confirmed (≥2 votes):**
-- `dispatch-signature-missing` (3 votes, high) — `JobScheduler` has no `dispatch()`; the method is `schedule(Job)` (`scheduler/JobScheduler.java:88`). Fix: retarget step 3 to `schedule()`.
-- `migrate-before-default` (2 votes, high) — step 4 migrates rows but no step gives `retryCount` a default, so step 3 NPEs on legacy rows between deploy and migration. Fix: add "step 2b: default `retryCount` to 0" *before* step 3; mark step 3 as requiring 2b.
-- `first_domino` = `migrate-before-default`.
-
-**Unconfirmed (1 vote, FYI):**
-- `no-rollback-on-migrate` (1 vote, medium) — step 4 has no down-migration. Surfaced for the user.
-
-The plan is reordered and the missing default step inserted before execution begins.
 
 ## Red Flags
 
 | Thought | Reality |
 |---|---|
+| "Three identical prompts give me three independent opinions." | They give one opinion sampled three times. Correlated skeptics manufacture false corroboration — partition the lens *and* the reading assignment. |
 | "The plan reads cleanly, it'll be fine." | Clean prose hides dead assumptions. The skeptics must open the files. |
 | "The agent says step 3 is wrong but didn't cite a line." | Unverified prediction = guess. Force `file:line` or mark confidence low. |
-| "One skeptic found the ordering bug, two didn't." | Keep it unconfirmed and look — ordering bugs are easy to miss and costly to hit. |
+| "One skeptic found the ordering bug, two didn't — so it's noise." | Wrong default. Modern skeptics are precise; the lone finding is usually real. Triage it and record the decision. |
+| "I'll tell them to only report the serious stuff." | The model will comply and report less. Ask for everything; filter at the gate. |
 | "I'll let the agents discuss the plan together." | Shared context collapses the vote. Dispatch independently. |
 | "I'll merge their findings in my own words." | Dedup on stable `id` + step, or the same bug splits into three sub-quorum entries. |
 
@@ -261,6 +141,10 @@ Plan skeptics under adversarial framing sometimes flag a "false assumption" that
 actually correct because they grepped the wrong file or an older copy. This is why the
 template demands `evidence: file:line` and a `confidence` field: a `high`-confidence
 finding with a concrete line is actionable immediately; a `low`-confidence one without a
-citation should be re-checked before you reorder the plan around it. The quorum plus the
-evidence requirement together filter the "confidently wrong" finding that a single
-aggressive reviewer would otherwise produce.
+citation should be re-checked before you reorder the plan around it.
+
+Note what the quorum is and is not for. It is a *ranking* device — it tells you which
+findings two independent readers reached, and those go first. It is not a filter that makes
+the rest disappear: an uncorroborated finding with a real `file:line` behind it is a
+different object from an uncorroborated guess, and only the citation distinguishes them.
+Read the evidence, not the vote count.

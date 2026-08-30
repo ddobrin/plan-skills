@@ -1,12 +1,6 @@
 ---
 name: implementation-validator
 description: Use after code is written and before merge, to confirm the implementation actually does what it claims. Dispatches independent skeptic agents that read the diff and surrounding code with a default-to-reject posture, hunt for real defects (or refute explicit acceptance claims), and assign a corrected severity — keeping only findings confirmed by a 2-of-3 majority. Symptoms - "validate this implementation", "did this actually work", "review this diff adversarially", "verify these findings are real", after completing a feature/task, before merging to main.
-tools:
-  - view_file
-  - write_to_file
-  - list_dir
-  - grep_search
-  - invoke_subagent
 ---
 
 # Adversarial Implementation Validation
@@ -40,11 +34,18 @@ Two modes, same machinery:
 
 ## Core Principle
 
-Three things turn an ordinary review into adversarial findings. All three are required:
+Four things turn an ordinary review into adversarial findings. All four are required:
 
 1. **Adversarial framing** — the agent's job is to construct the input or sequence that breaks the code, not to judge whether it "looks good."
 2. **Default-to-reject** — for finding-hunt, default `isReal=false` (only confirmed, code-grounded defects count). For claim-refutation, default `refuted=true` (a claim survives only if the agent actively tried and failed to break it).
-3. **Independent quorum** — run **N = 3** skeptics that never see each other's output, then keep only findings confirmed by a **majority (2 of 3)**.
+3. **Partitioned lenses** — the three skeptics are **not** given the same prompt. Each owns a different slice of the attack surface *and* a different reading assignment (the diff against its own description · the error branches and tests · the call sites the diff never touches). Three identical prompts on one model produce correlated errors: the panel is shaped like three votes and carries close to one.
+4. **Independent quorum** — the lenses never see each other's output; keep only findings confirmed by a **majority (2 of 3)**, and rank **cross-lens** agreement above same-lens repetition.
+
+Default-to-reject is a demand for **evidence**, not for restraint. It asks the skeptic to
+ground every claim in a real `file:line`; it does not ask for a shorter list. Never tell a
+skeptic to be conservative or to report only what matters — a review prompt that asks for
+restraint gets restraint, the model reports *less*, and what it drops is not reliably the
+noise. Recall is the skeptic's job; precision is the gate's.
 
 ## Attack Surface (what each skeptic hunts for)
 
@@ -69,14 +70,26 @@ HEAD_SHA=$(git rev-parse HEAD)
 ```
 
 ### 2. Author the skeptic prompt
-Pick **Finding-Hunt Template** or **Claim-Refutation Template** below. Keep the
-default-to-reject and "final message MUST be JSON" clauses verbatim.
+Pick the **Finding-Hunt** or **Claim-Refutation** template in
+`references/skeptic-prompts.md`, which also carries the aggregation **Output Contract**.
 
-### 3. Dispatch 3 skeptics in parallel
-Make **three `Agent` calls in a single message**, `subagent_type: "general-purpose"`
-(it can run `git diff` and read files). Independent runs, no shared scratchpad.
+### 3. Run the asymmetry test, then dispatch one skeptic per lens
+Before dispatching, name one defect **only that lens could reach** — lens 3 reads files
+that are not in the diff at all; lens 2 reads the test suite; lens 1 reads the claim text
+neither of the others is given. If you cannot name one for a lens, merge it and run two.
 
-> **Perspective-diverse variant:** instead of three identical skeptics, give each a distinct lens — e.g. one `correctness`, one `concurrency`, one `failure-paths`. Diversity catches failure modes that three identical refuters would all miss together. Then the "majority" becomes "≥2 lenses independently land on the same defect."
+Then make **three `Agent` calls in a single message**, one per lens from
+`references/skeptic-prompts.md` (Claim vs. Reality · Failure Paths · Blast Radius),
+`subagent_type: "general-purpose"` (it can run `git diff` and read files). Independent
+runs, no shared scratchpad.
+
+> **Panel cost.** Review accuracy holds up well below the top model tier, so a routine
+> pre-merge gate does not need the most expensive panel you can build — pass
+> `model: "sonnet"` for the skeptics and reserve the default for security-sensitive
+> changes, concurrency-heavy diffs, or a re-validation after fixes. A panel cheap enough to
+> run on every branch beats a thorough one that gets skipped. (In a `Workflow` script, the
+> same lever is `effort: "low"` / `"medium"` on `agent()`; the `Agent` tool exposes `model`
+> only.)
 
 ### 4. Collect verdicts
 Parse each agent's fenced JSON. Re-dispatch any agent that returns prose.
@@ -89,7 +102,15 @@ you tally on raw text, nothing reaches quorum. Normalize to `file:line::id` befo
 ### 6. Apply the majority gate + severity calibration
 - **Finding-hunt:** a finding is **confirmed** when **≥ 2 of 3** skeptics report it with `isReal=true`. Its severity is the **most common `correctedSeverity`** among the agreeing skeptics (tie → higher).
 - **Claim-refutation:** a claim **survives** when **≥ 2 of 3** skeptics return `refuted=false`. A claim **fails** (the code is broken) when ≥2 return `refuted=true` — those become defects to fix.
-- **Unconfirmed (1 vote):** never silently drop. List under "Unconfirmed (FYI)".
+- **Cross-lens vs. same-lens.** Record *which lenses* agreed. Two lenses reaching one defect
+  from different evidence — the failure-path lens and the blast-radius lens landing on the
+  same race — is independent corroboration and ranks first. Two votes are not automatically
+  that; read the evidence, not the tally.
+- **Single vote:** appears in exactly one output. These go to the **Single-Vote Findings
+  (triage required)** section and each one needs an explicit decision — fixed, accepted as a
+  known risk, or refuted with a reason. A lone finding from a current-generation skeptic is
+  more often a real defect one reviewer happened to reach than noise, and concurrency and
+  failure-path bugs are exactly the kind two of three readers miss.
 
 > **Tuning the gate:** 2-of-3 is the default. For a security-critical change, drop to **any-one** so a single skeptic's real catch isn't lost. When fix-churn is expensive, raise to **unanimous**.
 
@@ -102,227 +123,41 @@ to no milestone, write to `plans/adversarial-reviews/implementation-validation.m
 so. **Always write this file, even on a clean pass** — "zero confirmed defects, here is
 what was attacked" is the evidence the gate produced, and the **severity calibration**
 table is the highest-value thing this stage emits. A re-validation after fixes goes to
-`implementation-validation-r2.md`, `-r3.md`, … so each round is preserved. Fill the **The
-Review Document** template below verbatim.
+`implementation-validation-r2.md`, `-r3.md`, … so each round is preserved.
+
+Fill the template in `references/review-template.md`. See `references/worked-example.md`
+for a complete run.
 
 ### 8. Act
 - Fix **confirmed** defects (and **failed claims**) at their calibrated severity, highest first.
-- Surface **unconfirmed** findings for human eyeballing.
+- **Triage every single-vote finding** and record the decision in the review.
 - Report the calibration explicitly: "3 findings claimed Critical; all 3 confirmed real but downgraded to High because impact is conditional on concurrent requests." This is the single most useful sentence the panel produces — see Calibration Note.
 - Tick the **Actions Taken** checklist in the review file as you fix each defect.
-
-## Finding-Hunt Template (default)
-
-Dispatch **three times, unchanged**. Replace `{DESCRIPTION}`, `{BASE_SHA}`, `{HEAD_SHA}`.
-
-```
-You are an adversarial implementation verifier. Your job is to BREAK this change, not to
-approve it. Read the diff and the surrounding code, then construct the inputs or sequences
-that make it misbehave.
-
-WHAT THE CHANGE CLAIMS TO DO:
-{DESCRIPTION}
-
-DIFF TO ATTACK:
-  git diff --stat {BASE_SHA}..{HEAD_SHA}
-  git diff {BASE_SHA}..{HEAD_SHA}
-Read any file in the repo you need to understand the blast radius.
-
-Hunt across these categories:
-- Claim vs. reality: the code does not actually do what it claims.
-- Failure paths: error/empty/timeout path broken or silently swallowing errors.
-- Edge cases: empty, null, zero, negative, huge, duplicate, unicode, off-by-one.
-- Concurrency: shared mutable state, non-atomic read-modify-write, cross-request races.
-- Resource/correctness: leaks, unbounded growth, wrong math/comparison, lost precision.
-- Regression: a caller or contract the diff silently broke.
-
-Be skeptical. DEFAULT isReal=false: report a finding as real ONLY if you can ground it in
-the actual code. If a concern is purely stylistic, cannot be confirmed in the source, or
-relies on a misreading, set isReal=false and say why.
-
-Assign each finding a STABLE id: a short kebab-case slug (e.g. "empty-list-npe",
-"singleton-cursor-race"). Two reviewers finding the same defect should plausibly choose
-the same slug. Calibrate severity HONESTLY: critical = unconditional data loss/corruption
-or broken core function on every run; high = serious but conditional (e.g. only under
-concurrency); medium = real but narrow; low = minor.
-
-Your final message MUST be exactly one fenced JSON block and nothing else, matching:
-
-```json
-{
-  "findings": [
-    {
-      "id": "kebab-case-stable-slug",
-      "title": "short description of the defect",
-      "file": "path relative to repo root",
-      "location": "line number(s) or method/class",
-      "isReal": true,
-      "confidence": "high|medium|low",
-      "correctedSeverity": "critical|high|medium|low",
-      "attack": "the input/sequence/edge case that triggers it",
-      "evidence": "file:line and the specific code that proves it",
-      "reasoning": "why it breaks (or, if isReal=false, why it does not)",
-      "fix": "concrete remediation"
-    }
-  ],
-  "attacks_that_failed": ["short note for each serious attack that did NOT find a defect"]
-}
-```
-```
-
-## Claim-Refutation Template (variant)
-
-When you have explicit acceptance claims, dispatch this **three times per claim**
-(or once with the full claim list). Replace `{CLAIM}`, `{DESCRIPTION}`, `{BASE_SHA}`, `{HEAD_SHA}`.
-
-```
-You are an adversarial verifier. The implementer claims:
-
-  "{CLAIM}"
-
-Your job is to REFUTE this claim. Read the diff (git diff {BASE_SHA}..{HEAD_SHA}) and the
-surrounding code, then construct the input, sequence, or edge case that makes the claim
-false. Consider the failure path, not just the happy path; consider concurrency and
-boundary inputs.
-
-CONTEXT — what the change claims overall:
-{DESCRIPTION}
-
-Be skeptical. DEFAULT refuted=true. You may only return refuted=false if you ACTIVELY
-tried to break the claim and could not — and you must describe what you tried.
-
-Your final message MUST be exactly one fenced JSON block and nothing else, matching:
-
-```json
-{
-  "claim": "the claim verbatim",
-  "refuted": true,
-  "confidence": "high|medium|low",
-  "correctedSeverity": "critical|high|medium|low",
-  "attack": "the input/sequence you used to break it (or tried, if not refuted)",
-  "evidence": "file:line proving the refutation (or proving robustness)",
-  "reasoning": "why the claim fails or holds, citing the actual code"
-}
-```
-```
-
-## Output Contract
-
-The orchestrator aggregates skeptic JSON into:
-
-```json
-{
-  "confirmed":   [ { "id": "...", "votes": 2, "file": "...", "location": "...", "severity": "high", "fix": "..." } ],
-  "unconfirmed": [ { "id": "...", "votes": 1, "...": "..." } ],
-  "failed_claims": [ { "claim": "...", "refuted_by": 2, "severity": "high" } ],
-  "calibration": [ { "id": "...", "claimedSeverity": "critical", "correctedSeverity": "high", "why": "conditional on concurrency" } ]
-}
-```
-
-## The Review Document
-
-This is what step 7 writes to
-`plans/active_milestones/{moniker}/adversarial-reviews/implementation-validation.md`. It is
-the human-readable face of the JSON above — a reviewer should grasp what is broken, at what
-*corrected* severity, without opening an agent transcript. Use `date +%Y-%m-%d` for the
-date. Severity icons: 🔴 critical · 🟠 high · 🟡 medium · ⚪ low. The **Severity
-Calibration** table is the centerpiece — never omit it when any severity was revised. Drop
-the **Failed Claims** section in finding-hunt mode. Keep the other sections even when empty
-(write `_None._`).
-
-```markdown
-# Implementation Adversarial Review — {change title}
-
-> `implementation-validator` · 3 independent skeptics, no shared scratchpad · default-to-reject (`isReal=false` / `refuted=true`) · {2-of-3} majority gate · severity calibration
-
-| Field | Value |
-|---|---|
-| Milestone | `{moniker}` |
-| Diff | `{BASE_SHA}..{HEAD_SHA}` |
-| Date | {YYYY-MM-DD} |
-| Mode | {finding-hunt · claim-refutation} |
-| Gate | {2-of-3 · any-one · unanimous} |
-| Result | **{N} confirmed defects · {F} failed claims · {M} unconfirmed** — highest corrected severity **{high}** |
-
-## Verdict
-
-{1–3 plain-language sentences. Lead with the calibration headline, e.g. "3 findings claimed Critical; all confirmed real but downgraded to High — impact is gated on concurrent requests, not every run."}
-
-## Confirmed Defects (≥ 2 votes)
-
-> Fix at the **corrected** severity, highest first.
-
-### 🔴 `{id}` — {one-line title}  · severity {high} · {votes}/3
-- **Location:** `{file}:{location}`
-- **Attack:** {the input / sequence / edge case that triggers it}
-- **Evidence:** `{file:line}` — {the specific code that proves it}
-- **Why it breaks:** {reasoning}
-- **Fix:** {concrete remediation}
-
-_(repeat per confirmed defect)_
-
-## Severity Calibration
-
-| `id` | claimed | corrected | why |
-|---|---|---|---|
-| `{id}` | 🔴 critical | 🟠 high | {impact gated on concurrent requests, not every run} |
-
-## Failed Claims  _(claim-refutation mode only)_
-
-| claim | refuted by | severity | attack |
-|---|---|---|---|
-| "{claim}" | {2}/3 | 🟠 high | {input that falsified it} |
-
-## Unconfirmed (FYI · 1 vote)
-
-| `id` | severity | location | note |
-|---|---|---|---|
-| `{id}` | ⚪ low | `{file}:{loc}` | surfaced, not blocking |
-
-## Attacks That Failed
-
-- {short note per serious attack that found no defect} — corroborates robustness here.
-
-## Actions Taken
-
-- [x] Fixed `{id}` at {corrected severity}
-- [ ] Surfaced calibration delta to user: "{the headline sentence}"
-- [ ] Re-validated after fixes → `implementation-validation-r2.md` _(or: not needed)_
-```
-
-## Worked Example
-
-> Change claims: *"Planner walks precompiled steps; safe under concurrent deliberations."*
-> Finding-hunt, 3 skeptics over `git diff origin/main..HEAD`.
-
-After dedup + majority gate + calibration:
-
-**Confirmed (≥2 votes):**
-- `singleton-cursor-race` (3 votes) — claimed **critical** by the skeptics, **corrected to high**. The planner is a shared singleton with non-volatile `cursor`/`steps` instance fields mutated per run (`Planner.java:59-64`, non-atomic `cursor++` at `:306`). One verifier narrowed it: intra-request replan is serialized, so the race is **strictly cross-request**, not within one deliberation — which is why "critical" (implying unconditional corruption) was an overstatement. Fix: make planner request-scoped or move per-run state out of the bean.
-
-**Unconfirmed (1 vote, FYI):**
-- `objectmapper-dup` (1 vote, low) — duplicated `ObjectMapper`/serialization. Surfaced, not blocking.
-
-**Calibration reported to the user:** *"1 finding claimed Critical; confirmed real by all 3 skeptics but downgraded to High — impact is gated on concurrent requests, not every run."*
 
 ## Red Flags
 
 | Thought | Reality |
 |---|---|
+| "Three identical prompts give me three independent opinions." | They give one opinion sampled three times. Correlated skeptics manufacture false corroboration — partition the lens *and* the reading assignment. |
 | "The diff is small, one reviewer is enough." | Small diffs hide concurrency and failure-path bugs. Run the panel. |
 | "All three rated it Critical, so it's Critical." | Check the *corrected* severity and the reasoning — adversarial framing over-rates. Calibration is the point. |
-| "One skeptic flagged a race, two didn't." | Concurrency bugs are easy to miss. Keep it unconfirmed and look at the evidence. |
+| "One skeptic flagged a race, two didn't." | Concurrency bugs are the easiest to miss and the lone finding is usually real. Read the evidence and record a decision. |
+| "I'll tell them to only report the serious stuff." | The model will comply and report less. Ask for everything; filter at the gate. |
 | "I'll tally findings by their titles." | Titles differ across agents. Normalize to `file:line::id` or quorum never forms. |
 | "The agent said it's broken — fix it." | Read the cited `evidence` first. A finding without a real `file:line` is a guess, not a defect. |
 | "I verified the code, so the feature works." | This skill reasons about code; it does not run the app. For runtime confirmation, do a manual `verify` pass too. |
 
 ## Calibration Note
 
-Your own past runs show the highest-value output of this stage is **severity calibration,
-not deletion**. In a real review, three findings entered at **Critical** and *all three
-survived as real* — but every one was **downgraded to High** because the impact was
-conditional (a cross-request race on a singleton, not corruption on every call). Zero were
-deleted; zero stayed Critical. That Critical→High move is the signal: it separates
-"guaranteed on every call" from "serious but gated," which is exactly what a single
-aggressive reviewer gets wrong. Always surface the calibration delta to the user — it is
-more decision-useful than the raw verdict.
+Past runs show the highest-value output of this stage is **severity calibration, not
+deletion**. In a real review, three findings entered at **Critical** and *all three survived
+as real* — but every one was **downgraded to High** because the impact was conditional (a
+cross-request race on a singleton, not corruption on every call). Zero were deleted; zero
+stayed Critical. That Critical→High move is the signal: it separates "guaranteed on every
+call" from "serious but gated," which is exactly what a single aggressive reviewer gets
+wrong. Always surface the calibration delta to the user — it is more decision-useful than
+the raw verdict.
+
+The same asymmetry explains what the quorum is for. It is a *ranking* device — it tells you
+which defects two independent readers reached, and those go first. It is not a filter that
+makes the rest disappear. Read the evidence, not the vote count.

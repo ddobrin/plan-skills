@@ -1,12 +1,6 @@
 ---
 name: spec-validator
 description: Use after a spec or design doc is drafted and BEFORE writing an implementation plan, to find defects while they are still cheap to fix. Dispatches independent skeptic agents that attack the spec for ambiguity, missing or contradictory requirements, and untestable acceptance criteria, then keeps only findings confirmed by a 2-of-3 majority. Symptoms - "validate this spec", "poke holes in this design", "is this spec ready to plan against", finishing brainstorming before writing-plans, a freshly written specs/*.md.
-tools:
-  - view_file
-  - write_to_file
-  - list_dir
-  - grep_search
-  - invoke_subagent
 ---
 
 # Adversarial Spec Validation
@@ -38,14 +32,16 @@ in the spec, not the implementer.
 
 ## Core Principle
 
-Three things turn an ordinary review into adversarial findings. All three are required:
+Four things turn an ordinary review into adversarial findings. All four are required:
 
 1. **Adversarial framing** — the agent's success metric is "how many real holes did I find," not "is this good." It is told to *break* the spec, not evaluate it.
 2. **Default-to-reject** — uncertainty resolves *against* the spec. Returning "looks complete" is a failed review unless the agent lists what it attacked and why each attack failed.
-3. **Independent quorum** — run **N = 3** skeptics that never see each other's output, then keep only findings confirmed by a **majority (2 of 3)**.
+3. **Partitioned lenses** — the three skeptics are **not** given the same prompt. Each owns a different slice of the attack surface *and* a different reading assignment (the spec against itself · the world outside the spec · the acceptance criteria alone, read as a contract to game). Three identical prompts on one model produce correlated errors: the panel is shaped like three votes and carries close to one.
+4. **Independent quorum** — the lenses never see each other's output; keep only findings confirmed by a **majority (2 of 3)**, and rank **cross-lens** agreement above same-lens repetition.
 
-Aggressive framing raises *recall* (catches more real holes) but lowers *precision*
-(more noise). The majority quorum restores precision. One without the other is a bad trade.
+Never tell a skeptic to be conservative or to report only what matters. A review prompt
+that asks for restraint gets restraint: the model reports *less*, and what it drops is not
+reliably the noise. Recall is the skeptic's job; precision is the gate's.
 
 ## Attack Surface (what each skeptic hunts for)
 
@@ -62,30 +58,54 @@ Aggressive framing raises *recall* (catches more real holes) but lowers *precisi
 - Any context the spec depends on but does not restate (linked docs, constraints).
 
 ### 2. Author the skeptic prompt
-Fill the template in **Skeptic Prompt Template** below. Keep the framing verbatim — the
-"default to reject" and "your final message MUST be JSON" clauses are load-bearing.
+Fill the template in `references/skeptic-prompt.md`, which also carries the aggregation
+**Output Contract**.
 
-### 3. Dispatch 3 skeptics in parallel
-Make **three `Agent` calls in a single message** so they run concurrently and independently.
-Use `subagent_type: "general-purpose"` (or `"Explore"` if the spec lives in files they must read).
-Do **not** let them share a scratchpad — independence is what makes the vote mean something.
+### 3. Run the asymmetry test, then dispatch one skeptic per lens
+Before dispatching, name one hole **only that lens could find** — lens 2 is the only one
+looking outside the document; lens 3 is the only one that never reads the prose rationale.
+If you cannot name one for a lens (typically because there is no context report and lens 2
+has nothing external to read), merge it and run two.
+
+Then make **three `Agent` calls in a single message**, one per lens from
+`references/skeptic-prompt.md` (Internal Consistency · Missing Requirement · Malicious
+Compliance), so they run concurrently and independently. Use
+`subagent_type: "general-purpose"` (or `"Explore"` if the spec lives in files they must
+read). Do **not** let them share a scratchpad — independence is what makes the vote mean
+something.
+
+> **Panel cost.** Review accuracy holds up well below the top model tier, so a routine
+> pre-planning gate does not need the most expensive panel you can build — pass
+> `model: "sonnet"` for the skeptics and reserve the default for a security-sensitive spec
+> or a re-run after a material rewrite. A panel cheap enough to run every time beats a
+> thorough one that gets skipped. (In a `Workflow` script, the same lever is
+> `effort: "low"` / `"medium"` on `agent()`; the `Agent` tool exposes `model` only.)
 
 ### 4. Collect verdicts
-Each agent's final message is a fenced JSON block (see **Output Contract**). Parse all three.
-If an agent returns prose instead of JSON, re-dispatch that one — do not hand-guess its findings.
+Each agent's final message is a fenced JSON block. Parse all three. If an agent returns
+prose instead of JSON, re-dispatch that one — do not hand-guess its findings.
 
 ### 5. Dedup by identity
 Three skeptics will phrase the same hole three different ways. Group findings by a **stable
-identity**, not by exact wording. Use `id` (a kebab-case slug each agent assigns) plus the
+identity**, not by exact wording: `id` (a kebab-case slug each agent assigns) plus the
 quoted `clause`. If you tally on raw text you get three 1-vote findings and nothing reaches
 quorum.
 
 ### 6. Apply the majority gate
-- A finding is **confirmed** when it appears in **≥ 2 of 3** skeptic outputs.
-- A finding with **exactly 1 vote** is **unconfirmed** — do not silently drop it; list it under "Unconfirmed (FYI)". A single skeptic spotting a real hole is exactly the recall you traded for precision.
-- For severity, take the **most common** severity among the agreeing skeptics; on a tie, take the higher.
+- **Confirmed:** appears in **≥ 2 of 3** outputs.
+- **Cross-lens vs. same-lens.** Record *which lenses* agreed. Two lenses reaching one
+  finding from different evidence is independent corroboration and ranks first. A
+  finding both raised by lenses that read the same material is weaker than its vote
+  count suggests — read the evidence, not the tally.
+- **Single vote:** appears in exactly one. These go to the **Single-Vote Findings (triage
+  required)** section and each one needs an explicit decision — tightened, accepted as
+  intended behavior, or refuted with a reason. A lone finding from a current-generation
+  skeptic is more often a real hole one reviewer happened to reach than noise, so "only one
+  agent saw it" is not a reason to close it. Spec holes are the cheapest defects in the
+  lifecycle to fix and the most expensive to discover later.
+- Severity: most common among agreeing skeptics; tie → higher.
 
-> **Tuning the gate:** 2-of-3 is the default. For a high-stakes or security-sensitive spec, drop to **any-one** (1 of 3) for maximum recall and triage the noise yourself. When fix-churn is expensive, raise to **unanimous** (3 of 3).
+> **Tuning the gate:** 2-of-3 is the default. For a high-stakes or security-sensitive spec, drop to **any-one** (1 of 3) for maximum recall and triage the tail yourself. When fix-churn is expensive, raise to **unanimous** (3 of 3).
 
 ### 7. Persist the review
 Write the aggregated result as a Markdown report to
@@ -96,155 +116,25 @@ spec with no milestone, write to `plans/adversarial-reviews/spec-validation.md` 
 **Always write this file, even on a clean pass** — "zero confirmed findings, here is what
 was attacked" is itself the evidence the gate produced. A re-run after a material revision
 goes to `spec-validation-r2.md`, `-r3.md`, … so every round is preserved for comparison.
-Fill the **The Review Document** template below verbatim.
+
+Fill the template in `references/review-template.md`. See `references/worked-example.md`
+for a complete run.
 
 ### 8. Act
 - For each **confirmed** finding, apply its `tightening` to the spec (or surface it to the user if it changes intent).
-- List **unconfirmed** findings so the user can eyeball the tail.
+- **Triage every single-vote finding** and record the decision in the review.
 - If you rewrote the spec materially, re-run the panel once on the revision.
 - Tick the **Actions Taken** checklist in the review file as you apply each fix.
-
-## Skeptic Prompt Template
-
-Dispatch this **three times, unchanged**, via the `Agent` tool. Replace only `{SPEC}`
-(and `{CONTEXT}` if any).
-
-```
-You are an adversarial spec reviewer. You will implement this spec as literally and
-lazily as a hostile or careless engineer could. Your goal is to find every way the
-letter of this spec can be satisfied while its intent is violated, and every place it
-is ambiguous, incomplete, contradictory, or untestable.
-
-SPEC:
-{SPEC}
-
-ADDITIONAL CONTEXT (constraints the spec relies on but may not restate):
-{CONTEXT}
-
-Attack the spec across these categories:
-- Ambiguity: a requirement readable two ways — pick the damaging reading.
-- Missing requirements: error behavior, empty/null/huge inputs, concurrency and
-  ordering, auth, limits, units, time, backward compatibility.
-- Contradictions: two requirements that cannot both hold; architecture vs. features.
-- Untestable acceptance criteria: vague words with no measurable threshold.
-- Malicious compliance: the laziest implementation that passes every stated criterion
-  yet is useless.
-
-Be skeptical. DEFAULT TO REJECT: if you are unsure whether something is a hole, report
-it. The spec is "ready" only if you genuinely cannot find a damaging interpretation —
-and if so you must still list what you attacked and why each attack failed.
-
-For each finding assign a STABLE id: a short kebab-case slug naming the hole
-(e.g. "empty-input-undefined", "timeout-no-threshold"). Two reviewers describing the
-same hole should plausibly choose the same slug.
-
-Your final message MUST be exactly one fenced JSON block and nothing else, matching:
-
-```json
-{
-  "findings": [
-    {
-      "id": "kebab-case-stable-slug",
-      "clause": "verbatim quote of the offending requirement, or \"<MISSING>\" if absent",
-      "interpretation": "the malicious or literal reading this permits",
-      "harm": "the user-facing or downstream consequence",
-      "severity": "high|medium|low",
-      "tightening": "a concrete reworded/added requirement that closes the gap"
-    }
-  ],
-  "attacks_that_failed": ["short note for each serious attack you tried that did NOT find a hole"]
-}
-```
-```
-
-## Output Contract
-
-Each skeptic returns the JSON above. The orchestrator (you) aggregates into:
-
-```json
-{
-  "confirmed": [ { "id": "...", "votes": 3, "severity": "high", "clause": "...", "tightening": "..." } ],
-  "unconfirmed": [ { "id": "...", "votes": 1, "...": "..." } ]
-}
-```
-
-## The Review Document
-
-This is what step 7 writes to
-`plans/active_milestones/{moniker}/adversarial-reviews/spec-validation.md`. It is the
-human-readable face of the JSON above — a reviewer should grasp the verdict without ever
-opening an agent transcript. Use `date +%Y-%m-%d` for the date. Severity icons: 🔴 high ·
-🟠 medium · 🟡 low. Order confirmed findings highest-severity first. Keep every section,
-even when empty (write `_None._`).
-
-```markdown
-# Spec Adversarial Review — {spec title}
-
-> `spec-validator` · 3 independent skeptics, no shared scratchpad · default-to-reject · {2-of-3} majority gate
-
-| Field | Value |
-|---|---|
-| Milestone | `{moniker}` |
-| Artifact | `plans/active_milestones/{moniker}/spec.md` |
-| Date | {YYYY-MM-DD} |
-| Gate | {2-of-3 · any-one · unanimous} |
-| Result | **{N} confirmed · {M} unconfirmed** — highest severity **{high}** |
-
-## Verdict
-
-{1–3 plain-language sentences: is the spec ready to plan against, or what blocks it?}
-
-## Confirmed Findings (≥ 2 votes)
-
-> Fold each **Tightening** into the spec before any plan is drafted.
-
-### 🔴 `{id}` — {one-line name}  · {votes}/3
-- **Clause:** "{verbatim quote, or `<MISSING>`}"
-- **Malicious reading:** {the damaging interpretation this permits}
-- **Harm:** {user-facing or downstream consequence}
-- **Tightening:** {the concrete reworded / added requirement that closes it}
-
-_(repeat per confirmed finding)_
-
-## Unconfirmed (FYI · 1 vote)
-
-| `id` | severity | clause | note |
-|---|---|---|---|
-| `{id}` | 🟠 medium | "{clause}" | surfaced for the author to confirm intent |
-
-## Attacks That Failed
-
-- {short note per serious attack that found no hole} — corroborates the spec holds here.
-
-## Actions Taken
-
-- [x] Folded `{id}` tightening into spec §{n}
-- [ ] Surfaced `{id}` (unconfirmed) to the user
-- [ ] Re-ran panel on revision → `spec-validation-r2.md` _(or: not needed)_
-```
-
-## Worked Example
-
-> Spec excerpt: *"The export endpoint returns the user's records as a downloadable file."*
-
-Three skeptics dispatched. Results after dedup + majority gate:
-
-**Confirmed (≥2 votes):**
-- `format-unspecified` (3 votes, high) — "downloadable file" names no format. Malicious read: return an empty `.txt`. Tightening: *"returns a UTF-8 CSV with header row matching the schema in §2; one record per row."*
-- `no-pagination-limit` (2 votes, high) — no bound on record count. Malicious read: stream 10M rows, OOM the server. Tightening: *"records exceeding 50k are paginated via `?cursor=`; a single response returns ≤ 50k rows."*
-
-**Unconfirmed (1 vote, FYI):**
-- `auth-on-export` (1 vote, medium) — spec doesn't restate that export honors row-level access. Surfaced for the author to confirm intent.
-
-The two confirmed holes get written into the spec before any plan is drafted.
 
 ## Red Flags
 
 | Thought | Reality |
 |---|---|
+| "Three identical prompts give me three independent opinions." | They give one opinion sampled three times. Correlated skeptics manufacture false corroboration — partition the lens *and* the reading assignment. |
 | "The spec looks thorough, one skeptic is enough." | One agent trends toward agreement. The vote needs ≥3 independent runs. |
 | "I'll let the three agents collaborate." | Shared context collapses them toward consensus; the vote becomes meaningless. |
-| "Only 1 skeptic flagged it, so ignore it." | Log it as unconfirmed. That tail is the recall you paid for. |
+| "Only 1 skeptic flagged it, so ignore it." | Wrong default. Modern skeptics are precise; the lone finding is usually real. Triage it and record the decision. |
+| "I'll tell them to only report the serious stuff." | The model will comply and report less. Ask for everything; filter at the gate. |
 | "I'll paraphrase their findings together." | Dedup on stable `id` + quoted clause, not by re-summarizing — or real holes vanish in the merge. |
 | "An agent returned prose, I'll interpret it." | Re-dispatch for valid JSON. Don't guess the contract. |
 
@@ -255,3 +145,7 @@ adversarial framing. When agreeing skeptics disagree on severity, the aggregatio
 doing real work: a hole two reviewers call "high" and one calls "medium" lands at high,
 but the spread itself tells you the finding is real and the impact is debatable — worth a
 sentence to the user rather than a silent edit.
+
+Note what the quorum is and is not for. It is a *ranking* device — it tells you which
+findings two independent readers reached, and those go first. It is not a filter that makes
+the rest disappear. Read the evidence, not the vote count.
