@@ -86,8 +86,8 @@ def validate(graph: dict) -> list[str]:
         if skill and not (PLUGIN_ROOT / "skills" / skill / "SKILL.md").is_file():
             problems.append(f"node {node['id']!r}: skills/{skill}/SKILL.md not found")
         agent = node.get("agent")
-        if agent and not (PLUGIN_ROOT / "agents" / f"{agent}.md").is_file():
-            problems.append(f"node {node['id']!r}: agents/{agent}.md not found")
+        if agent and not (REPO_ROOT / "agents" / agent / "agent.md").is_file():
+            problems.append(f"node {node['id']!r}: agents/{agent}/agent.md not found")
         for alt in node.get("alternatives", []):
             if not (PLUGIN_ROOT / "skills" / alt / "SKILL.md").is_file():
                 problems.append(f"node {node['id']!r}: alternative skills/{alt}/SKILL.md not found")
@@ -555,7 +555,6 @@ def _esc(t: str) -> str:
 
 TARGETS = [
     (PLUGIN_ROOT / "README.md", "ascii"),
-    (PLUGIN_ROOT / "agents" / "README.md", "ascii"),
     (REPO_ROOT / "agents" / "README.md", "ascii"),
     (REPO_ROOT / "README.md", "ascii"),
 ]

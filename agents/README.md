@@ -2,7 +2,7 @@
 
 A swarm of role-based agents, deliberative panels, and adversarial validation gates that drive a feature, bug fix, or refactor through a disciplined **spec → plan → execute → audit → commit** lifecycle.
 
-This directory is an **Antigravity-format (`agy`)** standalone version of the planning swarm that lives in Claude Code plugin form at [`plugins/plan/`](../plugins/plan). Both copies are maintained to ensure full alignment with graph engineering principles and invariant enforcement.
+This directory contains the **Antigravity-format (`agy`)** standalone subagents for the planning swarm, complementing the skills packaged under [`plugins/plan/`](../plugins/plan) and [`plugins/orchestrator/`](../plugins/orchestrator). All roles maintain strict alignment with graph engineering principles and invariant enforcement.
 
 These agents are designed to be used together. A single orchestrator (`supervisor`) dispatches the role agents in sequence, stops for human approval at defined gates, and manages the milestone state machine in `plans/active_milestones/{moniker}/state.json` — treating declarative files, not chat messages or directory heuristics, as the single source of truth. Independent *validator* agents slot in at phase boundaries to attack artifacts (spec, plan, or diff) across 3 disjoint evidence lenses before downstream phases consume them.
 

@@ -144,6 +144,5 @@ Explore the underlying documentation for details on individual roles, lifecycle 
 
 * **[Standalone Agents (`agents/README.md`)](agents/README.md):** 13 AGY CLI subagents, system prompts, 3-lens partitioned validator panels, and standalone packaging.
 * **[Planning Skills (`plugins/plan/README.md`)](plugins/plan/README.md):** Complete guide to skills, state machine, adversarial reviews, and artifacts.
-* **[Plugin Subagents (`plugins/plan/agents/README.md`)](plugins/plan/agents/README.md):** Claude Code subagent definitions and runtime contracts.
 * **[State Schema (`plugins/plan/lib/graph/STATE.md`)](plugins/plan/lib/graph/STATE.md):** Declarative milestone state machine lifecycle and schema.
 * **[Supervisor Orchestrator Plugin (`plugins/orchestrator/README.md`)](plugins/orchestrator/README.md):** Documentation for the spec-driven coordinator and validation gates.
