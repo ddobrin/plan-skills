@@ -1,5 +1,5 @@
 {
-  "name": "plan-skills",
-  "description": "Antigravity (AGY) Spec-Driven Planning Swarm Plugins & Skills",
+  "name": "plan",
+  "description": "Antigravity (AGY) Spec-Driven Planning Swarm Plugins, Skills and Agents",
   "version": "1.0.0"
 }
