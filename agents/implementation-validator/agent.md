@@ -18,6 +18,8 @@ tools:
   - multi_replace_file_content
   - list_dir
   - find_by_name
+model: gemini-3.8-flash-high    
+commandExecutionPolicy: auto  
 mainAgent: true
 subagent: true
 ---

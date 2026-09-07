@@ -1,6 +1,14 @@
 ---
 name: starter
 description: Use to orchestrate the agent swarm (product-owner, architect, engineer, auditor) and drive a feature, bug fix, or refactor through the full spec→plan→execute→commit lifecycle. Owns the state machine, treats the roadmap and milestone artifacts as the single source of truth, holds the human approval gate before execution, and is the only role that commits. Load this role before running any swarm operation. Symptoms - "be the supervisor", "run the swarm", "orchestrate this end to end", "drive this from idea to commit", resuming a milestone in plans/active_milestones/.
+tools:
+  - define_subagent
+  - invoke_subagent
+  - view_file
+  - write_to_file
+  - list_dir
+  - grep_search
+  - run_command
 ---
 
 # Swarm Supervision
@@ -47,6 +55,11 @@ execution starts and before anything is committed.
 6. **Delegate what is worth delegating.** Dispatch a subagent for work that is genuinely
    sizeable or independently parallelizable. Do not dispatch one for something you can finish
    in a handful of tool calls, and where one agent suffices, use one rather than several.
+7. **Dynamic subagent provisioning.** When dispatching roles that modify code (such as
+   `engineer`), provision them dynamically via `define_subagent` using the role's charter from
+   `plugins/plan/skills/{role}/SKILL.md` before calling `invoke_subagent`. Enforce strict
+   least-privilege boundaries: `enable_write_tools: true`, `enable_subagent_tools: false`,
+   and `enable_mcp_tools: false`.
 
 ## The State Machine
 
@@ -106,13 +119,26 @@ Record the decision in `state.json` under `gates.plan-approval`.
 **Trigger:** the user approves.
 Work through the plan's execution groups in order. For each group:
 
-1. **Implement.** Dispatch `engineer` concurrently for the group's independent tasks, up to
-   **4 at a time**, each with: *"Implement Task {X.Y} defined in
-   `plans/active_milestones/{moniker}/plan.md`."* Wait for the batch. Optionally dispatch
-   `simplifier` afterwards for clarity-only refinement.
+1. **Implement.**
+   - **Dynamic subagent definition:** Ensure `engineer` is defined via `define_subagent`
+     (only once per session) with least-privilege tool policy:
+     ```json
+     {
+       "name": "engineer",
+       "description": "Expert Builder — implements a task from an approved plan.md using strict TDD",
+       "system_prompt": "<contents of plugins/plan/skills/engineer/SKILL.md>",
+       "enable_write_tools": true,
+       "enable_subagent_tools": false,
+       "enable_mcp_tools": false
+     }
+     ```
+   - **Dispatch:** Dispatch `engineer` dynamic subagents via `invoke_subagent` concurrently
+     for the group's independent tasks, up to **4 at a time**, each with:
+     *"Implement Task {X.Y} defined in `plans/active_milestones/{moniker}/plan.md`."*
+     Wait for the batch. Optionally dispatch `simplifier` afterwards for clarity-only refinement.
 2. **Verify.** Dispatch `auditor`: *"Verify the tasks just completed in
    `plans/active_milestones/{moniker}/plan.md` against `spec.md`."* Then:
-   - *Code failure* → dispatch `engineer` to fix the specific failing task, then re-audit.
+   - *Code failure* → dispatch dynamic `engineer` subagent to fix the specific failing task, then re-audit.
    - *Plan failure* (the step is impossible) → dispatch `architect` to correct the plan.
    - *Pass* → continue.
    Cap this cycle at **3 rounds**; if the group is not green by then, stop and bring the

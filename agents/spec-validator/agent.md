@@ -15,6 +15,7 @@ tools:
   - multi_replace_file_content
   - list_dir
   - find_by_name
+commandExecutionPolicy: auto  
 mainAgent: true
 subagent: true
 ---

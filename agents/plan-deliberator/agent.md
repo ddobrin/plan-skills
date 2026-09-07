@@ -17,6 +17,8 @@ tools:
   - list_dir
   - find_by_name
   - grep_search
+model: gemini-3.8-flash-medium    
+commandExecutionPolicy: auto  
 mainAgent: true
 subagent: true
 ---

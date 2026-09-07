@@ -12,6 +12,7 @@ tools:
   - multi_replace_file_content
   - list_dir
   - grep_search
+commandExecutionPolicy: auto  
 mainAgent: true
 subagent: true
 ---

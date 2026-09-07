@@ -15,6 +15,7 @@ tools:
   - list_dir
   - find_by_name
   - grep_search
+commandExecutionPolicy: auto  
 mainAgent: true
 subagent: true
 ---
