@@ -29,7 +29,7 @@ Running `./scripts/install-all.sh` creates and configures the following artifact
         ├── graph.json
         ├── lib/graph/graph.py
         ├── agents/                    # Bundled 13 custom subagents
-        └── skills/                    # 21 skills (including /plan-swarm + role skills + 4 internal GEAP helpers)
+        └── skills/                    # 17 skills (including /plan-swarm + role, panel, and trajectory skills)
 ```
 
 Every install run automatically executes `python3 ~/.gemini/config/plugins/plan/lib/graph/graph.py validate --agents-dir ...` to verify the installed topology and subagent contracts.

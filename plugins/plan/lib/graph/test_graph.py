@@ -209,9 +209,9 @@ class TestAgentsValidationInvariant1_SubagentsCount(unittest.TestCase):
         self.assertTrue(any("missing expected agent directory(s): supervisor" in p for p in problems))
 
     def test_unexpected_subagent_directory_rejected(self):
-        (self.agents_dir / "geap-interactions-caller").mkdir()
+        (self.agents_dir / "unexpected-extra-agent").mkdir()
         problems = validate_agents(self.agents_dir, self.graph)
-        self.assertTrue(any("unexpected agent directory(s): geap-interactions-caller" in p for p in problems))
+        self.assertTrue(any("unexpected agent directory(s): unexpected-extra-agent" in p for p in problems))
 
     def test_missing_agent_md(self):
         (self.agents_dir / "engineer" / "agent.md").unlink()
@@ -546,7 +546,7 @@ class TestCLIInvocations(unittest.TestCase):
 
 
 class TestPluginBundledLayoutAndErgonomics(unittest.TestCase):
-    """Tests that plugins/plan/ bundles agents/, provides /plan-swarm, and hides internal GEAP skills."""
+    """Tests that plugins/plan/ bundles agents/, provides /plan-swarm, and contains the exact 17 skills and graph lib."""
 
     def setUp(self):
         self.graph = load()
@@ -570,22 +570,37 @@ class TestPluginBundledLayoutAndErgonomics(unittest.TestCase):
         content = skill_file.read_text(encoding="utf-8")
         self.assertIn("name: plan-swarm", content)
 
-    def test_internal_geap_skills_disable_slash_command(self):
-        geap_skills = [
-            "geap-plan-validator",
-            "geap-spec-validator",
-            "geap-interactions-plan-validator",
-            "geap-interactions-spec-validator",
-        ]
-        for skill in geap_skills:
-            skill_file = self.plugin_root / "skills" / skill / "SKILL.md"
-            self.assertTrue(skill_file.is_file(), f"Missing {skill_file}")
-            content = skill_file.read_text(encoding="utf-8")
-            self.assertIn(
-                "disable-slash-command: true",
-                content,
-                f"Internal GEAP skill {skill} must set disable-slash-command: true",
-            )
+    def test_exact_skills_and_libs_bundled(self):
+        expected_skills = {
+            "architect",
+            "auditor",
+            "engineer",
+            "implementation-validator",
+            "plan-deliberator",
+            "plan-swarm",
+            "plan-validator",
+            "product-owner",
+            "simplifier",
+            "spec-deliberator",
+            "spec-validator",
+            "starter",
+            "teamwork-trajectory",
+            "visual-architect",
+            "visual-implementation-recap",
+            "visual-product-owner",
+            "wf-trajectory",
+        }
+        skills_dir = self.plugin_root / "skills"
+        present_skills = {d.name for d in skills_dir.iterdir() if d.is_dir() and not d.name.startswith(".")}
+        self.assertEqual(present_skills, expected_skills)
+
+        lib_dir = self.plugin_root / "lib"
+        present_libs = {
+            d.name
+            for d in lib_dir.iterdir()
+            if d.is_dir() and not d.name.startswith(".") and d.name != "__pycache__"
+        }
+        self.assertEqual(present_libs, {"graph"})
 
 
 if __name__ == "__main__":

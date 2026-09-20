@@ -18,7 +18,7 @@ from plugins/plan into ~/.gemini/config (or ./.agents for project scope).
 
 Artifacts created in global scope (~/.gemini/config):
   1. ~/.gemini/config/agents/<13 subagents>/agent.md (+ bundled visual assets)
-  2. ~/.gemini/config/plugins/plan/ (21 skills including /plan-swarm, 13 subagents, graph.py)
+  2. ~/.gemini/config/plugins/plan/ (17 skills including /plan-swarm, 13 subagents, graph.py)
   3. ~/.gemini/config/config.json (enables the 'plan' plugin)
 
 Options:
@@ -156,7 +156,7 @@ cat <<EOF
 ==================================================================
 Artifacts installed in: ${TARGET_BASE}
   - Subagents : ${TARGET_BASE}/agents/ (13 self-contained subagents)
-  - Plan      : ${TARGET_BASE}/plugins/plan/ (21 skills + 13 bundled subagents)
+  - Plan      : ${TARGET_BASE}/plugins/plan/ (17 skills + 13 bundled subagents)
 $(if [[ "$SCOPE" == "global" ]]; then echo "  - Config    : ${TARGET_BASE}/config.json ('plan' enabled)"; fi)
 
 Available Slash Commands in Chat:

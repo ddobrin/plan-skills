@@ -6,7 +6,7 @@ These skills are designed to operate as a coordinated state machine. A single or
 
 The swarm's structure is declaratively specified in [`graph.json`](graph.json) (`plan-swarm@2.1`): all 16 nodes, 25 edges, 2 human gates, and node read/write contracts live in one JSON file, the lifecycle diagram below is generated directly from it via [`lib/graph/graph.py`](lib/graph/graph.py), and each active milestone's runtime progression is recorded in [`plans/active_milestones/{moniker}/state.json`](#state-machine-specification-statejson--graphjson).
 
-> **Skills and Bundled Subagents:** This plugin bundles both the **21 skills** under [`skills/`](skills/) (invoked via slash commands such as `/plan-swarm` or the `Skill` tool) and the **13 self-contained custom subagents** under [`agents/`](agents/README.md) (invoked via `invoke_subagent`). Both families share the same [`graph.json`](graph.json) contracts and are validated together by `python3 lib/graph/graph.py validate --agents-dir agents`. See [`agents/README.md`](agents/README.md) for the subagent reference.
+> **Skills and Bundled Subagents:** This plugin bundles both the **17 skills** under [`skills/`](skills/) (invoked via slash commands such as `/plan-swarm` or the `Skill` tool) and the **13 self-contained custom subagents** under [`agents/`](agents/README.md) (invoked via `invoke_subagent`). Both families share the same [`graph.json`](graph.json) contracts and are validated together by `python3 lib/graph/graph.py validate --agents-dir agents`. See [`agents/README.md`](agents/README.md) for the subagent reference.
 
 ---
 
@@ -17,7 +17,7 @@ The swarm's structure is declaratively specified in [`graph.json`](graph.json) (
 | **Swarm entry & orchestration** | `plan-swarm`, `starter` | Bootstrap or resume a milestone from `plans/active_milestones/{moniker}/state.json`, enforce human review and commit gates, and act as the sole committer. |
 | **Swarm roles** | `product-owner` (or `visual-product-owner`), `architect` (or `visual-architect`), `engineer`, `simplifier`, `auditor`, `visual-implementation-recap` | Execute the core lifecycle — discover, spec, plan, build under TDD, simplify, audit with `file:line` evidence, and render the visual commit-gate recap. |
 | **Deliberative panels** | `spec-deliberator`, `plan-deliberator` | Improve a drafted artifact via 3 delegates holding deliberately disjoint context (stakeholder bundles for specs; intent, codebase, and delivery territories for plans) who deliberate over bounded verbatim rounds (hard cap 4) to consensus. Refuses deliberation if the asymmetry test fails. |
-| **Adversarial validators** | `spec-validator` (+ `geap-spec-validator`, `geap-interactions-spec-validator`), `plan-validator` (+ `geap-plan-validator`, `geap-interactions-plan-validator`), `implementation-validator` | Attack each artifact at its phase boundary with a 3-lens partitioned skeptic panel; keep findings confirmed by a 2-of-3 majority and require explicit triage for the single-vote tail. |
+| **Adversarial validators** | `spec-validator`, `plan-validator`, `implementation-validator` | Attack each artifact at its phase boundary with a 3-lens partitioned skeptic panel; keep findings confirmed by a 2-of-3 majority and require explicit triage for the single-vote tail. |
 | **Trajectory utilities** | `teamwork-trajectory`, `wf-trajectory` | Out-of-band HTML timeline renderers for `.agents/` handoff trajectories and workflow execution traces (`wf_<runId>.json`). |
 
 ---
@@ -166,7 +166,6 @@ All three validator panels enforce `graph.json` Invariant 3: **dispatch 3 indepe
   2. `missing-requirement` — reads `context.md`, `00-ROADMAP.md`, and external system constraints first (missing error states, limits, concurrency, auth, units, time zones).
   3. `malicious-compliance` — reads the Gherkin acceptance criteria alone without prose rationale to game them with the laziest passing implementation (`malicious-compliance`, `untestable`).
 - **Produces:** `plans/active_milestones/{moniker}/adversarial-reviews/spec-validation.md`.
-- **Remote alternatives (internal helpers, `disable-slash-command: true`):** `geap-spec-validator` (Vertex AI Python SDK) and `geap-interactions-spec-validator` (Interactions API via `curl` + ADC).
 
 #### 10. `plan-validator` — Attack the Plan (Phase 2 Gate, blocks `human-review-gate`)
 - **Disjoint Lenses (`n = 3`, `gate = majority`):**
@@ -174,7 +173,6 @@ All three validator panels enforce `graph.json` Invariant 3: **dispatch 3 indepe
   2. `ground-truth` — opens every repository file named in `plan.md` and verifies signatures, types, schemas, and symbols (`false-assumption`, **must cite `file:line`**).
   3. `blast-radius` — reads callers, tests, CI configs, and migrations outside the files the plan modifies (`unverifiable`, `no-rollback`, `missing-migration`, `hidden-coupling`).
 - **Produces:** `plans/active_milestones/{moniker}/adversarial-reviews/plan-validation.md`, including the headline **`first_domino`** (earliest step whose failure invalidates downstream steps).
-- **Remote alternatives (internal helpers, `disable-slash-command: true`):** `geap-plan-validator` and `geap-interactions-plan-validator` (plan-text-only remote model panels).
 
 #### 11. `implementation-validator` — Attack the Diff (Phase 4 Gate, blocks `commit-gate`)
 - **Disjoint Lenses (`n = 3`, `gate = majority`):**
@@ -385,7 +383,7 @@ Inferring a milestone's current phase by listing files in `plans/active_mileston
 | `nodes.{id}.reason` | `string` | Skipped nodes (`status == "skipped"`) | **Mandatory** explanation of why the node was not run (e.g. `"asymmetry test failed — context was mergeable"`). Prevents silent gate bypasses. |
 | `nodes.{id}.report` | `string` | Panel nodes (`spec-validator`, `plan-validator`, `implementation-validator`) | Workspace-relative path to the Markdown review report written by the panel under `adversarial-reviews/`. |
 | `nodes.{id}.lenses` | `array<string>` | Panel nodes | Ordered list of the 3 disjoint evidence lenses actually dispatched (e.g. `["sequencing", "ground-truth", "blast-radius"]`). Serves as cryptographic/audit proof that the panel partitioned its reading assignments rather than running 3 identical prompts. |
-| `nodes.{id}.confirmed` | `integer` | Panel nodes | Count of deduplicated findings that achieved the **2-of-3 majority quorum** (or ≥2-of-4 for remote GEAP synthesis panels). Any value `> 0` blocks the downstream gate and triggers the feedback edge in `graph.json`. |
+| `nodes.{id}.confirmed` | `integer` | Panel nodes | Count of deduplicated findings that achieved the **2-of-3 majority quorum**. Any value `> 0` blocks the downstream gate and triggers the feedback edge in `graph.json`. |
 | `nodes.{id}.single_vote` | `integer` | Panel nodes | Count of findings raised by only 1 of the 3 skeptics. These do not automatically block the gate, but cannot be silently discarded. |
 | `nodes.{id}.cross_lens` | `integer` | Panel nodes | Count of confirmed findings independently discovered by **two or more distinct lenses** from non-overlapping reading assignments. High `cross_lens` indicates genuine multi-perspective corroboration rather than single-lens repetition. |
 | `nodes.{id}.first_domino` | `string \| null` | `plan-validator` | Stable finding ID (or step reference, e.g. `"step-2-missing-migration"`) of the **earliest step failure in `plan.md` whose failure invalidates downstream steps**, or `null` when `confirmed == 0`. Guides `architect` to fix the root ordering defect first. |

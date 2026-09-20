@@ -48,6 +48,9 @@ while [[ $# -gt 0 ]]; do
         exit 1
       fi
       ;;
+    --standalone-skills)
+      shift
+      ;;
     --local)
       SOURCE_MODE="local"
       shift

@@ -82,7 +82,7 @@ curl -fsSL https://raw.githubusercontent.com/ddobrin/plan-skills/main/scripts/in
 
 What `./scripts/install-all.sh` creates in `~/.gemini/config`:
 1. **`~/.gemini/config/agents/`**: All 13 self-contained reasoning subagents (`architect`, `auditor`, `engineer`, `implementation-validator`, `plan-deliberator`, `plan-validator`, `product-owner`, `spec-deliberator`, `spec-validator`, `supervisor`, `visual-architect`, `visual-implementation-recap`, `visual-product-owner`) along with bundled `assets/` and `references/`.
-2. **`~/.gemini/config/plugins/plan/`**: Complete self-contained Plan Swarm plugin bundle containing both `skills/` (21 skills including `/plan-swarm`) and `agents/` (the 13 subagents) plus `graph.json` and `lib/graph/graph.py`.
+2. **`~/.gemini/config/plugins/plan/`**: Complete self-contained Plan Swarm plugin bundle containing both `skills/` (17 skills including `/plan-swarm`) and `agents/` (the 13 subagents) plus `graph.json` and `lib/graph/graph.py`.
 3. **`~/.gemini/config/config.json`**: Atomically enables `"plan"` under `"plugins"` and validates the installed topology via `graph.py validate`.
 
 For project-scoped installation into `./.agents/` (`./.agents/agents/` and `./.agents/plugins/plan/`), pass `--project`:
