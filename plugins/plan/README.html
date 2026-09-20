@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plan Plugin — Spec-Driven Planning Swarm — Plan Swarm v2 Documentation</title>
+  <style>
+    :root[data-theme="dark"] {
+      --bg: #0b0f19;
+      --bg-elevated: #111827;
+      --bg-card: #161f33;
+      --bg-code: #0d1322;
+      --border: #26324d;
+      --border-subtle: #1e293b;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --heading: #f8fafc;
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.14);
+      --purple: #c084fc;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --red: #f87171;
+      --shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+    }
+    :root[data-theme="light"] {
+      --bg: #f8fafc;
+      --bg-elevated: #ffffff;
+      --bg-card: #f1f5f9;
+      --bg-code: #0f172a;
+      --border: #cbd5e1;
+      --border-subtle: #e2e8f0;
+      --text: #1e293b;
+      --text-muted: #475569;
+      --heading: #0f172a;
+      --accent: #0284c7;
+      --accent-soft: rgba(2, 132, 199, 0.1);
+      --purple: #7e22ce;
+      --green: #16a34a;
+      --amber: #d97706;
+      --red: #dc2626;
+      --shadow: 0 8px 24px -8px rgba(15, 23, 42, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      font-size: 15px;
+    }
+
+    /* Top Header Bar */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1.5rem;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .brand-badge {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      letter-spacing: 0.03em;
+    }
+    .brand-title {
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--heading);
+    }
+    .brand-sub {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .theme-btn {
+      background: var(--bg-card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 0.4rem 0.85rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.82rem;
+      font-weight: 600;
+      transition: all 0.15s ease;
+    }
+    .theme-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Layout Grid */
+    .layout {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      max-width: 1560px;
+      margin: 0 auto;
+    }
+    @media (max-width: 1024px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+    }
+
+    /* Sticky Sidebar Navigation */
+    .sidebar {
+      position: sticky;
+      top: 57px;
+      height: calc(100vh - 57px);
+      overflow-y: auto;
+      padding: 1.25rem 1rem 2rem;
+      border-right: 1px solid var(--border);
+      background: var(--bg-elevated);
+    }
+    .search-input {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      margin-bottom: 1rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.84rem;
+    }
+    .search-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .toc-header {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      font-weight: 700;
+      margin: 0.5rem 0.5rem 0.6rem;
+    }
+    .toc-link {
+      display: block;
+      text-decoration: none;
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      padding: 0.32rem 0.6rem;
+      border-radius: 5px;
+      margin-bottom: 2px;
+      transition: all 0.12s ease;
+      line-height: 1.35;
+    }
+    .toc-link:hover {
+      color: var(--heading);
+      background: var(--accent-soft);
+    }
+    .toc-l2 { font-weight: 600; color: var(--text); margin-top: 0.45rem; }
+    .toc-l3 { padding-left: 1.25rem; font-size: 0.79rem; }
+    .toc-l4 { padding-left: 1.9rem; font-size: 0.76rem; color: var(--text-muted); }
+
+    /* Main Content Area */
+    .content {
+      padding: 2.25rem 3rem 5rem;
+      max-width: 1160px;
+    }
+    @media (max-width: 768px) {
+      .content { padding: 1.5rem 1.25rem 4rem; }
+    }
+
+    /* Typography */
+    h1, h2, h3, h4, h5 {
+      color: var(--heading);
+      scroll-margin-top: 76px;
+      position: relative;
+    }
+    .doc-h1 {
+      font-size: 2.1rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin: 0 0 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 2px solid var(--border);
+    }
+    .doc-h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin: 2.75rem 0 1rem;
+      padding-bottom: 0.45rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .doc-h3 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin: 2rem 0 0.75rem;
+      color: var(--accent);
+    }
+    .doc-h4 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin: 1.6rem 0 0.55rem;
+      padding: 0.55rem 0.85rem;
+      background: var(--bg-card);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 6px 6px 0;
+    }
+    .doc-h5 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--purple);
+      margin: 1.5rem 0 0.5rem;
+    }
+    .anchor-link {
+      opacity: 0;
+      margin-left: 0.5rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-weight: 400;
+      transition: opacity 0.15s ease;
+    }
+    h1:hover .anchor-link, h2:hover .anchor-link, h3:hover .anchor-link, h4:hover .anchor-link {
+      opacity: 1;
+    }
+
+    .doc-p { margin: 0.75rem 0; }
+    .doc-list { margin: 0.65rem 0 1rem 1.25rem; padding: 0; }
+    .doc-list li { margin-bottom: 0.45rem; }
+    .md-link { color: var(--accent); text-decoration: none; font-weight: 500; }
+    .md-link:hover { text-decoration: underline; }
+    .section-divider {
+      border: 0;
+      border-top: 1px solid var(--border);
+      margin: 2.5rem 0;
+    }
+
+    /* Inline Code & Pills */
+    .inline-code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.84em;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 0.12rem 0.4rem;
+      border-radius: 4px;
+      color: var(--accent);
+    }
+    .pill-ok { color: var(--green); border-color: rgba(74, 222, 128, 0.35); background: rgba(74, 222, 128, 0.1); }
+    .pill-err { color: var(--red); border-color: rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.1); }
+    .pill-warn { color: var(--amber); border-color: rgba(251, 191, 36, 0.35); background: rgba(251, 191, 36, 0.1); }
+
+    /* Blockquotes & Alerts */
+    .doc-quote {
+      margin: 1rem 0;
+      padding: 0.85rem 1.15rem;
+      background: var(--bg-card);
+      border-left: 4px solid var(--accent);
+      border-radius: 0 8px 8px 0;
+      color: var(--text);
+    }
+    .alert {
+      margin: 1.15rem 0;
+      padding: 0.95rem 1.2rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+    }
+    .alert-note { border-left: 4px solid var(--accent); }
+    .alert-important { border-left: 4px solid var(--purple); }
+    .alert-warning, .alert-caution { border-left: 4px solid var(--amber); }
+    .alert-title {
+      font-weight: 700;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.35rem;
+      color: var(--accent);
+    }
+    .alert-important .alert-title { color: var(--purple); }
+
+    /* Tables */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1.15rem 0 1.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+    .doc-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      background: var(--bg-elevated);
+    }
+    .doc-table th {
+      background: var(--bg-card);
+      color: var(--heading);
+      font-weight: 700;
+      text-align: left;
+      padding: 0.7rem 0.9rem;
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+    }
+    .doc-table td {
+      padding: 0.65rem 0.9rem;
+      border-bottom: 1px solid var(--border-subtle);
+      vertical-align: top;
+    }
+    .doc-table tr:last-child td { border-bottom: none; }
+    .doc-table tbody tr:hover { background: rgba(56, 189, 248, 0.04); }
+
+    /* Code Blocks & JSON Highlighting */
+    .code-card {
+      margin: 1.1rem 0 1.5rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--bg-code);
+      box-shadow: var(--shadow);
+    }
+    .code-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.45rem 0.9rem;
+      background: #161f33;
+      border-bottom: 1px solid var(--border);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.75rem;
+      color: #94a3b8;
+    }
+    .copy-btn {
+      background: rgba(255, 255, 255, 0.07);
+      color: #e2e8f0;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      padding: 0.2rem 0.55rem;
+      font-size: 0.72rem;
+      cursor: pointer;
+    }
+    .copy-btn:hover { border-color: #38bdf8; color: #38bdf8; }
+    .code-block {
+      margin: 0;
+      padding: 1rem 1.15rem;
+      overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.83rem;
+      line-height: 1.55;
+      color: #e2e8f0;
+    }
+    .json-key { color: #7dd3fc; font-weight: 600; }
+    .json-str { color: #86efac; }
+    .json-lit { color: #f472b6; font-weight: 600; }
+
+    /* Lifecycle SVG + ASCII Showcase */
+    .lifecycle-showcase {
+      margin: 1.25rem 0 1.75rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg-elevated);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    .lifecycle-tabs {
+      display: flex;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+    }
+    .ltab {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.7rem 1.25rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+    .ltab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background: var(--bg-elevated);
+    }
+    .lifecycle-pane { display: none; padding: 1.25rem; }
+    .lifecycle-pane.active { display: block; }
+    .svg-container {
+      display: flex;
+      justify-content: center;
+      overflow-x: auto;
+      padding: 0.5rem;
+    }
+    svg.graphsvg {
+      max-width: 780px;
+      width: 100%;
+      height: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    svg.graphsvg .n-entry, svg.graphsvg .n-term { fill: #1e293b; stroke: #64748b; stroke-width: 1.5; }
+    svg.graphsvg .n-role { fill: #0f2942; stroke: #38bdf8; stroke-width: 1.5; }
+    svg.graphsvg .n-panel { fill: #2e1065; stroke: #c084fc; stroke-width: 1.75; }
+    svg.graphsvg .n-delib { fill: #172554; stroke: #818cf8; stroke-width: 1.5; stroke-dasharray: 4 2; }
+    svg.graphsvg .n-gate { fill: #422006; stroke: #fbbf24; stroke-width: 2; }
+    svg.graphsvg .n-render { fill: #064e3b; stroke: #34d399; stroke-width: 1.5; stroke-dasharray: 4 2; }
+    svg.graphsvg .n-lbl { fill: #f8fafc; font-size: 11px; font-weight: 700; }
+    svg.graphsvg .n-sub { fill: #94a3b8; font-size: 9.5px; }
+    svg.graphsvg .e-fwd { stroke: #64748b; stroke-width: 1.4; fill: none; color: #64748b; }
+    svg.graphsvg .e-opt { stroke: #64748b; stroke-width: 1.2; stroke-dasharray: 4 3; fill: none; color: #64748b; }
+    svg.graphsvg .e-back { stroke: #f87171; stroke-width: 1.3; stroke-dasharray: 3 3; fill: none; color: #f87171; }
+    svg.graphsvg .e-lbl { fill: #94a3b8; font-size: 9px; }
+    svg.graphsvg .e-lbl-back { fill: #fca5a5; font-size: 9px; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-badge">plan-swarm@2.1</span>
+      <span class="brand-title">Plan Plugin — Spec-Driven Planning Swarm</span>
+      <span class="brand-sub">plugins/plan/README.HTML · Skills, Topology &amp; JSON State Machine Reference</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="theme-btn" onclick="toggleTheme()">Toggle Dark / Light Theme</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <input type="text" class="search-input" placeholder="Filter sections..." oninput="filterToc(this.value)">
+      <div class="toc-header">Contents</div>
+      <nav id="toc-nav">
+        <a href="#the-skill-families" class="toc-link toc-l2">The Skill Families</a>
+<a href="#the-lifecycle" class="toc-link toc-l2">The Lifecycle</a>
+<a href="#skill-reference" class="toc-link toc-l2">Skill Reference</a>
+<a href="#swarm-entry-roles" class="toc-link toc-l3">Swarm Entry &amp; Roles</a>
+<a href="#0-plan-swarm-starter-the-supervisor-protocol-guardian" class="toc-link toc-l4">0. plan-swarm &amp; starter — The Supervisor &amp; Protocol Guardian</a>
+<a href="#1-product-owner-the-product-owner-phase-1" class="toc-link toc-l4">1. product-owner — The Product Owner (Phase 1)</a>
+<a href="#1alt-visual-product-owner-the-visual-product-owner-phase-1-renderer" class="toc-link toc-l4">1·alt. visual-product-owner — The Visual Product Owner (Phase 1 + Renderer)</a>
+<a href="#2-architect-the-chief-software-architect-phase-2" class="toc-link toc-l4">2. architect — The Chief Software Architect (Phase 2)</a>
+<a href="#2alt-visual-architect-the-visual-architect-phase-2-renderer" class="toc-link toc-l4">2·alt. visual-architect — The Visual Architect (Phase 2 + Renderer)</a>
+<a href="#3-engineer-the-expert-builder-phase-4" class="toc-link toc-l4">3. engineer — The Expert Builder (Phase 4)</a>
+<a href="#4-simplifier-the-refiner-phase-4-optional" class="toc-link toc-l4">4. simplifier — The Refiner (Phase 4, Optional)</a>
+<a href="#5-auditor-the-quality-gatekeeper-phase-4" class="toc-link toc-l4">5. auditor — The Quality Gatekeeper (Phase 4)</a>
+<a href="#6-visual-implementation-recap-the-implementation-recap-renderer-phase-4-optional" class="toc-link toc-l4">6. visual-implementation-recap — The Implementation Recap Renderer (Phase 4, Optional)</a>
+<a href="#deliberative-panels" class="toc-link toc-l3">Deliberative Panels</a>
+<a href="#7-spec-deliberator-deliberate-the-spec-phase-1-optional" class="toc-link toc-l4">7. spec-deliberator — Deliberate the Spec (Phase 1, Optional)</a>
+<a href="#8-plan-deliberator-deliberate-the-plan-phase-2-optional" class="toc-link toc-l4">8. plan-deliberator — Deliberate the Plan (Phase 2, Optional)</a>
+<a href="#adversarial-validators-3-lens-partitioned-quorum-gates" class="toc-link toc-l3">Adversarial Validators (3-Lens Partitioned Quorum Gates)</a>
+<a href="#9-spec-validator-attack-the-spec-phase-1-gate-blocks-architect" class="toc-link toc-l4">9. spec-validator — Attack the Spec (Phase 1 Gate, blocks architect)</a>
+<a href="#10-plan-validator-attack-the-plan-phase-2-gate-blocks-human-review-gate" class="toc-link toc-l4">10. plan-validator — Attack the Plan (Phase 2 Gate, blocks human-review-gate)</a>
+<a href="#11-implementation-validator-attack-the-diff-phase-4-gate-blocks-commit-gate" class="toc-link toc-l4">11. implementation-validator — Attack the Diff (Phase 4 Gate, blocks commit-gate)</a>
+<a href="#trajectory-utilities" class="toc-link toc-l3">Trajectory Utilities</a>
+<a href="#artifact-map" class="toc-link toc-l2">Artifact Map</a>
+<a href="#state-machine-specification-statejson-graphjson" class="toc-link toc-l2">State Machine Specification (state.json &amp; graph.json)</a>
+<a href="#1-runtime-milestone-state-machine-plansactive_milestonesmonikerstatejson" class="toc-link toc-l3">1. Runtime Milestone State Machine (plans/active_milestones/{moniker}/state.json)</a>
+<a href="#why-statejson-exists" class="toc-link toc-l4">Why state.json Exists</a>
+<a href="#writer-honesty-invariants" class="toc-link toc-l4">Writer &amp; Honesty Invariants</a>
+<a href="#complete-annotated-statejson-example" class="toc-link toc-l4">Complete Annotated state.json Example</a>
+<a href="#field-by-field-meaning-in-statejson" class="toc-link toc-l4">Field-by-Field Meaning in state.json</a>
+<a href="#2-declarative-topology-schema-pluginsplangraphjson" class="toc-link toc-l3">2. Declarative Topology Schema (plugins/plan/graph.json)</a>
+      </nav>
+    </aside>
+    <main class="content">
+      <h1 id="plan-plugin-spec-driven-planning-swarm-v2" class="doc-h1"><code class="inline-code">plan</code> Plugin — Spec-Driven Planning Swarm (v2)<a class="anchor-link" href="#plan-plugin-spec-driven-planning-swarm-v2" aria-label="Link to section">#</a></h1>
+<p class="doc-p">A self-contained swarm of role-based skills, 13 bundled custom subagents, deliberative panels, and adversarial 3-lens validation gates that drive a feature, bug fix, or refactor through a disciplined <strong>spec → plan → execute → audit → commit</strong> lifecycle.</p>
+<p class="doc-p">These skills are designed to operate as a coordinated state machine. A single orchestrator (<code class="inline-code">starter</code> / <code class="inline-code">plan-swarm</code>) dispatches the role agents in sequence, stops for human approval at defined gates, and treats files under <code class="inline-code">plans/</code> — specifically <code class="inline-code">plans/active_milestones/{moniker}/state.json</code>, not chat history or directory-listing heuristics — as the single source of truth. Three <em>validator</em> gates slot in at phase boundaries to attack each artifact (<code class="inline-code">spec.md</code>, <code class="inline-code">plan.md</code>, and <code class="inline-code">git diff</code>) across <strong>3 disjoint evidence lenses</strong> before the next phase consumes it.</p>
+<p class="doc-p">The swarm&#x27;s structure is declaratively specified in <a href="graph.json" class="md-link"><code class="inline-code">graph.json</code></a> (<code class="inline-code">plan-swarm@2.1</code>): all 16 nodes, 25 edges, 2 human gates, and node read/write contracts live in one JSON file, the lifecycle diagram below is generated directly from it via <a href="lib/graph/graph.py" class="md-link"><code class="inline-code">lib/graph/graph.py</code></a>, and each active milestone&#x27;s runtime progression is recorded in <a href="#state-machine-specification-statejson--graphjson" class="md-link"><code class="inline-code">plans/active_milestones/{moniker}/state.json</code></a>.</p>
+<blockquote class="doc-quote"><strong>Skills and Bundled Subagents:</strong> This plugin bundles both the <strong>21 skills</strong> under <a href="skills/" class="md-link"><code class="inline-code">skills/</code></a> (invoked via slash commands such as <code class="inline-code">/plan-swarm</code> or the <code class="inline-code">Skill</code> tool) and the <strong>13 self-contained custom subagents</strong> under <a href="agents/README.md" class="md-link"><code class="inline-code">agents/</code></a> (invoked via <code class="inline-code">invoke_subagent</code>). Both families share the same <a href="graph.json" class="md-link"><code class="inline-code">graph.json</code></a> contracts and are validated together by <code class="inline-code">python3 lib/graph/graph.py validate --agents-dir agents</code>. See <a href="agents/README.md" class="md-link"><code class="inline-code">agents/README.md</code></a> for the subagent reference.</blockquote>
+<hr class="section-divider">
+<h2 id="the-skill-families" class="doc-h2">The Skill Families<a class="anchor-link" href="#the-skill-families" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table class="doc-table"><thead><tr><th>Family</th><th>Skills</th><th>Purpose</th></tr></thead><tbody><tr><td><strong>Swarm entry &amp; orchestration</strong></td><td><code class="inline-code">plan-swarm</code>, <code class="inline-code">starter</code></td><td>Bootstrap or resume a milestone from <code class="inline-code">plans/active_milestones/{moniker}/state.json</code>, enforce human review and commit gates, and act as the sole committer.</td></tr><tr><td><strong>Swarm roles</strong></td><td><code class="inline-code">product-owner</code> (or <code class="inline-code">visual-product-owner</code>), <code class="inline-code">architect</code> (or <code class="inline-code">visual-architect</code>), <code class="inline-code">engineer</code>, <code class="inline-code">simplifier</code>, <code class="inline-code">auditor</code>, <code class="inline-code">visual-implementation-recap</code></td><td>Execute the core lifecycle — discover, spec, plan, build under TDD, simplify, audit with <code class="inline-code">file:line</code> evidence, and render the visual commit-gate recap.</td></tr><tr><td><strong>Deliberative panels</strong></td><td><code class="inline-code">spec-deliberator</code>, <code class="inline-code">plan-deliberator</code></td><td>Improve a drafted artifact via 3 delegates holding deliberately disjoint context (stakeholder bundles for specs; intent, codebase, and delivery territories for plans) who deliberate over bounded verbatim rounds (hard cap 4) to consensus. Refuses deliberation if the asymmetry test fails.</td></tr><tr><td><strong>Adversarial validators</strong></td><td><code class="inline-code">spec-validator</code> (+ <code class="inline-code">geap-spec-validator</code>, <code class="inline-code">geap-interactions-spec-validator</code>), <code class="inline-code">plan-validator</code> (+ <code class="inline-code">geap-plan-validator</code>, <code class="inline-code">geap-interactions-plan-validator</code>), <code class="inline-code">implementation-validator</code></td><td>Attack each artifact at its phase boundary with a 3-lens partitioned skeptic panel; keep findings confirmed by a 2-of-3 majority and require explicit triage for the single-vote tail.</td></tr><tr><td><strong>Trajectory utilities</strong></td><td><code class="inline-code">teamwork-trajectory</code>, <code class="inline-code">wf-trajectory</code></td><td>Out-of-band HTML timeline renderers for <code class="inline-code">.agents/</code> handoff trajectories and workflow execution traces (<code class="inline-code">wf_&lt;runId&gt;.json</code>).</td></tr></tbody></table></div>
+<hr class="section-divider">
+<h2 id="the-lifecycle" class="doc-h2">The Lifecycle<a class="anchor-link" href="#the-lifecycle" aria-label="Link to section">#</a></h2>
+<blockquote class="doc-quote">The diagram below is generated from <a href="graph.json" class="md-link"><code class="inline-code">graph.json</code></a> — the single declaration of this swarm&#x27;s nodes, edges and gates. Edit that file and run <code class="inline-code">python3 lib/graph/graph.py sync</code>; do not hand-edit the block.</blockquote>
+
+                <div class="lifecycle-showcase">
+                  <div class="lifecycle-tabs">
+                    <button class="ltab active" onclick="switchLifecycleTab(this, 'svg-pane')">Interactive Topology Diagram (SVG from <code>graph.json</code>)</button>
+                    <button class="ltab" onclick="switchLifecycleTab(this, 'ascii-pane')">Generated ASCII Lifecycle Diagram</button>
+                  </div>
+                  <div id="svg-pane" class="lifecycle-pane active">
+                    <div class="svg-container"><svg class="graphsvg" viewBox="0 0 760 822" role="img" aria-label="The complete plan swarm topology generated from graph.json: 16 nodes and 25 edges. A vertical spine of required nodes runs from request to release, optional nodes branch to the right, and feedback edges arc back on the left.">
+<defs>
+<marker id="gh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+</defs>
+<line class="e-fwd" x1="300" y1="66" x2="300" y2="92" marker-end="url(#gh)"/>
+<line class="e-fwd" x1="300" y1="132" x2="300" y2="158" marker-end="url(#gh)"/>
+<path class="e-opt" d="M416,178 C445,178 445,178 474,178" marker-end="url(#gh)"/>
+<line class="e-fwd" x1="300" y1="198" x2="300" y2="224" marker-end="url(#gh)"/>
+<path class="e-fwd" d="M474,178 C445,178 445,244 416,244" marker-end="url(#gh)"/>
+<path class="e-back" d="M184,244 C147,244 147,178 184,178" marker-end="url(#gh)"/>
+<text class="e-lbl-back" x="143" y="211" text-anchor="end">fold in tightenings</text>
+<line class="e-fwd" x1="300" y1="264" x2="300" y2="290" marker-end="url(#gh)"/>
+<path class="e-opt" d="M416,310 C445,310 445,310 474,310" marker-end="url(#gh)"/>
+<line class="e-fwd" x1="300" y1="330" x2="300" y2="356" marker-end="url(#gh)"/>
+<path class="e-fwd" d="M474,310 C445,310 445,376 416,376" marker-end="url(#gh)"/>
+<path class="e-back" d="M184,376 C132,376 132,310 184,310" marker-end="url(#gh)"/>
+<text class="e-lbl-back" x="128" y="343" text-anchor="end">apply fixes · first_domino</text>
+<line class="e-fwd" x1="300" y1="396" x2="300" y2="422" marker-end="url(#gh)"/>
+<line class="e-fwd" x1="300" y1="462" x2="300" y2="488" marker-end="url(#gh)"/>
+<path class="e-opt" d="M416,508 C445,508 445,508 474,508" marker-end="url(#gh)"/>
+<line class="e-fwd" x1="300" y1="528" x2="300" y2="554" marker-end="url(#gh)"/>
+<path class="e-fwd" d="M474,508 C445,508 445,574 416,574" marker-end="url(#gh)"/>
+<path class="e-back" d="M184,574 C117,574 117,508 184,508" marker-end="url(#gh)"/>
+<text class="e-lbl-back" x="113" y="541" text-anchor="end">fix the failing task</text>
+<path class="e-back" d="M184,574 C102,574 102,310 184,310" marker-end="url(#gh)"/>
+<text class="e-lbl-back" x="98" y="442" text-anchor="end">step is impossible</text>
+<line class="e-fwd" x1="300" y1="594" x2="300" y2="620" marker-end="url(#gh)"/>
+<path class="e-back" d="M184,640 C87,640 87,508 184,508" marker-end="url(#gh)"/>
+<text class="e-lbl-back" x="83" y="574" text-anchor="end">fix at calibrated severity</text>
+<path class="e-opt" d="M416,640 C445,640 445,640 474,640" marker-end="url(#gh)"/>
+<line class="e-fwd" x1="300" y1="660" x2="300" y2="686" marker-end="url(#gh)"/>
+<path class="e-fwd" d="M474,640 C445,640 445,706 416,706" marker-end="url(#gh)"/>
+<path class="e-back" d="M184,706 C72,706 72,508 184,508" marker-end="url(#gh)"/>
+<text class="e-lbl-back" x="68" y="607" text-anchor="end">next execution group</text>
+<line class="e-fwd" x1="300" y1="726" x2="300" y2="752" marker-end="url(#gh)"/>
+<rect class="n-entry" x="184" y="26" width="232" height="40" rx="2"/>
+<text class="n-lbl" x="300" y="43" text-anchor="middle">request</text>
+<text class="n-sub" x="300" y="57" text-anchor="middle">feature · fix · refactor</text>
+<rect class="n-role" x="184" y="92" width="232" height="40" rx="2"/>
+<text class="n-lbl" x="300" y="109" text-anchor="middle">research</text>
+<text class="n-sub" x="300" y="123" text-anchor="middle">plans/research/*.md</text>
+<rect class="n-role" x="184" y="158" width="232" height="40" rx="2"/>
+<text class="n-lbl" x="300" y="175" text-anchor="middle">product-owner</text>
+<text class="n-sub" x="300" y="189" text-anchor="middle">spec.md · 00-ROADMAP.md</text>
+<rect class="n-delib" x="474" y="158" width="208" height="40" rx="2"/>
+<text class="n-lbl" x="578" y="175" text-anchor="middle">spec-deliberator</text>
+<text class="n-sub" x="578" y="189" text-anchor="middle">3 delegates · disjoint bundles</text>
+<rect class="n-panel" x="184" y="224" width="232" height="40" rx="2"/>
+<text class="n-lbl" x="300" y="241" text-anchor="middle">spec-validator</text>
+<text class="n-sub" x="300" y="255" text-anchor="middle">internal-consistency · missing-requirement · malicious-compliance</text>
+<rect class="n-role" x="184" y="290" width="232" height="40" rx="2"/>
+<text class="n-lbl" x="300" y="307" text-anchor="middle">architect</text>
+<text class="n-sub" x="300" y="321" text-anchor="middle">plan.md · parallel groups</text>
+<rect class="n-delib" x="474" y="290" width="208" height="40" rx="2"/>
+<text class="n-lbl" x="578" y="307" text-anchor="middle">plan-deliberator</text>
+<text class="n-sub" x="578" y="321" text-anchor="middle">intent · codebase · delivery</text>
+<rect class="n-panel" x="184" y="356" width="232" height="40" rx="2"/>
+<text class="n-lbl" x="300" y="373" text-anchor="middle">plan-validator</text>
+<text class="n-sub" x="300" y="387" text-anchor="middle">sequencing · ground-truth · blast-radius</text>
+<rect class="n-gate" x="184" y="422" width="232" height="40" rx="2"/>
+<text class="n-lbl" x="300" y="439" text-anchor="middle">HUMAN REVIEW GATE</text>
+<text class="n-sub" x="300" y="453" text-anchor="middle">user types &quot;approve&quot;</text>
+<rect class="n-role" x="184" y="488" width="232" height="40" rx="2"/>
+<text class="n-lbl" x="300" y="505" text-anchor="middle">engineer × N</text>
+<text class="n-sub" x="300" y="519" text-anchor="middle">≤ 4 concurrent · disjoint files</text>
+<rect class="n-role" x="474" y="488" width="208" height="40" rx="2"/>
+<text class="n-lbl" x="578" y="505" text-anchor="middle">simplifier</text>
+<text class="n-sub" x="578" y="519" text-anchor="middle">zero behavioral change</text>
+<rect class="n-role" x="184" y="554" width="232" height="40" rx="2"/>
+<text class="n-lbl" x="300" y="571" text-anchor="middle">auditor</text>
+<text class="n-sub" x="300" y="585" text-anchor="middle">AUDIT_[Plan_Name].md</text>
+<rect class="n-panel" x="184" y="620" width="232" height="40" rx="2"/>
+<text class="n-lbl" x="300" y="637" text-anchor="middle">implementation-validator</text>
+<text class="n-sub" x="300" y="651" text-anchor="middle">claim-vs-reality · failure-paths · blast-radius</text>
+<rect class="n-render" x="474" y="620" width="208" height="40" rx="2"/>
+<text class="n-lbl" x="578" y="637" text-anchor="middle">visual-implementation-recap</text>
+<text class="n-sub" x="578" y="651" text-anchor="middle">visual-recap.html</text>
+<rect class="n-gate" x="184" y="686" width="232" height="40" rx="2"/>
+<text class="n-lbl" x="300" y="703" text-anchor="middle">COMMIT GATE</text>
+<text class="n-sub" x="300" y="717" text-anchor="middle">green audit + explicit &quot;yes&quot;</text>
+<rect class="n-term" x="184" y="752" width="232" height="40" rx="2"/>
+<text class="n-lbl" x="300" y="769" text-anchor="middle">release · tag</text>
+<text class="n-sub" x="300" y="783" text-anchor="middle">product-owner marks Shipped</text>
+</svg></div>
+                  </div>
+                  <div id="ascii-pane" class="lifecycle-pane">
+                    <pre class="code-block ascii-diagram"><code> IDEA
+  |
+  v  Phase 0   research -- plans/research/*.md
+  |
+  v  Phase 1   product-owner -- spec.md · 00-ROADMAP.md
+  |            +- (optional) spec-deliberator -- 3 delegates · disjoint bundles
+  |            === GATE spec-validator [3-lens majority gate: internal-consistency · missing-requirement · malicious-compliance]
+  |                 -&gt; plans/active_milestones/{moniker}/adversarial-reviews/spec-validation.md
+  |
+  v  Phase 2   architect -- plan.md · parallel groups
+  |            +- (optional) plan-deliberator -- intent · codebase · delivery
+  |            === GATE plan-validator [3-lens majority gate: sequencing · ground-truth · blast-radius]
+  |                 -&gt; plans/active_milestones/{moniker}/adversarial-reviews/plan-validation.md
+  |
+  v  Phase 3  *** HUMAN REVIEW GATE *** -- user types &quot;approve&quot;
+  |
+  v  Phase 4   engineer × N -- ≤ 4 concurrent · disjoint files
+  |               fan-out over execution group tasks, max 4 concurrent, files-disjoint
+  |            +- (optional) simplifier -- zero behavioral change
+  |
+  v  Phase 4   auditor -- AUDIT_[Plan_Name].md
+  |            === GATE implementation-validator [3-lens majority gate: claim-vs-reality · failure-paths · blast-radius]
+  |                 -&gt; plans/active_milestones/{moniker}/adversarial-reviews/implementation-validation.md
+  |            +- (optional) visual-implementation-recap -- visual-recap.html
+  |
+  v  Phase 4  *** COMMIT GATE *** -- green audit + explicit &quot;yes&quot;
+  |
+  v  Phase 5  release · tag -- product-owner marks Shipped
+
+ feedback edges (cycles):
+   spec-validator -&gt; product-owner   when: confirmed findings — fold in tightenings
+   plan-validator -&gt; architect   when: confirmed findings — apply fixes · first_domino
+   auditor -&gt; engineer   when: code failure — fix the failing task
+   auditor -&gt; architect   when: plan failure — step is impossible
+   implementation-validator -&gt; engineer   when: confirmed defects — fix at calibrated severity
+   commit-gate -&gt; engineer   when: more groups remain — next execution group</code></pre>
+                  </div>
+                </div>
+                
+<hr class="section-divider">
+<h2 id="skill-reference" class="doc-h2">Skill Reference<a class="anchor-link" href="#skill-reference" aria-label="Link to section">#</a></h2>
+<h3 id="swarm-entry-roles" class="doc-h3">Swarm Entry &amp; Roles<a class="anchor-link" href="#swarm-entry-roles" aria-label="Link to section">#</a></h3>
+<h4 id="0-plan-swarm-starter-the-supervisor-protocol-guardian" class="doc-h4">0. <code class="inline-code">plan-swarm</code> &amp; <code class="inline-code">starter</code> — The Supervisor &amp; Protocol Guardian<a class="anchor-link" href="#0-plan-swarm-starter-the-supervisor-protocol-guardian" aria-label="Link to section">#</a></h4>
+<p class="doc-p">The primary slash-command entry point (<code class="inline-code">/plan-swarm</code>) and state-machine orchestrator (<code class="inline-code">starter</code>). <strong>Does no coding itself</strong>; it owns <code class="inline-code">plans/active_milestones/{moniker}/state.json</code>, dispatches the role agents in sequence, enforces validator and human approval gates, and holds exclusive commit authority.</p>
+<ul class="doc-list"><li><strong>Owns:</strong> protocol enforcement, <code class="inline-code">state.json</code> lifecycle management, human gating (<code class="inline-code">plan-approval</code> and <code class="inline-code">commit</code>), and the git commit protocol. <strong>The only role that runs <code class="inline-code">git commit</code></strong> — it is the only node holding a user-facing turn in which explicit approval (<code class="inline-code">&quot;yes&quot;</code>) can be obtained.</li><li><strong>Key rules:</strong> never edits repository source directly (delegates to <code class="inline-code">engineer</code>); dispatches subagents with <em>file paths</em>, never oral summaries; <strong>must stop for user approval</strong> at Phase 3 (<code class="inline-code">human-review-gate</code>) and Phase 4 (<code class="inline-code">commit-gate</code>); never commits without a green audit report (<code class="inline-code">AUDIT_[Plan_Name].md</code>) and passing implementation validation.</li><li><strong>Triggers:</strong> <code class="inline-code">/plan-swarm</code>, &quot;be the supervisor&quot;, &quot;orchestrate this end to end&quot;, &quot;run the swarm&quot;, &quot;drive this from idea to commit&quot;, or resuming a milestone in <code class="inline-code">plans/active_milestones/</code>.</li></ul>
+<h4 id="1-product-owner-the-product-owner-phase-1" class="doc-h4">1. <code class="inline-code">product-owner</code> — The Product Owner (Phase 1)<a class="anchor-link" href="#1-product-owner-the-product-owner-phase-1" aria-label="Link to section">#</a></h4>
+<p class="doc-p">Translates raw, ambiguous human ideas into rigorous, testable specifications, and owns the master roadmap.</p>
+<ul class="doc-list"><li><strong>Produces:</strong> <code class="inline-code">plans/active_milestones/{moniker}/spec.md</code> (with Gherkin <code class="inline-code">Given/When/Then</code> acceptance criteria), <code class="inline-code">plans/active_milestones/{moniker}/context.md</code>, and updates <code class="inline-code">plans/00-ROADMAP.md</code>.</li><li><strong>Signature move — the &quot;Grill Loop&quot;:</strong> interrogates the user (≤3 Socratic questions at a time) about edge cases, limits, error states, and UX until ambiguity is resolved. No clear acceptance criteria → not a spec.</li><li><strong>Constraints:</strong> writes no code and no architecture — defines <em>what</em> and <em>why</em>, never <em>how</em>; never guesses an unspecified edge case; never commits.</li></ul>
+<h4 id="1alt-visual-product-owner-the-visual-product-owner-phase-1-renderer" class="doc-h4">1·alt. <code class="inline-code">visual-product-owner</code> — The Visual Product Owner (Phase 1 + Renderer)<a class="anchor-link" href="#1alt-visual-product-owner-the-visual-product-owner-phase-1-renderer" aria-label="Link to section">#</a></h4>
+<p class="doc-p">A <strong>drop-in alternative to <code class="inline-code">product-owner</code></strong> for specs that deserve a human-optimized review surface. Runs the identical Grill Loop and writes the same <code class="inline-code">spec.md</code>, then renders that spec as a self-contained, browsable HTML document.</p>
+<ul class="doc-list"><li><strong>Produces:</strong> the identical <code class="inline-code">plans/active_milestones/{moniker}/spec.md</code> and <code class="inline-code">plans/00-ROADMAP.md</code> update <strong>plus</strong> <code class="inline-code">plans/active_milestones/{moniker}/visual-spec.html</code>.</li><li><strong>The visual file:</strong> a single, zero-build HTML page (opens via <code class="inline-code">file://</code>) with eight spec-native surfaces — overview, user-story cards, color-coded Given/When/Then acceptance criteria, user-flow diagrams, edge-cases/constraints, wireframes/prototype, open questions, and author comments.</li><li><strong>Authority rule:</strong> the HTML is a <strong>derived view</strong> of <code class="inline-code">spec.md</code> — if they disagree, <code class="inline-code">spec.md</code> wins.</li></ul>
+<h4 id="2-architect-the-chief-software-architect-phase-2" class="doc-h4">2. <code class="inline-code">architect</code> — The Chief Software Architect (Phase 2)<a class="anchor-link" href="#2-architect-the-chief-software-architect-phase-2" aria-label="Link to section">#</a></h4>
+<p class="doc-p">Reads <code class="inline-code">spec.md</code>, investigates the actual codebase read-only, and produces a detailed, micro-stepped implementation plan. <strong>Strictly read-only on source code (<code class="inline-code">must_not_write: [&quot;&lt;repo source&gt;&quot;]</code>).</strong></p>
+<ul class="doc-list"><li><strong>Produces:</strong> <code class="inline-code">plans/active_milestones/{moniker}/plan.md</code> (and optionally <code class="inline-code">data-model.md</code> / <code class="inline-code">api-contracts.md</code>).</li><li><strong>Plan shape:</strong> tasks grouped into <strong>parallel execution groups</strong> (tasks within a group must touch file-disjoint sets so up to 4 <code class="inline-code">engineer</code> subagents can run concurrently); every task includes a characterization/test step before any refactor (<em>&quot;if there is no test, there is no refactoring&quot;</em>).</li><li><strong>Constraints:</strong> never edits source; never commits; verification steps must name exact runnable commands, not &quot;ensure it works&quot;.</li></ul>
+<h4 id="2alt-visual-architect-the-visual-architect-phase-2-renderer" class="doc-h4">2·alt. <code class="inline-code">visual-architect</code> — The Visual Architect (Phase 2 + Renderer)<a class="anchor-link" href="#2alt-visual-architect-the-visual-architect-phase-2-renderer" aria-label="Link to section">#</a></h4>
+<p class="doc-p">A <strong>drop-in alternative to <code class="inline-code">architect</code></strong> for plans that deserve a human-optimized review surface. Does the identical read-only codebase investigation and writes the same <code class="inline-code">plan.md</code>, then renders the plan as a self-contained, browsable HTML document.</p>
+<ul class="doc-list"><li><strong>Produces:</strong> the identical <code class="inline-code">plans/active_milestones/{moniker}/plan.md</code> <strong>plus</strong> <code class="inline-code">plans/active_milestones/{moniker}/visual-plan.html</code> (nine surfaces: overview, architecture diagrams, file map, annotated code, OpenAPI-style API cards, schema map, wireframes/prototype, open questions, and author comments).</li><li><strong>Authority rule:</strong> the HTML is a <strong>derived view</strong> of <code class="inline-code">plan.md</code> — if they disagree, <code class="inline-code">plan.md</code> wins.</li></ul>
+<h4 id="3-engineer-the-expert-builder-phase-4" class="doc-h4">3. <code class="inline-code">engineer</code> — The Expert Builder (Phase 4)<a class="anchor-link" href="#3-engineer-the-expert-builder-phase-4" aria-label="Link to section">#</a></h4>
+<p class="doc-p">Implements the approved <code class="inline-code">plan.md</code> exactly, one atomic micro-step at a time, under strict Test-Driven Development (<code class="inline-code">fanout: max_concurrent = 4, disjoint = &quot;files&quot;</code>).</p>
+<ul class="doc-list"><li><strong>Doctrine:</strong> no untested changes; Red → Green → Refactor; characterization tests + seams before modifying untested legacy code; strict scope — implement the assigned task and nothing more.</li><li><strong>Writes:</strong> <code class="inline-code">&lt;repo source&gt;</code> and checks off completed task checkboxes in <code class="inline-code">plans/active_milestones/{moniker}/plan.md#todos</code>.</li><li><strong>Constraints:</strong> strict scope — no unrequested refactors or features; no plan → no code; never hands off a broken build; <strong>never runs <code class="inline-code">git commit</code></strong> (<code class="inline-code">must_not_write: [&quot;git commit&quot;]</code>).</li></ul>
+<h4 id="4-simplifier-the-refiner-phase-4-optional" class="doc-h4">4. <code class="inline-code">simplifier</code> — The Refiner (Phase 4, Optional)<a class="anchor-link" href="#4-simplifier-the-refiner-phase-4-optional" aria-label="Link to section">#</a></h4>
+<p class="doc-p">Improves clarity, consistency, and maintainability of modified code <strong>with zero behavioral change</strong>.</p>
+<ul class="doc-list"><li><strong>Focus:</strong> reduce nesting and cognitive load, use explicit naming and early returns, and match the surrounding code&#x27;s idiom.</li><li><strong>Constraints:</strong> zero-regression — never alters business logic, outputs, or side effects; never commits.</li></ul>
+<h4 id="5-auditor-the-quality-gatekeeper-phase-4" class="doc-h4">5. <code class="inline-code">auditor</code> — The Quality Gatekeeper (Phase 4)<a class="anchor-link" href="#5-auditor-the-quality-gatekeeper-phase-4" aria-label="Link to section">#</a></h4>
+<p class="doc-p">Skeptically verifies the engineer&#x27;s work against <code class="inline-code">plan.md</code> and <code class="inline-code">spec.md</code> with cited evidence. It never fixes code and never commits — its passing report is required to unlock <code class="inline-code">implementation-validator</code> and <code class="inline-code">commit-gate</code>.</p>
+<ul class="doc-list"><li><strong>Verifies:</strong> static code alignment (cites <code class="inline-code">file:line</code>), dynamic build + test suite execution, and <strong>anti-shortcut detection</strong> (hunts for <code class="inline-code">TODO</code>/<code class="inline-code">FIXME</code>/placeholders, deferred-work comments, skipped or gutted tests, hardcoded expected outputs).</li><li><strong>Produces:</strong> a formal PASS/FAIL audit report at <code class="inline-code">plans/audit/AUDIT_[Plan_Name].md</code>.</li><li><strong>Constraints:</strong> strictly read-only on repository source (<code class="inline-code">must_not_write: [&quot;&lt;repo source&gt;&quot;, &quot;git commit&quot;]</code>); never fixes what it finds (hands failures back to <code class="inline-code">engineer</code> on code failure or <code class="inline-code">architect</code> on plan failure); <strong>never commits</strong>.</li></ul>
+<h4 id="6-visual-implementation-recap-the-implementation-recap-renderer-phase-4-optional" class="doc-h4">6. <code class="inline-code">visual-implementation-recap</code> — The Implementation Recap Renderer (Phase 4, Optional)<a class="anchor-link" href="#6-visual-implementation-recap-the-implementation-recap-renderer-phase-4-optional" aria-label="Link to section">#</a></h4>
+<p class="doc-p">An <strong>additive</strong> renderer run after a green audit and passing implementation validation. Renders everything the milestone changed into a single self-contained HTML document for the human <code class="inline-code">commit-gate</code> review.</p>
+<ul class="doc-list"><li><strong>Produces:</strong> <code class="inline-code">plans/active_milestones/{moniker}/visual-recap.html</code> (nine surfaces: outcome + metrics, tasks completed, changed-files tree with diffstat, annotated diffs, architecture, API &amp; schema changes, before/after UI, audit verdict with evidence, and author notes).</li><li><strong>Grounded &amp; read-only:</strong> every line and stat traces to the real <code class="inline-code">git diff</code>, <code class="inline-code">plan.md</code>, and <code class="inline-code">AUDIT_[Plan_Name].md</code>; secrets are redacted; never replaces the auditor or human approval; <strong>never commits</strong>.</li></ul>
+<hr class="section-divider">
+<h3 id="deliberative-panels" class="doc-h3">Deliberative Panels<a class="anchor-link" href="#deliberative-panels" aria-label="Link to section">#</a></h3>
+<h4 id="7-spec-deliberator-deliberate-the-spec-phase-1-optional" class="doc-h4">7. <code class="inline-code">spec-deliberator</code> — Deliberate the Spec (Phase 1, Optional)<a class="anchor-link" href="#7-spec-deliberator-deliberate-the-spec-phase-1-optional" aria-label="Link to section">#</a></h4>
+<p class="doc-p">Runs <strong>after <code class="inline-code">spec.md</code> is drafted, before <code class="inline-code">spec-validator</code></strong>, when the spec depends on knowledge siloed across stakeholders, docs, or repos.</p>
+<ul class="doc-list"><li><strong>Machinery:</strong> 3 delegates (<code class="inline-code">product</code>, <code class="inline-code">engineering</code>, <code class="inline-code">ops/security</code>), each seeded with a private context bundle passing the <strong>asymmetry test</strong> (name ≥1 concrete fact only that delegate holds that could change the spec; if context is mergeable into one prompt, deliberation is refused and recorded as <code class="inline-code">&quot;status&quot;: &quot;skipped&quot;</code>). Sequential verbatim-relayed turns, hard cap of <strong>4 rounds</strong>, earned acceptance (<code class="inline-code">acceptance_basis</code> required).</li><li><strong>Produces:</strong> revised <code class="inline-code">plans/active_milestones/{moniker}/spec.md</code> and <code class="inline-code">plans/active_milestones/{moniker}/deliberations/spec-deliberation.md</code>.</li></ul>
+<h4 id="8-plan-deliberator-deliberate-the-plan-phase-2-optional" class="doc-h4">8. <code class="inline-code">plan-deliberator</code> — Deliberate the Plan (Phase 2, Optional)<a class="anchor-link" href="#8-plan-deliberator-deliberate-the-plan-phase-2-optional" aria-label="Link to section">#</a></h4>
+<p class="doc-p">Runs <strong>after <code class="inline-code">plan.md</code> is drafted, before <code class="inline-code">plan-validator</code></strong>, when the plan spans multiple territories (<code class="inline-code">intent</code>, <code class="inline-code">codebase</code>, <code class="inline-code">delivery</code>) or leaves architectural trade-offs open.</p>
+<ul class="doc-list"><li><strong>Machinery:</strong> 3 delegates assigned disjoint investigation territories (<code class="inline-code">intent</code> reads <code class="inline-code">spec.md</code>; <code class="inline-code">codebase</code> deep-reads affected subsystems; <code class="inline-code">delivery</code> reads tests, CI, migrations, and rollout). Every claim must cite <code class="inline-code">file:line</code>, spec clause, or CI command. Hard cap of <strong>4 rounds</strong>. Refuses deliberation (<code class="inline-code">&quot;status&quot;: &quot;skipped&quot;</code>) if the asymmetry test fails.</li><li><strong>Produces:</strong> revised <code class="inline-code">plans/active_milestones/{moniker}/plan.md</code> and <code class="inline-code">plans/active_milestones/{moniker}/deliberations/plan-deliberation.md</code>.</li></ul>
+<hr class="section-divider">
+<h3 id="adversarial-validators-3-lens-partitioned-quorum-gates" class="doc-h3">Adversarial Validators (3-Lens Partitioned Quorum Gates)<a class="anchor-link" href="#adversarial-validators-3-lens-partitioned-quorum-gates" aria-label="Link to section">#</a></h3>
+<p class="doc-p">All three validator panels enforce <code class="inline-code">graph.json</code> Invariant 3: <strong>dispatch 3 independent skeptics in parallel across 3 disjoint evidence lenses</strong> (no shared scratchpad, never identical prompts), keep findings confirmed by a <strong>2-of-3 majority</strong>, track <code class="inline-code">cross_lens</code> corroboration, and require explicit triage (<code class="inline-code">fold-in</code> or <code class="inline-code">defer</code>) for every single-vote finding (<code class="inline-code">single_vote_triaged: true</code>).</p>
+<h4 id="9-spec-validator-attack-the-spec-phase-1-gate-blocks-architect" class="doc-h4">9. <code class="inline-code">spec-validator</code> — Attack the Spec (Phase 1 Gate, blocks <code class="inline-code">architect</code>)<a class="anchor-link" href="#9-spec-validator-attack-the-spec-phase-1-gate-blocks-architect" aria-label="Link to section">#</a></h4>
+<ul class="doc-list"><li><strong>Disjoint Lenses (<code class="inline-code">n = 3</code>, <code class="inline-code">gate = majority</code>):</strong></li><li><code class="inline-code">internal-consistency</code> — reads the spec against itself twice (<code class="inline-code">ambiguity</code>, <code class="inline-code">contradiction</code>, terminology drift).</li><li><code class="inline-code">missing-requirement</code> — reads <code class="inline-code">context.md</code>, <code class="inline-code">00-ROADMAP.md</code>, and external system constraints first (missing error states, limits, concurrency, auth, units, time zones).</li><li><code class="inline-code">malicious-compliance</code> — reads the Gherkin acceptance criteria alone without prose rationale to game them with the laziest passing implementation (<code class="inline-code">malicious-compliance</code>, <code class="inline-code">untestable</code>).</li><li><strong>Produces:</strong> <code class="inline-code">plans/active_milestones/{moniker}/adversarial-reviews/spec-validation.md</code>.</li><li><strong>Remote alternatives (internal helpers, <code class="inline-code">disable-slash-command: true</code>):</strong> <code class="inline-code">geap-spec-validator</code> (Vertex AI Python SDK) and <code class="inline-code">geap-interactions-spec-validator</code> (Interactions API via <code class="inline-code">curl</code> + ADC).</li></ul>
+<h4 id="10-plan-validator-attack-the-plan-phase-2-gate-blocks-human-review-gate" class="doc-h4">10. <code class="inline-code">plan-validator</code> — Attack the Plan (Phase 2 Gate, blocks <code class="inline-code">human-review-gate</code>)<a class="anchor-link" href="#10-plan-validator-attack-the-plan-phase-2-gate-blocks-human-review-gate" aria-label="Link to section">#</a></h4>
+<ul class="doc-list"><li><strong>Disjoint Lenses (<code class="inline-code">n = 3</code>, <code class="inline-code">gate = majority</code>):</strong></li><li><code class="inline-code">sequencing</code> — reads the step dependency graph and parallel execution groups before opening source (<code class="inline-code">ordering</code>, group file collisions).</li><li><code class="inline-code">ground-truth</code> — opens every repository file named in <code class="inline-code">plan.md</code> and verifies signatures, types, schemas, and symbols (<code class="inline-code">false-assumption</code>, <strong>must cite <code class="inline-code">file:line</code></strong>).</li><li><code class="inline-code">blast-radius</code> — reads callers, tests, CI configs, and migrations outside the files the plan modifies (<code class="inline-code">unverifiable</code>, <code class="inline-code">no-rollback</code>, <code class="inline-code">missing-migration</code>, <code class="inline-code">hidden-coupling</code>).</li><li><strong>Produces:</strong> <code class="inline-code">plans/active_milestones/{moniker}/adversarial-reviews/plan-validation.md</code>, including the headline <strong><code class="inline-code">first_domino</code></strong> (earliest step whose failure invalidates downstream steps).</li><li><strong>Remote alternatives (internal helpers, <code class="inline-code">disable-slash-command: true</code>):</strong> <code class="inline-code">geap-plan-validator</code> and <code class="inline-code">geap-interactions-plan-validator</code> (plan-text-only remote model panels).</li></ul>
+<h4 id="11-implementation-validator-attack-the-diff-phase-4-gate-blocks-commit-gate" class="doc-h4">11. <code class="inline-code">implementation-validator</code> — Attack the Diff (Phase 4 Gate, blocks <code class="inline-code">commit-gate</code>)<a class="anchor-link" href="#11-implementation-validator-attack-the-diff-phase-4-gate-blocks-commit-gate" aria-label="Link to section">#</a></h4>
+<ul class="doc-list"><li><strong>Disjoint Lenses (<code class="inline-code">n = 3</code>, <code class="inline-code">gate = majority</code>):</strong></li><li><code class="inline-code">claim-vs-reality</code> — compares the plan/commit claim against <code class="inline-code">git diff BASE..HEAD</code> line by line (<code class="inline-code">claim-mismatch</code>, unrequested scope).</li><li><code class="inline-code">failure-paths</code> — inspects error branches, early returns, resource cleanup, and new tests (<code class="inline-code">failure-path</code>, <code class="inline-code">edge-case</code>).</li><li><code class="inline-code">blast-radius</code> — inspects untouched callers, interfaces, concurrency locks, and serialization boundaries (<code class="inline-code">concurrency</code>, <code class="inline-code">resource</code>, <code class="inline-code">regression</code>).</li><li><strong>Signature output — Severity Calibration:</strong> calibrates inflated finding severities with concrete rationale and writes <code class="inline-code">plans/active_milestones/{moniker}/adversarial-reviews/implementation-validation.md</code>.</li></ul>
+<hr class="section-divider">
+<h3 id="trajectory-utilities" class="doc-h3">Trajectory Utilities<a class="anchor-link" href="#trajectory-utilities" aria-label="Link to section">#</a></h3>
+<ul class="doc-list"><li><strong><code class="inline-code">teamwork-trajectory</code>:</strong> Scans <code class="inline-code">.agents/</code> briefing and handoff records and compiles an interactive HTML dashboard at <code class="inline-code">.agents/trajectory.html</code>.</li><li><strong><code class="inline-code">wf-trajectory</code>:</strong> Renders a completed dynamic workflow execution log (<code class="inline-code">wf_&lt;runId&gt;.json</code>) as a self-contained HTML page with a <code class="inline-code">run → phase → agent</code> tree and parallelism timeline.</li></ul>
+<hr class="section-divider">
+<h2 id="artifact-map" class="doc-h2">Artifact Map<a class="anchor-link" href="#artifact-map" aria-label="Link to section">#</a></h2>
+<div class="table-wrap"><table class="doc-table"><thead><tr><th>Path</th><th>Written by</th><th>Contents</th></tr></thead><tbody><tr><td><code class="inline-code">plans/research/{topic}_context.md</code></td><td><code class="inline-code">research</code> (Phase 0)</td><td>Codebase context report: affected domain, existing patterns, constraints.</td></tr><tr><td><code class="inline-code">plans/00-ROADMAP.md</code></td><td><code class="inline-code">product-owner</code></td><td>Master roadmap — releases, milestones, and their status (<code class="inline-code">Active</code>, <code class="inline-code">Shipped</code>).</td></tr><tr><td><code class="inline-code">plans/active_milestones/{moniker}/context.md</code></td><td><code class="inline-code">product-owner</code></td><td>Milestone context report snapshot.</td></tr><tr><td><code class="inline-code">plans/active_milestones/{moniker}/state.json</code></td><td><code class="inline-code">starter</code> / <code class="inline-code">supervisor</code></td><td><strong>Single source of truth for milestone execution state</strong> (phase, human gates, per-node status/verdicts, per-group tasks/audit/commit SHA).</td></tr><tr><td><code class="inline-code">plans/active_milestones/{moniker}/spec.md</code></td><td><code class="inline-code">product-owner</code> · <code class="inline-code">spec-deliberator</code></td><td>Testable Gherkin specification (<code class="inline-code">Given/When/Then</code>).</td></tr><tr><td><code class="inline-code">plans/active_milestones/{moniker}/visual-spec.html</code></td><td><code class="inline-code">visual-product-owner</code></td><td>Self-contained HTML review surface for <code class="inline-code">spec.md</code>.</td></tr><tr><td><code class="inline-code">plans/active_milestones/{moniker}/deliberations/{spec,plan}-deliberation.md</code></td><td><code class="inline-code">spec-deliberator</code> · <code class="inline-code">plan-deliberator</code></td><td>Deliberation record: bundles/territories, cited disclosures, trade-offs decided, edits with <code class="inline-code">acceptance_basis</code>, round log.</td></tr><tr><td><code class="inline-code">plans/active_milestones/{moniker}/adversarial-reviews/{spec,plan,implementation}-validation.md</code></td><td><code class="inline-code">spec-validator</code> · <code class="inline-code">plan-validator</code> · <code class="inline-code">implementation-validator</code></td><td>3-lens adversarial review report: verdict, 2-of-3 confirmed findings, <code class="inline-code">cross_lens</code> tally, <code class="inline-code">first_domino</code>, severity calibration, and single-vote triage table.</td></tr><tr><td><code class="inline-code">plans/active_milestones/{moniker}/plan.md</code></td><td><code class="inline-code">architect</code> · <code class="inline-code">plan-deliberator</code> · <code class="inline-code">engineer</code> (<code class="inline-code">#todos</code>)</td><td>Micro-stepped implementation plan with file-disjoint parallel execution groups.</td></tr><tr><td><code class="inline-code">plans/active_milestones/{moniker}/data-model.md</code> · <code class="inline-code">api-contracts.md</code></td><td><code class="inline-code">architect</code></td><td>Optional supporting schema and API contract specifications.</td></tr><tr><td><code class="inline-code">plans/active_milestones/{moniker}/visual-plan.html</code></td><td><code class="inline-code">visual-architect</code></td><td>Self-contained HTML review surface for <code class="inline-code">plan.md</code>.</td></tr><tr><td><code class="inline-code">plans/audit/AUDIT_[Plan_Name].md</code></td><td><code class="inline-code">auditor</code></td><td>Evidence-based PASS/FAIL audit report (<code class="inline-code">file:line</code> checks, test output, anti-shortcut scan).</td></tr><tr><td><code class="inline-code">plans/active_milestones/{moniker}/visual-recap.html</code></td><td><code class="inline-code">visual-implementation-recap</code></td><td>Self-contained HTML commit-gate recap of the diff, completed tasks, and audit verdict.</td></tr></tbody></table></div>
+<hr class="section-divider">
+<h2 id="state-machine-specification-statejson-graphjson" class="doc-h2">State Machine Specification (<code class="inline-code">state.json</code> &amp; <code class="inline-code">graph.json</code>)<a class="anchor-link" href="#state-machine-specification-statejson-graphjson" aria-label="Link to section">#</a></h2>
+<p class="doc-p">The Plan Swarm is governed by two complementary JSON documents:</p>
+<ol class="doc-list"><li><strong><code class="inline-code">plans/active_milestones/{moniker}/state.json</code></strong> — the <strong>runtime milestone state machine</strong> instance tracking the live execution of a single milestone.</li><li><strong><code class="inline-code">plugins/plan/graph.json</code></strong> — the <strong>declarative state machine definition</strong> specifying all valid nodes, phase transitions (<code class="inline-code">edges</code>), human gates (<code class="inline-code">gates</code>), lens partitions (<code class="inline-code">panel</code>), concurrency rules (<code class="inline-code">fanout</code>), and read/write invariants.</li></ol>
+<h3 id="1-runtime-milestone-state-machine-plansactive_milestonesmonikerstatejson" class="doc-h3">1. Runtime Milestone State Machine (<code class="inline-code">plans/active_milestones/{moniker}/state.json</code>)<a class="anchor-link" href="#1-runtime-milestone-state-machine-plansactive_milestonesmonikerstatejson" aria-label="Link to section">#</a></h3>
+<h4 id="why-statejson-exists" class="doc-h4">Why <code class="inline-code">state.json</code> Exists<a class="anchor-link" href="#why-statejson-exists" aria-label="Link to section">#</a></h4>
+<p class="doc-p">Inferring a milestone&#x27;s current phase by listing files in <code class="inline-code">plans/active_milestones/{moniker}/</code> is a bug: a <code class="inline-code">plan-validator</code> run that failed with blocking findings leaves <code class="inline-code">plan.md</code> on disk identically to a <code class="inline-code">plan-validator</code> run that passed or never ran at all. <code class="inline-code">state.json</code> records every transition, gate state, lens partition, and commit SHA explicitly so <code class="inline-code">starter</code> / <code class="inline-code">supervisor</code> can resume deterministically.</p>
+<h4 id="writer-honesty-invariants" class="doc-h4">Writer &amp; Honesty Invariants<a class="anchor-link" href="#writer-honesty-invariants" aria-label="Link to section">#</a></h4>
+<ul class="doc-list"><li><strong>Exclusive Writer:</strong> Only <code class="inline-code">starter</code> (or the <code class="inline-code">supervisor</code> subagent) and the human gates it holds (<code class="inline-code">plan-approval</code>, <code class="inline-code">commit</code>) may write <code class="inline-code">state.json</code>. Every other skill and subagent is strictly read-only on <code class="inline-code">state.json</code>.</li><li><strong>No Fabricated State:</strong> Any field whose value is not known with certainty must be omitted or set to <code class="inline-code">&quot;status&quot;: &quot;unknown&quot;</code> — never guessed as <code class="inline-code">&quot;passed&quot;</code>.</li><li><strong>Mandatory Skip Recording:</strong> Whenever an optional node (<code class="inline-code">spec-deliberator</code>, <code class="inline-code">plan-deliberator</code>, <code class="inline-code">simplifier</code>, <code class="inline-code">visual-implementation-recap</code>) or gate is skipped, it <strong>must</strong> be recorded with <code class="inline-code">&quot;status&quot;: &quot;skipped&quot;</code> and a non-empty <code class="inline-code">&quot;reason&quot;</code> (for example, <code class="inline-code">&quot;reason&quot;: &quot;asymmetry test failed — context was mergeable&quot;</code>).</li></ul>
+<h4 id="complete-annotated-statejson-example" class="doc-h4">Complete Annotated <code class="inline-code">state.json</code> Example<a class="anchor-link" href="#complete-annotated-statejson-example" aria-label="Link to section">#</a></h4>
+
+                <div class="code-card">
+                  <div class="code-card-header">
+                    <span class="code-lang">JSON · State Machine Schema</span>
+                    <button class="copy-btn" onclick="copyCodeBlock(this)">Copy JSON</button>
+                  </div>
+                  <pre class="code-block json-block"><code>{
+  <span class="json-key">&quot;graph_version&quot;</span>: <span class="json-str">&quot;plan-swarm@<span class="json-lit">2</span>.<span class="json-lit">1</span>&quot;</span>,
+  <span class="json-key">&quot;run_id&quot;</span>: <span class="json-str">&quot;ms_checkout-redesign_0c41&quot;</span>,
+  <span class="json-key">&quot;moniker&quot;</span>: <span class="json-str">&quot;checkout-redesign&quot;</span>,
+  <span class="json-key">&quot;phase&quot;</span>: <span class="json-str">&quot;<span class="json-lit">4</span>.gate&quot;</span>,
+  <span class="json-key">&quot;updated&quot;</span>: <span class="json-str">&quot;<span class="json-lit">2026</span>-<span class="json-lit">09</span>-20T16:<span class="json-lit">30</span>:00Z&quot;</span>,
+
+  <span class="json-key">&quot;gates&quot;</span>: [
+    {
+      <span class="json-key">&quot;id&quot;</span>: <span class="json-str">&quot;plan-approval&quot;</span>,
+      <span class="json-key">&quot;state&quot;</span>: <span class="json-str">&quot;approved&quot;</span>
+    },
+    {
+      <span class="json-key">&quot;id&quot;</span>: <span class="json-str">&quot;commit&quot;</span>,
+      <span class="json-key">&quot;state&quot;</span>: <span class="json-str">&quot;pending&quot;</span>
+    }
+  ],
+
+  <span class="json-key">&quot;nodes&quot;</span>: {
+    <span class="json-key">&quot;research&quot;</span>: {
+      <span class="json-key">&quot;status&quot;</span>: <span class="json-str">&quot;done&quot;</span>,
+      <span class="json-key">&quot;artifact&quot;</span>: <span class="json-str">&quot;plans/research/checkout_context.md&quot;</span>
+    },
+    <span class="json-key">&quot;product-owner&quot;</span>: {
+      <span class="json-key">&quot;status&quot;</span>: <span class="json-str">&quot;done&quot;</span>,
+      <span class="json-key">&quot;artifact&quot;</span>: <span class="json-str">&quot;plans/active_milestones/checkout-redesign/spec.md&quot;</span>
+    },
+    <span class="json-key">&quot;spec-deliberator&quot;</span>: {
+      <span class="json-key">&quot;status&quot;</span>: <span class="json-str">&quot;skipped&quot;</span>,
+      <span class="json-key">&quot;reason&quot;</span>: <span class="json-str">&quot;asymmetry test failed — context was mergeable into single prompt&quot;</span>
+    },
+    <span class="json-key">&quot;spec-validator&quot;</span>: {
+      <span class="json-key">&quot;status&quot;</span>: <span class="json-str">&quot;passed&quot;</span>,
+      <span class="json-key">&quot;report&quot;</span>: <span class="json-str">&quot;plans/active_milestones/checkout-redesign/adversarial-reviews/spec-validation.md&quot;</span>,
+      <span class="json-key">&quot;lenses&quot;</span>: [
+        <span class="json-str">&quot;internal-consistency&quot;</span>,
+        <span class="json-str">&quot;missing-requirement&quot;</span>,
+        <span class="json-str">&quot;malicious-compliance&quot;</span>
+      ],
+      <span class="json-key">&quot;confirmed&quot;</span>: <span class="json-lit">0</span>,
+      <span class="json-key">&quot;single_vote&quot;</span>: <span class="json-lit">2</span>,
+      <span class="json-key">&quot;cross_lens&quot;</span>: <span class="json-lit">0</span>,
+      <span class="json-key">&quot;single_vote_triaged&quot;</span>: <span class="json-lit">true</span>
+    },
+    <span class="json-key">&quot;architect&quot;</span>: {
+      <span class="json-key">&quot;status&quot;</span>: <span class="json-str">&quot;done&quot;</span>,
+      <span class="json-key">&quot;artifact&quot;</span>: <span class="json-str">&quot;plans/active_milestones/checkout-redesign/plan.md&quot;</span>
+    },
+    <span class="json-key">&quot;plan-deliberator&quot;</span>: {
+      <span class="json-key">&quot;status&quot;</span>: <span class="json-str">&quot;done&quot;</span>,
+      <span class="json-key">&quot;artifact&quot;</span>: <span class="json-str">&quot;plans/active_milestones/checkout-redesign/deliberations/plan-deliberation.md&quot;</span>
+    },
+    <span class="json-key">&quot;plan-validator&quot;</span>: {
+      <span class="json-key">&quot;status&quot;</span>: <span class="json-str">&quot;passed&quot;</span>,
+      <span class="json-key">&quot;report&quot;</span>: <span class="json-str">&quot;plans/active_milestones/checkout-redesign/adversarial-reviews/plan-validation.md&quot;</span>,
+      <span class="json-key">&quot;lenses&quot;</span>: [
+        <span class="json-str">&quot;sequencing&quot;</span>,
+        <span class="json-str">&quot;ground-truth&quot;</span>,
+        <span class="json-str">&quot;blast-radius&quot;</span>
+      ],
+      <span class="json-key">&quot;confirmed&quot;</span>: <span class="json-lit">0</span>,
+      <span class="json-key">&quot;single_vote&quot;</span>: <span class="json-lit">1</span>,
+      <span class="json-key">&quot;cross_lens&quot;</span>: <span class="json-lit">0</span>,
+      <span class="json-key">&quot;first_domino&quot;</span>: <span class="json-lit">null</span>,
+      <span class="json-key">&quot;single_vote_triaged&quot;</span>: <span class="json-lit">true</span>
+    },
+    <span class="json-key">&quot;engineer&quot;</span>: {
+      <span class="json-key">&quot;status&quot;</span>: <span class="json-str">&quot;done&quot;</span>,
+      <span class="json-key">&quot;artifact&quot;</span>: <span class="json-str">&quot;plans/active_milestones/checkout-redesign/plan.md#todos&quot;</span>
+    },
+    <span class="json-key">&quot;simplifier&quot;</span>: {
+      <span class="json-key">&quot;status&quot;</span>: <span class="json-str">&quot;skipped&quot;</span>,
+      <span class="json-key">&quot;reason&quot;</span>: <span class="json-str">&quot;no high-complexity nesting introduced in group <span class="json-lit">1</span>&quot;</span>
+    },
+    <span class="json-key">&quot;auditor&quot;</span>: {
+      <span class="json-key">&quot;status&quot;</span>: <span class="json-str">&quot;passed&quot;</span>,
+      <span class="json-key">&quot;artifact&quot;</span>: <span class="json-str">&quot;plans/audit/AUDIT_checkout-redesign.md&quot;</span>
+    },
+    <span class="json-key">&quot;implementation-validator&quot;</span>: {
+      <span class="json-key">&quot;status&quot;</span>: <span class="json-str">&quot;passed&quot;</span>,
+      <span class="json-key">&quot;report&quot;</span>: <span class="json-str">&quot;plans/active_milestones/checkout-redesign/adversarial-reviews/implementation-validation.md&quot;</span>,
+      <span class="json-key">&quot;lenses&quot;</span>: [
+        <span class="json-str">&quot;claim-vs-reality&quot;</span>,
+        <span class="json-str">&quot;failure-paths&quot;</span>,
+        <span class="json-str">&quot;blast-radius&quot;</span>
+      ],
+      <span class="json-key">&quot;confirmed&quot;</span>: <span class="json-lit">0</span>,
+      <span class="json-key">&quot;single_vote&quot;</span>: <span class="json-lit">1</span>,
+      <span class="json-key">&quot;cross_lens&quot;</span>: <span class="json-lit">0</span>,
+      <span class="json-key">&quot;single_vote_triaged&quot;</span>: <span class="json-lit">true</span>
+    },
+    <span class="json-key">&quot;visual-implementation-recap&quot;</span>: {
+      <span class="json-key">&quot;status&quot;</span>: <span class="json-str">&quot;done&quot;</span>,
+      <span class="json-key">&quot;artifact&quot;</span>: <span class="json-str">&quot;plans/active_milestones/checkout-redesign/visual-recap.html&quot;</span>
+    }
+  },
+
+  <span class="json-key">&quot;groups&quot;</span>: [
+    {
+      <span class="json-key">&quot;id&quot;</span>: <span class="json-str">&quot;<span class="json-lit">1</span>&quot;</span>,
+      <span class="json-key">&quot;tasks&quot;</span>: {
+        <span class="json-key">&quot;<span class="json-lit">1</span>.A&quot;</span>: <span class="json-str">&quot;done&quot;</span>,
+        <span class="json-key">&quot;<span class="json-lit">1</span>.B&quot;</span>: <span class="json-str">&quot;done&quot;</span>
+      },
+      <span class="json-key">&quot;audit&quot;</span>: <span class="json-str">&quot;passed&quot;</span>,
+      <span class="json-key">&quot;audit_rounds&quot;</span>: <span class="json-lit">1</span>,
+      <span class="json-key">&quot;implementation_validation&quot;</span>: <span class="json-str">&quot;plans/active_milestones/checkout-redesign/adversarial-reviews/implementation-validation.md&quot;</span>,
+      <span class="json-key">&quot;committed&quot;</span>: <span class="json-str">&quot;a3f19c2&quot;</span>
+    },
+    {
+      <span class="json-key">&quot;id&quot;</span>: <span class="json-str">&quot;<span class="json-lit">2</span>&quot;</span>,
+      <span class="json-key">&quot;tasks&quot;</span>: {
+        <span class="json-key">&quot;<span class="json-lit">2</span>.A&quot;</span>: <span class="json-str">&quot;done&quot;</span>,
+        <span class="json-key">&quot;<span class="json-lit">2</span>.B&quot;</span>: <span class="json-str">&quot;done&quot;</span>
+      },
+      <span class="json-key">&quot;audit&quot;</span>: <span class="json-str">&quot;passed&quot;</span>,
+      <span class="json-key">&quot;audit_rounds&quot;</span>: <span class="json-lit">2</span>,
+      <span class="json-key">&quot;implementation_validation&quot;</span>: <span class="json-str">&quot;plans/active_milestones/checkout-redesign/adversarial-reviews/implementation-validation-r2.md&quot;</span>,
+      <span class="json-key">&quot;committed&quot;</span>: <span class="json-lit">null</span>
+    }
+  ]
+}</code></pre>
+                </div>
+                
+<hr class="section-divider">
+<h4 id="field-by-field-meaning-in-statejson" class="doc-h4">Field-by-Field Meaning in <code class="inline-code">state.json</code><a class="anchor-link" href="#field-by-field-meaning-in-statejson" aria-label="Link to section">#</a></h4>
+<h5 id="a-top-level-fields" class="doc-h5">A. Top-Level Fields<a class="anchor-link" href="#a-top-level-fields" aria-label="Link to section">#</a></h5>
+<div class="table-wrap"><table class="doc-table"><thead><tr><th>Field</th><th>JSON Type</th><th>Allowed Values / Format</th><th>Meaning &amp; Operational Contract</th></tr></thead><tbody><tr><td><code class="inline-code">graph_version</code></td><td><code class="inline-code">string</code></td><td><code class="inline-code">&quot;plan-swarm@2.1&quot;</code></td><td>Exact version string of <a href="graph.json" class="md-link"><code class="inline-code">graph.json</code></a> against which the milestone was initialized. If <code class="inline-code">state.json.graph_version</code> does not match <code class="inline-code">graph.json.graph_version</code> on resume, the orchestrator must halt and alert the user that the swarm topology changed mid-milestone.</td></tr><tr><td><code class="inline-code">run_id</code></td><td><code class="inline-code">string</code></td><td><code class="inline-code">&quot;ms_{moniker}_{short_hash}&quot;</code></td><td>Immutable, unique correlation identifier for this milestone execution. Stamped onto generated review and deliberation reports so every artifact can be traced to the run that produced it.</td></tr><tr><td><code class="inline-code">moniker</code></td><td><code class="inline-code">string</code></td><td>Kebab-case slug (e.g. <code class="inline-code">&quot;checkout-redesign&quot;</code>)</td><td>Directory name of the milestone under <code class="inline-code">plans/active_milestones/{moniker}/</code>.</td></tr><tr><td><code class="inline-code">phase</code></td><td><code class="inline-code">string</code></td><td><code class="inline-code">&quot;0&quot;</code> \</td><td><code class="inline-code">&quot;1&quot;</code> \</td><td><code class="inline-code">&quot;1.gate&quot;</code> \</td><td><code class="inline-code">&quot;2&quot;</code> \</td><td><code class="inline-code">&quot;2.gate&quot;</code> \</td><td><code class="inline-code">&quot;3&quot;</code> \</td><td><code class="inline-code">&quot;4&quot;</code> \</td><td><code class="inline-code">&quot;4.gate&quot;</code> \</td><td><code class="inline-code">&quot;5&quot;</code></td><td>Current position of the state machine:<br>• <code class="inline-code">&quot;0&quot;</code> — Phase 0 codebase research (<code class="inline-code">research</code>) in progress.<br>• <code class="inline-code">&quot;1&quot;</code> — Phase 1 specification (<code class="inline-code">product-owner</code> / <code class="inline-code">spec-deliberator</code>) in progress.<br>• <code class="inline-code">&quot;1.gate&quot;</code> — Phase 1 adversarial gate (<code class="inline-code">spec-validator</code>) running or awaiting tightening loop.<br>• <code class="inline-code">&quot;2&quot;</code> — Phase 2 technical planning (<code class="inline-code">architect</code> / <code class="inline-code">plan-deliberator</code>) in progress.<br>• <code class="inline-code">&quot;2.gate&quot;</code> — Phase 2 adversarial gate (<code class="inline-code">plan-validator</code>) running or applying <code class="inline-code">first_domino</code> fixes.<br>• <code class="inline-code">&quot;3&quot;</code> — Stopped at <strong><code class="inline-code">human-review-gate</code></strong> waiting for the user to type <code class="inline-code">&quot;approve&quot;</code> on <code class="inline-code">spec.md</code> + <code class="inline-code">plan.md</code>.<br>• <code class="inline-code">&quot;4&quot;</code> — Phase 4 TDD construction, simplification, audit, and diff validation in progress for the active execution group.<br>• <code class="inline-code">&quot;4.gate&quot;</code> — Stopped at <strong><code class="inline-code">commit-gate</code></strong> after a green audit + clean <code class="inline-code">implementation-validator</code>, waiting for explicit user <code class="inline-code">&quot;yes&quot;</code> before <code class="inline-code">starter</code> executes <code class="inline-code">git commit</code>.<br>• <code class="inline-code">&quot;5&quot;</code> — All execution groups committed; tagging release and marking <code class="inline-code">plans/00-ROADMAP.md</code> as <code class="inline-code">Shipped</code>.</td></tr><tr><td><code class="inline-code">updated</code></td><td><code class="inline-code">string</code></td><td>ISO-8601 UTC timestamp (<code class="inline-code">YYYY-MM-DDTHH:MM:SSZ</code>)</td><td>UTC timestamp of the most recent state transition written by <code class="inline-code">starter</code> / <code class="inline-code">supervisor</code>.</td></tr></tbody></table></div>
+<h5 id="b-human-gate-entries-gates" class="doc-h5">B. Human Gate Entries (<code class="inline-code">gates[]</code>)<a class="anchor-link" href="#b-human-gate-entries-gates" aria-label="Link to section">#</a></h5>
+<div class="table-wrap"><table class="doc-table"><thead><tr><th>Field</th><th>JSON Type</th><th>Allowed Values</th><th>Meaning &amp; Operational Contract</th></tr></thead><tbody><tr><td><code class="inline-code">gates[].id</code></td><td><code class="inline-code">string</code></td><td><code class="inline-code">&quot;plan-approval&quot;</code> \</td><td><code class="inline-code">&quot;commit&quot;</code></td><td>Identifier matching <code class="inline-code">gates[].id</code> in <code class="inline-code">graph.json</code>.<br>• <code class="inline-code">&quot;plan-approval&quot;</code> corresponds to node <code class="inline-code">human-review-gate</code> (Phase 3, reversible).<br>• <code class="inline-code">&quot;commit&quot;</code> corresponds to node <code class="inline-code">commit-gate</code> (Phase 4, irreversible, evaluated once per execution group).</td></tr><tr><td><code class="inline-code">gates[].state</code></td><td><code class="inline-code">string</code></td><td><code class="inline-code">&quot;not-reached&quot;</code> \</td><td><code class="inline-code">&quot;pending&quot;</code> \</td><td><code class="inline-code">&quot;approved&quot;</code> \</td><td><code class="inline-code">&quot;rejected&quot;</code></td><td>Current human decision state:<br>• <code class="inline-code">&quot;not-reached&quot;</code> — upstream phases/gates have not yet cleared.<br>• <code class="inline-code">&quot;pending&quot;</code> — execution is paused awaiting explicit human input in chat.<br>• <code class="inline-code">&quot;approved&quot;</code> — human explicitly approved (<code class="inline-code">&quot;approve&quot;</code> for Phase 3, <code class="inline-code">&quot;yes&quot;</code> for Phase 4 commit).<br>• <code class="inline-code">&quot;rejected&quot;</code> — human requested changes, routing execution back to <code class="inline-code">product-owner</code>, <code class="inline-code">architect</code>, or <code class="inline-code">engineer</code>.</td></tr></tbody></table></div>
+<h5 id="c-per-node-status-validator-telemetry-nodesnode_id" class="doc-h5">C. Per-Node Status &amp; Validator Telemetry (<code class="inline-code">nodes.{node_id}</code>)<a class="anchor-link" href="#c-per-node-status-validator-telemetry-nodesnode_id" aria-label="Link to section">#</a></h5>
+<div class="table-wrap"><table class="doc-table"><thead><tr><th>Field</th><th>JSON Type</th><th>Applies To</th><th>Meaning &amp; Operational Contract</th></tr></thead><tbody><tr><td><code class="inline-code">nodes.{id}.status</code></td><td><code class="inline-code">string</code></td><td>All nodes</td><td>Lifecycle status of the node:<br>• <code class="inline-code">&quot;pending&quot;</code> — scheduled but not yet dispatched.<br>• <code class="inline-code">&quot;running&quot;</code> — currently executing.<br>• <code class="inline-code">&quot;done&quot;</code> — role, deliberation, or renderer completed its output artifact.<br>• <code class="inline-code">&quot;passed&quot;</code> — validator or auditor cleared the artifact with zero blocking findings.<br>• <code class="inline-code">&quot;findings&quot;</code> — validator found confirmed (≥2-of-3) defects requiring a feedback cycle.<br>• <code class="inline-code">&quot;skipped&quot;</code> — optional node (<code class="inline-code">spec-deliberator</code>, <code class="inline-code">plan-deliberator</code>, <code class="inline-code">simplifier</code>, <code class="inline-code">visual-implementation-recap</code>) was bypassed; <strong>requires <code class="inline-code">reason</code></strong>.<br>• <code class="inline-code">&quot;failed&quot;</code> — tool, build, or subagent failure.<br>• <code class="inline-code">&quot;unknown&quot;</code> — honest fallback when reconstructing partial state; never treated as <code class="inline-code">&quot;passed&quot;</code>.</td></tr><tr><td><code class="inline-code">nodes.{id}.artifact</code></td><td><code class="inline-code">string</code></td><td>Role, deliberation &amp; renderer nodes</td><td>Workspace-relative path to the primary artifact produced or updated by the node (e.g., <code class="inline-code">&quot;spec.md&quot;</code>, <code class="inline-code">&quot;plan.md&quot;</code>, <code class="inline-code">&quot;plans/audit/AUDIT_...md&quot;</code>).</td></tr><tr><td><code class="inline-code">nodes.{id}.reason</code></td><td><code class="inline-code">string</code></td><td>Skipped nodes (<code class="inline-code">status == &quot;skipped&quot;</code>)</td><td><strong>Mandatory</strong> explanation of why the node was not run (e.g. <code class="inline-code">&quot;asymmetry test failed — context was mergeable&quot;</code>). Prevents silent gate bypasses.</td></tr><tr><td><code class="inline-code">nodes.{id}.report</code></td><td><code class="inline-code">string</code></td><td>Panel nodes (<code class="inline-code">spec-validator</code>, <code class="inline-code">plan-validator</code>, <code class="inline-code">implementation-validator</code>)</td><td>Workspace-relative path to the Markdown review report written by the panel under <code class="inline-code">adversarial-reviews/</code>.</td></tr><tr><td><code class="inline-code">nodes.{id}.lenses</code></td><td><code class="inline-code">array&lt;string&gt;</code></td><td>Panel nodes</td><td>Ordered list of the 3 disjoint evidence lenses actually dispatched (e.g. <code class="inline-code">[&quot;sequencing&quot;, &quot;ground-truth&quot;, &quot;blast-radius&quot;]</code>). Serves as cryptographic/audit proof that the panel partitioned its reading assignments rather than running 3 identical prompts.</td></tr><tr><td><code class="inline-code">nodes.{id}.confirmed</code></td><td><code class="inline-code">integer</code></td><td>Panel nodes</td><td>Count of deduplicated findings that achieved the <strong>2-of-3 majority quorum</strong> (or ≥2-of-4 for remote GEAP synthesis panels). Any value <code class="inline-code">&gt; 0</code> blocks the downstream gate and triggers the feedback edge in <code class="inline-code">graph.json</code>.</td></tr><tr><td><code class="inline-code">nodes.{id}.single_vote</code></td><td><code class="inline-code">integer</code></td><td>Panel nodes</td><td>Count of findings raised by only 1 of the 3 skeptics. These do not automatically block the gate, but cannot be silently discarded.</td></tr><tr><td><code class="inline-code">nodes.{id}.cross_lens</code></td><td><code class="inline-code">integer</code></td><td>Panel nodes</td><td>Count of confirmed findings independently discovered by <strong>two or more distinct lenses</strong> from non-overlapping reading assignments. High <code class="inline-code">cross_lens</code> indicates genuine multi-perspective corroboration rather than single-lens repetition.</td></tr><tr><td><code class="inline-code">nodes.{id}.first_domino</code></td><td>`string \</td><td>null`</td><td><code class="inline-code">plan-validator</code></td><td>Stable finding ID (or step reference, e.g. <code class="inline-code">&quot;step-2-missing-migration&quot;</code>) of the <strong>earliest step failure in <code class="inline-code">plan.md</code> whose failure invalidates downstream steps</strong>, or <code class="inline-code">null</code> when <code class="inline-code">confirmed == 0</code>. Guides <code class="inline-code">architect</code> to fix the root ordering defect first.</td></tr><tr><td><code class="inline-code">nodes.{id}.single_vote_triaged</code></td><td><code class="inline-code">boolean</code></td><td>Panel nodes</td><td>Must be <code class="inline-code">true</code> before a panel node can transition to <code class="inline-code">&quot;passed&quot;</code> when <code class="inline-code">single_vote &gt; 0</code>. Confirms every 1-vote finding in the report&#x27;s Single-Vote Triage table received an explicit <code class="inline-code">fold-in</code> or <code class="inline-code">defer</code> decision.</td></tr></tbody></table></div>
+<h5 id="d-execution-group-progress-groups" class="doc-h5">D. Execution Group Progress (<code class="inline-code">groups[]</code>)<a class="anchor-link" href="#d-execution-group-progress-groups" aria-label="Link to section">#</a></h5>
+<div class="table-wrap"><table class="doc-table"><thead><tr><th>Field</th><th>JSON Type</th><th>Allowed Values / Format</th><th>Meaning &amp; Operational Contract</th></tr></thead><tbody><tr><td><code class="inline-code">groups[].id</code></td><td><code class="inline-code">string</code></td><td><code class="inline-code">&quot;1&quot;</code>, <code class="inline-code">&quot;2&quot;</code>, ...</td><td>Execution group identifier matching the parallel group headers in <code class="inline-code">plan.md</code>. Groups execute sequentially (<code class="inline-code">Group 1</code> must be audited and committed before <code class="inline-code">Group 2</code> begins).</td></tr><tr><td><code class="inline-code">groups[].tasks</code></td><td><code class="inline-code">object&lt;string, string&gt;</code></td><td>`{ &quot;1.A&quot;: &quot;pending&quot; \</td><td>&quot;running&quot; \</td><td>&quot;done&quot; \</td><td>&quot;failed&quot; }`</td><td>Map of file-disjoint task IDs within the group to their completion status. Up to 4 <code class="inline-code">engineer</code> subagents execute tasks within the same group concurrently.</td></tr><tr><td><code class="inline-code">groups[].audit</code></td><td><code class="inline-code">string</code></td><td><code class="inline-code">&quot;not-reached&quot;</code> \</td><td><code class="inline-code">&quot;passed&quot;</code> \</td><td><code class="inline-code">&quot;failed&quot;</code></td><td>Verdict from <code class="inline-code">auditor</code> (<code class="inline-code">AUDIT_[Plan_Name].md</code>) for this execution group. <code class="inline-code">&quot;failed&quot;</code> routes back to <code class="inline-code">engineer</code> (code failure) or <code class="inline-code">architect</code> (plan failure).</td></tr><tr><td><code class="inline-code">groups[].audit_rounds</code></td><td><code class="inline-code">integer</code></td><td><code class="inline-code">0</code>, <code class="inline-code">1</code>, <code class="inline-code">2</code>, <code class="inline-code">3</code> (hard cap <code class="inline-code">3</code>)</td><td>Number of <code class="inline-code">engineer ⇄ auditor</code> verification cycles expended on this group. If <code class="inline-code">audit_rounds</code> reaches <code class="inline-code">3</code> without passing, the orchestrator <strong>must halt and escalate to the human</strong>.</td></tr><tr><td><code class="inline-code">groups[].implementation_validation</code></td><td>`string \</td><td>null`</td><td>Path to <code class="inline-code">adversarial-reviews/implementation-validation*.md</code></td><td>Path to the 3-lens diff validation report for this group&#x27;s changes (<code class="inline-code">git diff BASE..HEAD</code>).</td></tr><tr><td><code class="inline-code">groups[].committed</code></td><td>`string \</td><td>null`</td><td>7–40 char Git SHA (e.g. <code class="inline-code">&quot;a3f19c2&quot;</code>) or <code class="inline-code">null</code></td><td>Git commit SHA recorded by <code class="inline-code">starter</code> / <code class="inline-code">supervisor</code> <strong>only after</strong> <code class="inline-code">audit == &quot;passed&quot;</code>, <code class="inline-code">implementation-validator</code> is clean, and the user responded <code class="inline-code">&quot;yes&quot;</code> at <code class="inline-code">commit-gate</code>.</td></tr></tbody></table></div>
+<hr class="section-divider">
+<h3 id="2-declarative-topology-schema-pluginsplangraphjson" class="doc-h3">2. Declarative Topology Schema (<code class="inline-code">plugins/plan/graph.json</code>)<a class="anchor-link" href="#2-declarative-topology-schema-pluginsplangraphjson" aria-label="Link to section">#</a></h3>
+<p class="doc-p">While <code class="inline-code">state.json</code> tracks a single milestone run, <a href="graph.json" class="md-link"><code class="inline-code">plugins/plan/graph.json</code></a> defines the static state machine rules enforced by <code class="inline-code">python3 lib/graph/graph.py validate</code>:</p>
+<div class="table-wrap"><table class="doc-table"><thead><tr><th>Field in <code class="inline-code">graph.json</code></th><th>JSON Type</th><th>Meaning &amp; Validation Rule Enforced by <code class="inline-code">graph.py</code></th></tr></thead><tbody><tr><td><code class="inline-code">graph_version</code></td><td><code class="inline-code">string</code></td><td>Schema/topology version (<code class="inline-code">&quot;plan-swarm@2.1&quot;</code>). Synced into the header comment of every generated README lifecycle diagram.</td></tr><tr><td><code class="inline-code">state_file</code></td><td><code class="inline-code">string</code></td><td>Template path (<code class="inline-code">&quot;plans/active_milestones/{moniker}/state.json&quot;</code>) locating the runtime state file for each milestone.</td></tr><tr><td><code class="inline-code">node_kinds</code></td><td><code class="inline-code">object</code></td><td>Dictionary of the 7 legal node archetypes: <code class="inline-code">entry</code>, <code class="inline-code">role</code>, <code class="inline-code">panel</code>, <code class="inline-code">deliberation</code>, <code class="inline-code">human-gate</code>, <code class="inline-code">renderer</code>, and <code class="inline-code">terminal</code>.</td></tr><tr><td><code class="inline-code">nodes[].id</code></td><td><code class="inline-code">string</code></td><td>Unique identifier for each of the 16 swarm nodes (e.g., <code class="inline-code">&quot;product-owner&quot;</code>, <code class="inline-code">&quot;spec-validator&quot;</code>, <code class="inline-code">&quot;human-review-gate&quot;</code>). Checked for uniqueness and reachability.</td></tr><tr><td><code class="inline-code">nodes[].kind</code></td><td><code class="inline-code">string</code></td><td>Must be one of the keys in <code class="inline-code">node_kinds</code>. Determines how <code class="inline-code">graph.py</code> renders the node and which structural contracts apply.</td></tr><tr><td><code class="inline-code">nodes[].phase</code></td><td><code class="inline-code">string</code></td><td>Lifecycle phase (<code class="inline-code">&quot;0&quot;</code>, <code class="inline-code">&quot;1&quot;</code>, <code class="inline-code">&quot;2&quot;</code>, <code class="inline-code">&quot;3&quot;</code>, <code class="inline-code">&quot;4&quot;</code>, <code class="inline-code">&quot;5&quot;</code>) used to group nodes vertically in ASCII/Mermaid/SVG diagrams.</td></tr><tr><td><code class="inline-code">nodes[].skill</code> / <code class="inline-code">nodes[].agent</code></td><td><code class="inline-code">string</code></td><td>Maps the node to <code class="inline-code">plugins/plan/skills/&lt;skill&gt;/SKILL.md</code> and <code class="inline-code">plugins/plan/agents/&lt;agent&gt;/agent.md</code> (or <code class="inline-code">agents/&lt;agent&gt;/agent.md</code>). <code class="inline-code">graph.py validate</code> fails if either file is missing on disk.</td></tr><tr><td><code class="inline-code">nodes[].alternatives</code></td><td><code class="inline-code">array&lt;string&gt;</code></td><td>Drop-in replacement skills (e.g., <code class="inline-code">[&quot;visual-product-owner&quot;]</code> for <code class="inline-code">product-owner</code>, <code class="inline-code">[&quot;visual-architect&quot;]</code> for <code class="inline-code">architect</code>). Each alternative <code class="inline-code">SKILL.md</code> must exist on disk.</td></tr><tr><td><code class="inline-code">nodes[].dispatched_by</code> / <code class="inline-code">nodes[].held_by</code></td><td><code class="inline-code">string</code></td><td>Declares authority: subagent nodes are <code class="inline-code">dispatched_by: &quot;starter&quot;</code>, while human-turn nodes (<code class="inline-code">human-review-gate</code>, <code class="inline-code">commit-gate</code>, <code class="inline-code">release</code>) are <code class="inline-code">held_by: &quot;starter&quot;</code>. Only nodes with <code class="inline-code">held_by: &quot;starter&quot;</code> may declare <code class="inline-code">&quot;git commit&quot;</code> in <code class="inline-code">writes</code>.</td></tr><tr><td><code class="inline-code">nodes[].blocks</code></td><td><code class="inline-code">string</code></td><td>Downstream node ID blocked until this validator panel passes (e.g., <code class="inline-code">spec-validator</code> blocks <code class="inline-code">architect</code>; <code class="inline-code">plan-validator</code> blocks <code class="inline-code">human-review-gate</code>; <code class="inline-code">implementation-validator</code> blocks <code class="inline-code">commit-gate</code>).</td></tr><tr><td><code class="inline-code">nodes[].panel</code></td><td><code class="inline-code">object</code></td><td>Required on <code class="inline-code">kind: &quot;panel&quot;</code> nodes (<code class="inline-code">n</code>, <code class="inline-code">gate</code>, <code class="inline-code">prompt_file</code>, <code class="inline-code">lenses[]</code>, <code class="inline-code">asymmetry</code>). <code class="inline-code">graph.py validate</code> verifies <code class="inline-code">len(lenses) == n</code>, ensures every lens name appears in <code class="inline-code">prompt_file</code>, and rejects any prompt containing correlated-skeptic phrases (<code class="inline-code">&quot;three times, unchanged&quot;</code>).</td></tr><tr><td><code class="inline-code">nodes[].fanout</code></td><td><code class="inline-code">object</code></td><td>Concurrency specification on <code class="inline-code">engineer</code> (<code class="inline-code">{&quot;over&quot;: &quot;execution group tasks&quot;, &quot;max_concurrent&quot;: 4, &quot;disjoint&quot;: &quot;files&quot;}</code>).</td></tr><tr><td><code class="inline-code">nodes[].reads</code> / <code class="inline-code">writes</code> / <code class="inline-code pill-err">must_not_write</code></td><td><code class="inline-code">array&lt;string&gt;</code></td><td>Explicit artifact and side-effect contracts. <code class="inline-code">graph.py validate</code> enforces that <strong>only</strong> <code class="inline-code">engineer</code> and <code class="inline-code">simplifier</code> may include <code class="inline-code">&quot;&lt;repo source&gt;&quot;</code> in <code class="inline-code">writes</code>, and <strong>only</strong> nodes held by <code class="inline-code">starter</code> may include <code class="inline-code">&quot;git commit&quot;</code> in <code class="inline-code">writes</code>.</td></tr><tr><td><code class="inline-code">edges[]</code></td><td><code class="inline-code">array&lt;object&gt;</code></td><td>Directed transitions (<code class="inline-code">{&quot;from&quot;: &quot;&lt;node_id&gt;&quot;, &quot;to&quot;: &quot;&lt;node_id&gt;&quot;, &quot;when&quot;: &quot;&lt;condition&gt;&quot;, &quot;label&quot;: &quot;&lt;note&gt;&quot;}</code>). Forward edges (`when: &quot;always&quot; \</td><td>&quot;optional&quot; \</td><td>&quot;clean&quot; \</td><td>&quot;approved&quot; \</td><td>&quot;pass&quot;<code class="inline-code">) drive progression; back-edges (</code>when: &quot;confirmed findings&quot; \</td><td>&quot;code failure&quot; \</td><td>&quot;plan failure&quot; \</td><td>&quot;confirmed defects&quot; \</td><td>&quot;more groups remain&quot;`) define feedback loops.</td></tr><tr><td><code class="inline-code">gates[]</code></td><td><code class="inline-code">array&lt;object&gt;</code></td><td>Human gate declarations (<code class="inline-code">id</code>, <code class="inline-code">node</code>, <code class="inline-code">irreversible</code>, <code class="inline-code">per</code>, <code class="inline-code">prompt</code>). Every gate&#x27;s <code class="inline-code">node</code> must exist and have <code class="inline-code">kind == &quot;human-gate&quot;</code>.</td></tr><tr><td><code class="inline-code">invariants[]</code></td><td><code class="inline-code">array&lt;string&gt;</code></td><td>The 5 non-negotiable architectural laws of the swarm (sole committer, restricted source writers, non-correlated lens panels, interactive human gates, and file-path-only dispatch).</td></tr></tbody></table></div>
+    </main>
+  </div>
+
+  <script>
+    function toggleTheme() {
+      const root = document.documentElement;
+      const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+    }
+    function switchLifecycleTab(btn, paneId) {
+      const wrap = btn.closest('.lifecycle-showcase');
+      wrap.querySelectorAll('.ltab').forEach(b => b.classList.remove('active'));
+      wrap.querySelectorAll('.lifecycle-pane').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      wrap.querySelector('#' + paneId).classList.add('active');
+    }
+    function copyCodeBlock(btn) {
+      const pre = btn.closest('.code-card').querySelector('pre');
+      navigator.clipboard.writeText(pre.innerText).then(() => {
+        const orig = btn.innerText;
+        btn.innerText = 'Copied!';
+        setTimeout(() => btn.innerText = orig, 1400);
+      });
+    }
+    function filterToc(query) {
+      const q = query.toLowerCase().trim();
+      document.querySelectorAll('#toc-nav .toc-link').forEach(a => {
+        a.style.display = (!q || a.innerText.toLowerCase().includes(q)) ? 'block' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>

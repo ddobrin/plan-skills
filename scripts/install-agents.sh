@@ -172,6 +172,10 @@ done
 if [[ -f "${AGENTS_SRC}/README.md" ]]; then
   cp "${AGENTS_SRC}/README.md" "${DEST_DIR}/README.md"
 fi
+if [[ -f "${AGENTS_SRC}/README.html" ]]; then
+  cp "${AGENTS_SRC}/README.html" "${DEST_DIR}/README.html"
+fi
+rm -f "${DEST_DIR}/README.HTML"
 
 if [[ "$INSTALLED_COUNT" -eq 0 ]]; then
   echo "Error: No valid subagent directories (containing agent.md) found in '$AGENTS_SRC'." >&2
