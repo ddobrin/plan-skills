@@ -13,8 +13,8 @@ usage() {
   cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Install the 'plan' and 'orchestrator' plugins (skills, bundled subagents, and
-topology tools) directly into ~/.gemini/config/plugins and enable them in
+Install the 'plan' plugin (skills, bundled subagents, and topology tools)
+directly into ~/.gemini/config/plugins/plan and enable it in
 ~/.gemini/config/config.json.
 
 Options:
@@ -141,8 +141,9 @@ else
   SOURCE_ROOT="$TMP_DIR/repo"
 fi
 
-if [[ ! -d "${SOURCE_ROOT}/plugins" ]]; then
-  echo "Error: 'plugins/' directory not found in '$SOURCE_ROOT'." >&2
+PLAN_PLUGIN_SRC="${SOURCE_ROOT}/plugins/plan"
+if [[ ! -d "$PLAN_PLUGIN_SRC" ]]; then
+  echo "Error: 'plugins/plan/' directory not found in '$SOURCE_ROOT'." >&2
   exit 1
 fi
 
@@ -157,57 +158,52 @@ else
 fi
 
 mkdir -p "$PLUGINS_DEST"
-echo "Installing plugins to: $PLUGINS_DEST ($SCOPE scope)"
+echo "Installing 'plan' plugin to: $PLUGINS_DEST ($SCOPE scope)"
+
+# Remove any legacy orchestrator plugin installation if present
+if [[ -d "${PLUGINS_DEST}/orchestrator" ]]; then
+  rm -rf "${PLUGINS_DEST}/orchestrator"
+  echo "  - Removed legacy plugin '${PLUGINS_DEST}/orchestrator'"
+fi
 
 INSTALLED_PLUGINS=()
 TOTAL_SKILLS=0
 
-for plugin_dir in "${SOURCE_ROOT}/plugins"/*/; do
-  [[ -d "$plugin_dir" ]] || continue
-  plugin_name="$(basename "$plugin_dir")"
-  [[ "$plugin_name" == .* ]] && continue
+plugin_name="plan"
+plugin_dir="$PLAN_PLUGIN_SRC"
+target_plugin_dir="${PLUGINS_DEST}/${plugin_name}"
+rm -rf "$target_plugin_dir"
+cp -R "$plugin_dir" "$target_plugin_dir"
 
-  if [[ -f "${plugin_dir}/plugin.json" || -d "${plugin_dir}/skills" ]]; then
-    target_plugin_dir="${PLUGINS_DEST}/${plugin_name}"
-    rm -rf "$target_plugin_dir"
-    cp -R "$plugin_dir" "$target_plugin_dir"
-
-    # If installing 'plan' plugin and root agents/ exists while bundled agents/ was missing, ensure bundled agents/ is populated
-    if [[ "$plugin_name" == "plan" && ! -d "${target_plugin_dir}/agents" && -d "${SOURCE_ROOT}/agents" ]]; then
-      cp -R "${SOURCE_ROOT}/agents" "${target_plugin_dir}/agents"
-    fi
-
-    # Strip Python bytecode caches from installed plugin directory
-    find "$target_plugin_dir" \( -name "__pycache__" -o -name "*.pyc" -o -name "*.pyo" \) -exec rm -rf {} + 2>/dev/null || true
-
-    skill_count=0
-    if [[ -d "${target_plugin_dir}/skills" ]]; then
-      for sdir in "${target_plugin_dir}/skills"/*/; do
-        [[ -d "$sdir" && -f "${sdir}/SKILL.md" ]] && skill_count=$((skill_count + 1))
-      done
-    fi
-    TOTAL_SKILLS=$((TOTAL_SKILLS + skill_count))
-    INSTALLED_PLUGINS+=("$plugin_name")
-    echo "  - Installed plugin '${plugin_name}' (${skill_count} skills) -> ${target_plugin_dir}"
-
-    if [[ "$STANDALONE_SKILLS" == "true" && -d "${target_plugin_dir}/skills" ]]; then
-      mkdir -p "$SKILLS_DEST"
-      for sdir in "${target_plugin_dir}/skills"/*/; do
-        [[ -d "$sdir" && -f "${sdir}/SKILL.md" ]] || continue
-        sname="$(basename "$sdir")"
-        rm -rf "${SKILLS_DEST:?}/${sname}"
-        cp -R "$sdir" "${SKILLS_DEST}/${sname}"
-      done
-    fi
-  fi
-done
-
-if [[ "${#INSTALLED_PLUGINS[@]}" -eq 0 ]]; then
-  echo "Error: No valid plugins found in '${SOURCE_ROOT}/plugins'." >&2
-  exit 1
+# Ensure bundled agents/ is populated inside plugins/plan/agents if root agents/ exists
+if [[ ! -d "${target_plugin_dir}/agents" && -d "${SOURCE_ROOT}/agents" ]]; then
+  cp -R "${SOURCE_ROOT}/agents" "${target_plugin_dir}/agents"
 fi
 
-# Enable installed plugins in ~/.gemini/config/config.json (global scope)
+# Strip Python bytecode caches from installed plugin directory
+find "$target_plugin_dir" \( -name "__pycache__" -o -name "*.pyc" -o -name "*.pyo" \) -exec rm -rf {} + 2>/dev/null || true
+
+skill_count=0
+if [[ -d "${target_plugin_dir}/skills" ]]; then
+  for sdir in "${target_plugin_dir}/skills"/*/; do
+    [[ -d "$sdir" && -f "${sdir}/SKILL.md" ]] && skill_count=$((skill_count + 1))
+  done
+fi
+TOTAL_SKILLS=$((TOTAL_SKILLS + skill_count))
+INSTALLED_PLUGINS+=("$plugin_name")
+echo "  - Installed plugin '${plugin_name}' (${skill_count} skills) -> ${target_plugin_dir}"
+
+if [[ "$STANDALONE_SKILLS" == "true" && -d "${target_plugin_dir}/skills" ]]; then
+  mkdir -p "$SKILLS_DEST"
+  for sdir in "${target_plugin_dir}/skills"/*/; do
+    [[ -d "$sdir" && -f "${sdir}/SKILL.md" ]] || continue
+    sname="$(basename "$sdir")"
+    rm -rf "${SKILLS_DEST:?}/${sname}"
+    cp -R "$sdir" "${SKILLS_DEST}/${sname}"
+  done
+fi
+
+# Enable 'plan' plugin (and prune deprecated 'orchestrator' entry) in ~/.gemini/config/config.json
 if [[ -n "$CONFIG_JSON" ]] && command -v python3 >/dev/null 2>&1; then
   python3 - "$CONFIG_JSON" "${INSTALLED_PLUGINS[@]}" <<'PYEOF'
 import json
@@ -247,11 +243,14 @@ for name in plugin_names:
     entry["enabled"] = True
     plugins_map[name] = entry
 
+# Remove legacy orchestrator entry if present
+plugins_map.pop("orchestrator", None)
+
 tmp_path = config_path.with_suffix(".json.tmp")
 tmp_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 os.chmod(tmp_path, orig_mode)
 tmp_path.replace(config_path)
-print(f"Enabled plugins {plugin_names} in {config_path}")
+print(f"Enabled plugin {plugin_names} in {config_path}")
 PYEOF
 fi
 

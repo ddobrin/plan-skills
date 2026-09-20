@@ -82,11 +82,10 @@ curl -fsSL https://raw.githubusercontent.com/ddobrin/plan-skills/main/scripts/in
 
 What `./scripts/install-all.sh` creates in `~/.gemini/config`:
 1. **`~/.gemini/config/agents/`**: All 13 self-contained reasoning subagents (`architect`, `auditor`, `engineer`, `implementation-validator`, `plan-deliberator`, `plan-validator`, `product-owner`, `spec-deliberator`, `spec-validator`, `supervisor`, `visual-architect`, `visual-implementation-recap`, `visual-product-owner`) along with bundled `assets/` and `references/`.
-2. **`~/.gemini/config/plugins/plan/`**: Complete self-contained Plan Swarm plugin bundle containing both `skills/` (19 skills including `/plan-swarm`) and `agents/` (the 13 subagents) plus `graph.json` and `lib/graph/graph.py`.
-3. **`~/.gemini/config/plugins/orchestrator/`**: Meta-orchestrator plugin bundle (`/orchestrator`).
-4. **`~/.gemini/config/config.json`**: Atomically enables `"plan"` and `"orchestrator"` under `"plugins"` and validates the installed topology via `graph.py validate`.
+2. **`~/.gemini/config/plugins/plan/`**: Complete self-contained Plan Swarm plugin bundle containing both `skills/` (21 skills including `/plan-swarm`) and `agents/` (the 13 subagents) plus `graph.json` and `lib/graph/graph.py`.
+3. **`~/.gemini/config/config.json`**: Atomically enables `"plan"` under `"plugins"` and validates the installed topology via `graph.py validate`.
 
-For project-scoped installation into `./.agents/` (`./.agents/agents/` and `./.agents/plugins/`), pass `--project`:
+For project-scoped installation into `./.agents/` (`./.agents/agents/` and `./.agents/plugins/plan/`), pass `--project`:
 ```bash
 ./scripts/install-all.sh --project
 ```
@@ -103,7 +102,6 @@ Once installed, invoke the swarm or individual roles directly from chat:
 * **Phase 2 (Plan):** `/architect`, `/visual-architect`, `/plan-deliberator`, `/plan-validator`
 * **Phase 3 (Execute):** `/engineer`, `/simplifier`, `/visual-implementation-recap`
 * **Phase 4 (Verify & Gate):** `/auditor`, `/implementation-validator`
-* **Cross-Project Meta-Orchestration:** `/orchestrator`
 
 ---
 
@@ -137,4 +135,4 @@ Explore the underlying documentation for details on individual roles, lifecycle 
 * **[Standalone Agents (`agents/README.md`)](agents/README.md):** 13 AGY CLI subagents, system prompts, 3-lens partitioned validator panels, and standalone packaging.
 * **[Planning Skills (`plugins/plan/README.md`)](plugins/plan/README.md):** Complete guide to skills, state machine, adversarial reviews, and artifacts.
 * **[State Schema (`plugins/plan/lib/graph/STATE.md`)](plugins/plan/lib/graph/STATE.md):** Declarative milestone state machine lifecycle and schema.
-* **[Supervisor Orchestrator Plugin (`plugins/orchestrator/README.md`)](plugins/orchestrator/README.md):** Documentation for the spec-driven coordinator and validation gates.
+* **[Installation Scripts (`scripts/README.md`)](scripts/README.md):** Direct `~/.gemini/config` installer scripts and CLI flags.

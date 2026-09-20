@@ -1,9 +1,0 @@
-{
-  "name": "orchestrator",
-  "description": "Supervisor lifecycle orchestrator skills (research, discovery, planning, construction, release) for Jetski and Antigravity CLI.",
-  "suggestedPrompts": [
-    "/supervisor Detect current milestone state and route to the next phase",
-    "/discovery Author a Gherkin spec.md and run the spec-validator gate",
-    "/planning Produce a micro-stepped plan.md and run the plan-validator gate"
-  ]
-}

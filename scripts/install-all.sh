@@ -13,18 +13,17 @@ usage() {
   cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Install all 'plan' and 'orchestrator' plugins, skills, and the 13 custom
-reasoning subagents into ~/.gemini/config (or ./.agents for project scope).
+Install the 'plan' plugin, skills, and the 13 custom reasoning subagents
+from plugins/plan into ~/.gemini/config (or ./.agents for project scope).
 
 Artifacts created in global scope (~/.gemini/config):
   1. ~/.gemini/config/agents/<13 subagents>/agent.md (+ bundled visual assets)
-  2. ~/.gemini/config/plugins/plan/ (19 skills including /plan-swarm, 13 subagents, graph.py)
-  3. ~/.gemini/config/plugins/orchestrator/ (/orchestrator skill + references)
-  4. ~/.gemini/config/config.json (enables 'plan' and 'orchestrator' plugins)
+  2. ~/.gemini/config/plugins/plan/ (21 skills including /plan-swarm, 13 subagents, graph.py)
+  3. ~/.gemini/config/config.json (enables the 'plan' plugin)
 
 Options:
   -g, --global              Install globally to ~/.gemini/config (default)
-  -p, --project             Install subagents and plugins to current project's ./.agents
+  -p, --project             Install subagents and plugin to current project's ./.agents
       --config-dir <dir>    Override global config directory (default: ~/.gemini/config)
       --standalone-skills   Also copy unwrapped skills into ~/.gemini/config/skills
       --local               Install from the local repository checkout
@@ -135,13 +134,13 @@ if [[ -z "$SCRIPT_DIR" || ! -f "${SCRIPT_DIR}/install-agents.sh" || ! -f "${SCRI
 fi
 
 echo "=================================================================="
-echo "  Plan Swarm & Orchestrator — Unified Installer"
+echo "  Plan Swarm — Unified Installer"
 echo "=================================================================="
 echo ""
 echo "[1/2] Installing Custom Subagents..."
 bash "${SCRIPT_DIR}/install-agents.sh" "${FORWARD_ARGS[@]}"
 echo ""
-echo "[2/2] Installing Plugins & Skills..."
+echo "[2/2] Installing 'plan' Plugin & Skills..."
 bash "${SCRIPT_DIR}/install-skills.sh" "${FORWARD_ARGS[@]}"
 echo ""
 
@@ -158,8 +157,7 @@ cat <<EOF
 Artifacts installed in: ${TARGET_BASE}
   - Subagents : ${TARGET_BASE}/agents/ (13 self-contained subagents)
   - Plan      : ${TARGET_BASE}/plugins/plan/ (21 skills + 13 bundled subagents)
-  - Orch      : ${TARGET_BASE}/plugins/orchestrator/ (6 orchestrator skills)
-$(if [[ "$SCOPE" == "global" ]]; then echo "  - Config    : ${TARGET_BASE}/config.json ('plan' & 'orchestrator' enabled)"; fi)
+$(if [[ "$SCOPE" == "global" ]]; then echo "  - Config    : ${TARGET_BASE}/config.json ('plan' enabled)"; fi)
 
 Available Slash Commands in Chat:
   /plan-swarm                Launch or resume the full 4-phase Plan Swarm
@@ -176,6 +174,5 @@ Available Slash Commands in Chat:
   /visual-implementation-recap Phase 3c: Self-contained visual-recap.html
   /auditor                   Phase 4a: Static + test verification -> audit.md
   /implementation-validator  Phase 4b: 3-lens adversarial diff review
-  /orchestrator              Meta-orchestrator for cross-project decomposition
 ==================================================================
 EOF

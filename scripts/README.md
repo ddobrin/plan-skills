@@ -1,6 +1,6 @@
 # Installation Scripts (`scripts/`)
 
-This directory contains automated installation scripts for setting up the **Plan Swarm** (`plugins/plan`), **Orchestrator** (`plugins/orchestrator`), and the **13 self-contained reasoning subagents** (`agents/` and `plugins/plan/agents/`) directly into `~/.gemini/config` (or `./.agents` for project-scoped installation).
+This directory contains automated installation scripts for setting up the **Plan Swarm** (`plugins/plan`) and the **13 self-contained reasoning subagents** (`agents/` and `plugins/plan/agents/`) directly into `~/.gemini/config` (or `./.agents` for project-scoped installation).
 
 ## What Gets Installed into `~/.gemini/config`
 
@@ -8,7 +8,7 @@ Running `./scripts/install-all.sh` creates and configures the following artifact
 
 ```text
 ~/.gemini/config/
-├── config.json                        # Atomically merges "plan": {"enabled": true} and "orchestrator": {"enabled": true}
+├── config.json                        # Atomically merges "plan": {"enabled": true}
 ├── agents/                            # All 13 self-contained reasoning subagents (global discovery)
 │   ├── architect/agent.md
 │   ├── auditor/agent.md
@@ -24,15 +24,12 @@ Running `./scripts/install-all.sh` creates and configures the following artifact
 │   ├── visual-implementation-recap/   # Includes bundled assets/template.html & references/
 │   └── visual-product-owner/          # Includes bundled assets/template.html & references/
 └── plugins/
-    ├── plan/                          # Complete self-contained Plan Swarm plugin bundle
-    │   ├── plugin.json
-    │   ├── graph.json
-    │   ├── lib/graph/graph.py
-    │   ├── agents/                    # Bundled 13 custom subagents
-    │   └── skills/                    # 19 skills (including /plan-swarm + 14 role skills + 4 internal GEAP helpers)
-    └── orchestrator/                  # Meta-orchestrator plugin bundle
+    └── plan/                          # Complete self-contained Plan Swarm plugin bundle
         ├── plugin.json
-        └── skills/orchestrator/
+        ├── graph.json
+        ├── lib/graph/graph.py
+        ├── agents/                    # Bundled 13 custom subagents
+        └── skills/                    # 21 skills (including /plan-swarm + role skills + 4 internal GEAP helpers)
 ```
 
 Every install run automatically executes `python3 ~/.gemini/config/plugins/plan/lib/graph/graph.py validate --agents-dir ...` to verify the installed topology and subagent contracts.
@@ -43,8 +40,8 @@ Every install run automatically executes `python3 ~/.gemini/config/plugins/plan/
 
 | Script | Description |
 | :--- | :--- |
-| **[`install-all.sh`](./install-all.sh)** | **Recommended.** Installs both the 13 custom subagents (`install-agents.sh`) and the `plan` + `orchestrator` plugins/skills (`install-skills.sh`) into `~/.gemini/config`, enables the plugins in `~/.gemini/config/config.json`, and validates the installed graph. |
-| **[`install-skills.sh`](./install-skills.sh)** | Installs `plugins/plan` and `plugins/orchestrator` into `~/.gemini/config/plugins/` (or `./.agents/plugins/` with `--project`) and enables them in `~/.gemini/config/config.json`. |
+| **[`install-all.sh`](./install-all.sh)** | **Recommended.** Installs both the 13 custom subagents (`install-agents.sh`) and the `plan` plugin/skills (`install-skills.sh`) into `~/.gemini/config`, enables `plan` in `~/.gemini/config/config.json`, and validates the installed graph. |
+| **[`install-skills.sh`](./install-skills.sh)** | Installs `plugins/plan` into `~/.gemini/config/plugins/plan/` (or `./.agents/plugins/plan/` with `--project`) and enables `plan` in `~/.gemini/config/config.json`. |
 | **[`install-agents.sh`](./install-agents.sh)** | Installs the 13 standalone custom subagent definitions into `~/.gemini/config/agents/` (or `./.agents/agents/` with `--project`) and validates them with `graph.py validate-agents`. |
 
 ---
