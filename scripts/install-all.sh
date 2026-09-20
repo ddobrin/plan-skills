@@ -1,54 +1,100 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Default configuration
-REPO="${REPO:-https://github.com/ddobrin/plan-skills.git}"
-BRANCH="${BRANCH:-plan-graph}"
-TARGET="global"
+# Default values
+SCOPE="global"
+SOURCE_MODE="auto"
+REPO_URL="https://github.com/ddobrin/plan-skills.git"
+BRANCH="main"
+CONFIG_DIR="${GEMINI_CONFIG_DIR:-$HOME/.gemini/config}"
+STANDALONE_SKILLS=false
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [options]
+Usage: $(basename "$0") [OPTIONS]
 
-Install BOTH custom subagents and plugin skills from a specific GitHub repository and branch.
+Install all 'plan' and 'orchestrator' plugins, skills, and the 13 custom
+reasoning subagents into ~/.gemini/config (or ./.agents for project scope).
+
+Artifacts created in global scope (~/.gemini/config):
+  1. ~/.gemini/config/agents/<13 subagents>/agent.md (+ bundled visual assets)
+  2. ~/.gemini/config/plugins/plan/ (19 skills including /plan-swarm, 13 subagents, graph.py)
+  3. ~/.gemini/config/plugins/orchestrator/ (/orchestrator skill + references)
+  4. ~/.gemini/config/config.json (enables 'plan' and 'orchestrator' plugins)
 
 Options:
-  -b, --branch <branch>   Git branch to install from (default: $BRANCH)
-  -r, --repo <url>        Git repository URL (default: $REPO)
-  -p, --project           Install agents project-scoped (.agents/agents) instead of global (~/.gemini/config/agents)
-  -g, --global            Install agents globally into ~/.gemini/config/agents (default)
-  -h, --help              Show this help message
-
-Environment variables:
-  BRANCH                  Alternative way to set default branch
-  REPO                    Alternative way to set default repo URL
-
-Examples:
-  $(basename "$0")
-  $(basename "$0") --branch main
-  $(basename "$0") --project
+  -g, --global              Install globally to ~/.gemini/config (default)
+  -p, --project             Install subagents and plugins to current project's ./.agents
+      --config-dir <dir>    Override global config directory (default: ~/.gemini/config)
+      --standalone-skills   Also copy unwrapped skills into ~/.gemini/config/skills
+      --local               Install from the local repository checkout
+      --remote              Clone from remote Git repository before installing
+  -b, --branch <name>       Git branch or tag to clone in remote mode (default: main)
+  -r, --repo <url>          Git repository URL to clone in remote mode
+  -h, --help                Show this help message and exit
 EOF
   exit 0
 }
 
-# Parse command line options
+FORWARD_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -b|--branch)
-      BRANCH="$2"
-      shift 2
-      ;;
-    -r|--repo)
-      REPO="$2"
-      shift 2
+    -g|--global)
+      SCOPE="global"
+      FORWARD_ARGS+=("$1")
+      shift
       ;;
     -p|--project)
-      TARGET="project"
+      SCOPE="project"
+      FORWARD_ARGS+=("$1")
       shift
       ;;
-    -g|--global)
-      TARGET="global"
+    --config-dir)
+      if [[ -n "${2:-}" ]]; then
+        CONFIG_DIR="$2"
+        FORWARD_ARGS+=("$1" "$2")
+        shift 2
+      else
+        echo "Error: --config-dir requires a directory path." >&2
+        exit 1
+      fi
+      ;;
+    --standalone-skills)
+      STANDALONE_SKILLS=true
+      FORWARD_ARGS+=("$1")
       shift
+      ;;
+    --local)
+      SOURCE_MODE="local"
+      FORWARD_ARGS+=("$1")
+      shift
+      ;;
+    --remote)
+      SOURCE_MODE="remote"
+      FORWARD_ARGS+=("$1")
+      shift
+      ;;
+    -b|--branch)
+      if [[ -n "${2:-}" ]]; then
+        BRANCH="$2"
+        SOURCE_MODE="remote"
+        FORWARD_ARGS+=("$1" "$2")
+        shift 2
+      else
+        echo "Error: --branch requires a branch name." >&2
+        exit 1
+      fi
+      ;;
+    -r|--repo)
+      if [[ -n "${2:-}" ]]; then
+        REPO_URL="$2"
+        SOURCE_MODE="remote"
+        FORWARD_ARGS+=("$1" "$2")
+        shift 2
+      else
+        echo "Error: --repo requires a repository URL." >&2
+        exit 1
+      fi
       ;;
     -h|--help)
       usage
@@ -60,62 +106,76 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Check if agy CLI is available
-if ! command -v agy &> /dev/null; then
-  echo "Error: 'agy' CLI command not found in PATH." >&2
-  echo "Please ensure Antigravity CLI is installed." >&2
-  exit 1
-fi
-
-# Setup temporary directory and ensure cleanup
-TMP_DIR=$(mktemp -d)
-trap 'rm -rf "$TMP_DIR"' EXIT
-
-echo "================================================================="
-echo " Plan Swarm: Installing Agents & Plugin Skills"
-echo " Repo:   $REPO"
-echo " Branch: $BRANCH"
-echo " Scope:  $TARGET (for agents)"
-echo "================================================================="
-
-echo "==> Cloning $REPO (branch: $BRANCH)..."
-git clone --depth 1 --branch "$BRANCH" "$REPO" "$TMP_DIR" --quiet
-
-# 1. Install Subagents
-if [[ "$TARGET" == "global" ]]; then
-  DEST_DIR="$HOME/.gemini/config/agents"
-  echo "==> [1/3] Installing subagents globally to $DEST_DIR..."
-  mkdir -p "$DEST_DIR"
-  for d in "$TMP_DIR"/agents/*/; do
-    [[ -d "$d" ]] || continue
-    name=$(basename "$d")
-    rm -rf "$DEST_DIR/$name"
-    cp -R "$TMP_DIR/agents/$name" "$DEST_DIR/$name"
-    echo "  ✔ $name"
-  done
+SCRIPT_PATH="${BASH_SOURCE[0]:-}"
+if [[ -n "$SCRIPT_PATH" && -f "$SCRIPT_PATH" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 else
-  DEST_DIR=".agents/agents"
-  echo "==> [1/3] Installing subagents project-scoped to $DEST_DIR..."
-  mkdir -p "$DEST_DIR"
-  for d in "$TMP_DIR"/agents/*/; do
-    [[ -d "$d" ]] || continue
-    name=$(basename "$d")
-    rm -rf "$DEST_DIR/$name"
-    cp -R "$TMP_DIR/agents/$name" "$DEST_DIR/$name"
-    echo "  ✔ $name"
-  done
+  SCRIPT_DIR=""
 fi
 
-# 2. Install Plan Plugin Skills
-echo "==> [2/3] Installing 'plan' plugin skills via agy CLI..."
-agy plugin install "$TMP_DIR/plugins/plan"
+# If invoked via curl | bash (no sibling scripts on disk), clone once and invoke the cloned scripts
+TMP_DIR=""
+cleanup() {
+  if [[ -n "$TMP_DIR" && -d "$TMP_DIR" ]]; then
+    rm -rf "$TMP_DIR"
+  fi
+}
+trap cleanup EXIT
 
-# 3. Install Orchestrator Plugin Skills
-echo "==> [3/3] Installing 'orchestrator' plugin skills via agy CLI..."
-agy plugin install "$TMP_DIR/plugins/orchestrator"
+if [[ -z "$SCRIPT_DIR" || ! -f "${SCRIPT_DIR}/install-agents.sh" || ! -f "${SCRIPT_DIR}/install-skills.sh" ]]; then
+  if ! command -v git >/dev/null 2>&1; then
+    echo "Error: 'git' command not found in PATH." >&2
+    exit 1
+  fi
+  TMP_DIR="$(mktemp -d)"
+  echo "Cloning '$REPO_URL' (branch: '$BRANCH')..."
+  git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$TMP_DIR/repo" >/dev/null 2>&1
+  SCRIPT_DIR="${TMP_DIR}/repo/scripts"
+  FORWARD_ARGS+=("--local")
+fi
 
-echo "================================================================="
-echo "==> Complete! All agents and plugin skills successfully installed."
-echo "    Verify subagents: agy agents"
-echo "    Verify plugins:   agy plugin list"
-echo "================================================================="
+echo "=================================================================="
+echo "  Plan Swarm & Orchestrator — Unified Installer"
+echo "=================================================================="
+echo ""
+echo "[1/2] Installing Custom Subagents..."
+bash "${SCRIPT_DIR}/install-agents.sh" "${FORWARD_ARGS[@]}"
+echo ""
+echo "[2/2] Installing Plugins & Skills..."
+bash "${SCRIPT_DIR}/install-skills.sh" "${FORWARD_ARGS[@]}"
+echo ""
+
+if [[ "$SCOPE" == "global" ]]; then
+  TARGET_BASE="$CONFIG_DIR"
+else
+  TARGET_BASE="$(pwd)/.agents"
+fi
+
+cat <<EOF
+==================================================================
+  Installation Complete!
+==================================================================
+Artifacts installed in: ${TARGET_BASE}
+  - Subagents : ${TARGET_BASE}/agents/ (13 self-contained subagents)
+  - Plan      : ${TARGET_BASE}/plugins/plan/ (21 skills + 13 bundled subagents)
+  - Orch      : ${TARGET_BASE}/plugins/orchestrator/ (6 orchestrator skills)
+$(if [[ "$SCOPE" == "global" ]]; then echo "  - Config    : ${TARGET_BASE}/config.json ('plan' & 'orchestrator' enabled)"; fi)
+
+Available Slash Commands in Chat:
+  /plan-swarm                Launch or resume the full 4-phase Plan Swarm
+  /product-owner             Phase 1: Interactive Grill Loop -> spec.md
+  /visual-product-owner      Phase 1: Grill Loop -> spec.md + visual-spec.html
+  /spec-deliberator          Phase 1b: Multi-delegate spec deliberation
+  /spec-validator            Phase 1c: 3-lens adversarial spec review
+  /architect                 Phase 2: Read-only investigation -> plan.md
+  /visual-architect          Phase 2: Read-only investigation -> plan.md + visual-plan.html
+  /plan-deliberator          Phase 2b: Multi-delegate plan deliberation
+  /plan-validator            Phase 2c: 3-lens adversarial plan review
+  /engineer                  Phase 3: Strict TDD Red->Green->Refactor execution
+  /simplifier                Phase 3b: Behavior-preserving cleanup pass
+  /visual-implementation-recap Phase 3c: Self-contained visual-recap.html
+  /auditor                   Phase 4a: Static + test verification -> audit.md
+  /implementation-validator  Phase 4b: 3-lens adversarial diff review
+  /orchestrator              Meta-orchestrator for cross-project decomposition
+==================================================================
+EOF

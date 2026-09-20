@@ -1,5 +1,9 @@
 {
   "name": "plan-skills",
-  "description": "Antigravity (AGY) Spec-Driven Planning Swarm Plugins & Skills",
-  "version": "1.0.0"
+  "description": "Spec-driven Planning Swarm plugins, skills, and 13 custom subagents for Jetski and Antigravity CLI.",
+  "suggestedPrompts": [
+    "/plan-swarm Drive a feature or refactor through spec, plan, and TDD execution",
+    "/supervisor Resume the active milestone in plans/active_milestones/",
+    "/plan-validator Validate an implementation plan against codebase ground truth"
+  ]
 }

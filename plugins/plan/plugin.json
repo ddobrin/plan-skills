@@ -1,4 +1,9 @@
 {
   "name": "plan",
-  "description": "Spec-driven planning swarm skills for Antigravity (AGY CLI)"
+  "description": "Spec-driven planning swarm skills and 13 custom subagents (spec -> plan -> 3-lens validation -> TDD execution -> audit) for Jetski and Antigravity CLI.",
+  "suggestedPrompts": [
+    "/plan-swarm Drive a new feature from spec to implementation plan",
+    "/plan-validator Attack my current plan.md across 3 adversarial lenses",
+    "/spec-validator Run a 3-lens adversarial review on my spec.md"
+  ]
 }

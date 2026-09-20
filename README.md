@@ -66,52 +66,44 @@ The swarm operates on strict graph engineering principles declared in [`plugins/
 
 ---
 
-## 🚀 Quick Start & Installation
+## 🚀 Quick Start & Installation (`~/.gemini/config`)
 
-### 1. How to Install Custom Subagents in AGY CLI
-> 📖 See [`agents/README.md`](agents/README.md) for the complete reference.
+### One-Step Automated Install (Recommended)
 
-Antigravity CLI discovers custom agents as directories, each named after the agent and containing a single `agent.md` file (whose body acts as the system prompt and frontmatter specifies available tools). All 13 reasoning agents are packaged under [`agents/`](agents/).
+Run `./scripts/install-all.sh` from a local checkout (or via `curl | bash`) to install and enable all plugins, skills, and the 13 custom reasoning subagents directly in `~/.gemini/config`:
 
-#### Method A: Loose Global Agents (Recommended)
-This method installs the 13 standalone roles globally in AGY CLI, making them available across all of your projects:
 ```bash
-mkdir -p "$HOME/.gemini/config/agents"
-for d in agents/*/; do
-  name=$(basename "$d")
-  rm -rf "$HOME/.gemini/config/agents/$name"
-  cp -R "agents/$name" "$HOME/.gemini/config/agents/$name"
-done
-```
-> [!IMPORTANT]
-> Always copy the **entire directory** (`cp -R`), not just individual files. Visual agents (`visual-architect`, `visual-product-owner`, `visual-implementation-recap`) carry bundled assets (such as `assets/template.html` and `references/`) that must remain relatively aligned inside their installation directories to prevent rendering errors.
+# From a local checkout of this repository:
+./scripts/install-all.sh
 
-#### Method B: Project-Scoped (Workspace) Agents
-To make the swarm agents available only within a specific project, place them in a `.agents/agents` subfolder:
-```bash
-mkdir -p ".agents/agents"
-cp -R agents/* .agents/agents/
+# Or directly via curl from GitHub:
+curl -fsSL https://raw.githubusercontent.com/ddobrin/plan-skills/main/scripts/install-all.sh | bash
 ```
+
+What `./scripts/install-all.sh` creates in `~/.gemini/config`:
+1. **`~/.gemini/config/agents/`**: All 13 self-contained reasoning subagents (`architect`, `auditor`, `engineer`, `implementation-validator`, `plan-deliberator`, `plan-validator`, `product-owner`, `spec-deliberator`, `spec-validator`, `supervisor`, `visual-architect`, `visual-implementation-recap`, `visual-product-owner`) along with bundled `assets/` and `references/`.
+2. **`~/.gemini/config/plugins/plan/`**: Complete self-contained Plan Swarm plugin bundle containing both `skills/` (19 skills including `/plan-swarm`) and `agents/` (the 13 subagents) plus `graph.json` and `lib/graph/graph.py`.
+3. **`~/.gemini/config/plugins/orchestrator/`**: Meta-orchestrator plugin bundle (`/orchestrator`).
+4. **`~/.gemini/config/config.json`**: Atomically enables `"plan"` and `"orchestrator"` under `"plugins"` and validates the installed topology via `graph.py validate`.
+
+For project-scoped installation into `./.agents/` (`./.agents/agents/` and `./.agents/plugins/`), pass `--project`:
+```bash
+./scripts/install-all.sh --project
+```
+> 📖 See [`scripts/README.md`](scripts/README.md) for individual installers (`install-skills.sh`, `install-agents.sh`) and CLI flags (`--config-dir`, `--branch`, `--standalone-skills`).
 
 ---
 
-### 2. How to Install Skills as AGY Plugins
-> 📖 See [`plugins/plan/README.md`](plugins/plan/README.md) for details on the skill set.
+### Using the `"plan"` Commands in Chat
 
-Skills in AGY CLI are registered via Antigravity plugins. You can install the planning plugins directly into AGY using `agy plugin install`:
+Once installed, invoke the swarm or individual roles directly from chat:
 
-```bash
-# Install the core planning plugin
-agy plugin install plugins/plan
-
-# Install the supervisor orchestrator plugin
-agy plugin install plugins/orchestrator
-```
-
-Or install the repository plugin bundle directly from GitHub:
-```bash
-agy plugin install https://github.com/ddobrin/plan-skills
-```
+* **`/plan-swarm`** — Start a new milestone (`plans/active_milestones/{moniker}/state.json`) or resume an existing milestone at its exact `state.json` stage across the 4-phase lifecycle.
+* **Phase 1 (Spec):** `/product-owner`, `/visual-product-owner`, `/spec-deliberator`, `/spec-validator`
+* **Phase 2 (Plan):** `/architect`, `/visual-architect`, `/plan-deliberator`, `/plan-validator`
+* **Phase 3 (Execute):** `/engineer`, `/simplifier`, `/visual-implementation-recap`
+* **Phase 4 (Verify & Gate):** `/auditor`, `/implementation-validator`
+* **Cross-Project Meta-Orchestration:** `/orchestrator`
 
 ---
 

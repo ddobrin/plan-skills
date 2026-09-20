@@ -1,6 +1,7 @@
 ---
 name: geap-interactions-plan-validator
 description: No-Python remote drop-in for plan-validator - runs the adversarial plan review on remote models over the Interactions API (curl + ADC from caller subagents; configurable roster; Vertex fallback), with a synthesis model casting an extra vote and nominating the first domino. Symptoms - "run the interactions plan panel", "remote plan validation without Python", "validate this plan via the Interactions API", "GEAP plan validation, no local scripts", geap-plan-validator wanted but no venv/Python available.
+disable-slash-command: true
 ---
 
 # GEAP Interactions Plan Validation

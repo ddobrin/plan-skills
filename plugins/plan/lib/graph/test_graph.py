@@ -545,5 +545,48 @@ class TestCLIInvocations(unittest.TestCase):
         self.assertIn("graph.json OK", stdout_buf.getvalue())
 
 
+class TestPluginBundledLayoutAndErgonomics(unittest.TestCase):
+    """Tests that plugins/plan/ bundles agents/, provides /plan-swarm, and hides internal GEAP skills."""
+
+    def setUp(self):
+        self.graph = load()
+        self.plugin_root = REPO_ROOT / "plugins" / "plan"
+
+    def test_plugin_bundled_agents_pass_validation(self):
+        bundled_agents = self.plugin_root / "agents"
+        self.assertTrue(bundled_agents.is_dir(), "plugins/plan/agents directory must exist")
+        problems = validate_agents(bundled_agents, self.graph)
+        self.assertEqual(problems, [], f"Bundled plugins/plan/agents failed validation: {problems}")
+
+    def test_repo_root_agents_pass_validation(self):
+        root_agents = REPO_ROOT / "agents"
+        self.assertTrue(root_agents.is_dir(), "repo root agents/ directory must exist")
+        problems = validate_agents(root_agents, self.graph)
+        self.assertEqual(problems, [], f"Root agents/ failed validation: {problems}")
+
+    def test_plan_swarm_skill_exists(self):
+        skill_file = self.plugin_root / "skills" / "plan-swarm" / "SKILL.md"
+        self.assertTrue(skill_file.is_file(), "plugins/plan/skills/plan-swarm/SKILL.md must exist")
+        content = skill_file.read_text(encoding="utf-8")
+        self.assertIn("name: plan-swarm", content)
+
+    def test_internal_geap_skills_disable_slash_command(self):
+        geap_skills = [
+            "geap-plan-validator",
+            "geap-spec-validator",
+            "geap-interactions-plan-validator",
+            "geap-interactions-spec-validator",
+        ]
+        for skill in geap_skills:
+            skill_file = self.plugin_root / "skills" / skill / "SKILL.md"
+            self.assertTrue(skill_file.is_file(), f"Missing {skill_file}")
+            content = skill_file.read_text(encoding="utf-8")
+            self.assertIn(
+                "disable-slash-command: true",
+                content,
+                f"Internal GEAP skill {skill} must set disable-slash-command: true",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

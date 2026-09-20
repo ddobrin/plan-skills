@@ -1,6 +1,7 @@
 ---
 name: geap-spec-validator
 description: Remote drop-in alternative to spec-validator - runs the adversarial spec review on Vertex AI foundation models (3 configurable skeptics + a synthesis model) instead of local subagents, for an independent perspective from different model families. Symptoms - "run the remote spec panel", "GEAP spec validation", "validate this spec with cloud/Vertex models", "get a second opinion on this spec from other models", spec-validator requested with remote or Gemini/Claude-on-Vertex models.
+disable-slash-command: true
 ---
 
 # GEAP Remote Spec Validation

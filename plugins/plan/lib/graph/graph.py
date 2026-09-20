@@ -86,8 +86,13 @@ def validate(graph: dict) -> list[str]:
         if skill and not (PLUGIN_ROOT / "skills" / skill / "SKILL.md").is_file():
             problems.append(f"node {node['id']!r}: skills/{skill}/SKILL.md not found")
         agent = node.get("agent")
-        if agent and not (REPO_ROOT / "agents" / agent / "agent.md").is_file():
-            problems.append(f"node {node['id']!r}: agents/{agent}/agent.md not found")
+        if agent:
+            plugin_agent = PLUGIN_ROOT / "agents" / agent / "agent.md"
+            repo_agent = REPO_ROOT / "agents" / agent / "agent.md"
+            if not (plugin_agent.is_file() or repo_agent.is_file()):
+                problems.append(f"node {node['id']!r}: agents/{agent}/agent.md not found")
+            elif (PLUGIN_ROOT / "agents").is_dir() and not plugin_agent.is_file():
+                problems.append(f"node {node['id']!r}: plugins/plan/agents/{agent}/agent.md not found")
         for alt in node.get("alternatives", []):
             if not (PLUGIN_ROOT / "skills" / alt / "SKILL.md").is_file():
                 problems.append(f"node {node['id']!r}: alternative skills/{alt}/SKILL.md not found")
@@ -555,6 +560,7 @@ def _esc(t: str) -> str:
 
 TARGETS = [
     (PLUGIN_ROOT / "README.md", "ascii"),
+    (PLUGIN_ROOT / "agents" / "README.md", "ascii"),
     (REPO_ROOT / "agents" / "README.md", "ascii"),
     (REPO_ROOT / "README.md", "ascii"),
 ]
@@ -601,12 +607,20 @@ def sync(graph: dict, check: bool = False) -> int:
 # ----------------------------------------------------------------------------- cli
 
 
+DEFAULT_AGENTS_DIR = (
+    PLUGIN_ROOT / "agents" if (PLUGIN_ROOT / "agents").is_dir() else REPO_ROOT / "agents"
+)
+
+
 def _resolve_agents_dir(raw_path: Path | str) -> Path:
     p = Path(raw_path)
     if p.is_absolute():
         return p.resolve()
     if p.is_dir():
         return p.resolve()
+    plugin_candidate = PLUGIN_ROOT / p
+    if plugin_candidate.is_dir():
+        return plugin_candidate.resolve()
     repo_candidate = REPO_ROOT / p
     if repo_candidate.is_dir():
         return repo_candidate.resolve()
@@ -622,7 +636,7 @@ def main(argv: list[str] | None = None) -> int:
         "--agents-dir",
         type=Path,
         nargs="?",
-        const=REPO_ROOT / "agents",
+        const=DEFAULT_AGENTS_DIR,
         default=None,
         help="verify standalone subagent definitions in agents/ directory against graph contracts",
     )
@@ -634,8 +648,8 @@ def main(argv: list[str] | None = None) -> int:
     va.add_argument(
         "--agents-dir",
         type=Path,
-        default=REPO_ROOT / "agents",
-        help="path to agents directory (defaults to repo root agents/)",
+        default=DEFAULT_AGENTS_DIR,
+        help="path to agents directory (defaults to plugins/plan/agents/ or repo root agents/)",
     )
 
     r = sub.add_parser("render", help="print a diagram")

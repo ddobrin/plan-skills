@@ -1,6 +1,7 @@
 ---
 name: geap-interactions-spec-validator
 description: No-Python remote drop-in for spec-validator - runs the adversarial spec review on remote models over the Interactions API (curl + ADC from caller subagents; configurable roster; Vertex fallback), with a synthesis model casting an extra vote. Symptoms - "run the interactions spec panel", "remote spec validation without Python", "validate this spec via the Interactions API", "GEAP spec validation, no local scripts", geap-spec-validator wanted but no venv/Python available.
+disable-slash-command: true
 ---
 
 # GEAP Interactions Spec Validation

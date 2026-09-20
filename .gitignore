@@ -24,3 +24,7 @@ hs_err_pid*
 replay_pid*
 
 .agents/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
