@@ -38,7 +38,7 @@ and lens 2 has nothing external to read — merge it and run two.
 
 ---
 
-## Shared Preamble (prepend to every lens)
+## Shared Preamble (prepend to every lens, partitioning `{CONTEXT}` by lens)
 
 ```
 You are an adversarial spec reviewer on a three-lens panel. You will implement this spec
@@ -51,7 +51,7 @@ spec shallowly — breadth is the panel's job, depth is yours.
 SPEC:
 {SPEC}
 
-ADDITIONAL CONTEXT (constraints the spec relies on but may not restate):
+ADDITIONAL CONTEXT (Lens 2 only — omit for Lens 1 and Lens 3 to preserve reading-assignment asymmetry):
 {CONTEXT}
 ```
 

@@ -20,6 +20,7 @@ from plugins.plan.lib.graph.graph import (
     EXPECTED_AGENTS,
     FORBIDDEN_CORRELATED_PHRASES,
     by_id,
+    init_state,
     load,
     main,
     phases,
@@ -28,6 +29,7 @@ from plugins.plan.lib.graph.graph import (
     sync,
     validate,
     validate_agents,
+    validate_state,
 )
 
 
@@ -63,6 +65,7 @@ def populate_clean_agents_directory(base_dir: Path, graph: dict) -> None:
             ])
         elif name == "supervisor":
             lines.extend([
+                "Governed by `graph.json` (`plan-swarm@2.1`).",
                 "You are designated as the sole committer permitted to run `git commit`.",
                 "Commit protocol requires both a passing green audit report and explicit user confirmation ('yes').",
                 "Reads and manages plans/active_milestones/{moniker}/state.json across lifecycle transitions.",
@@ -601,6 +604,65 @@ class TestPluginBundledLayoutAndErgonomics(unittest.TestCase):
             if d.is_dir() and not d.name.startswith(".") and d.name != "__pycache__"
         }
         self.assertEqual(present_libs, {"graph"})
+
+
+class TestRuntimeStateAndGraphPrinciples(unittest.TestCase):
+    """Tests for state.json initialization, validation, and strict Graph Engineering checks."""
+
+    def setUp(self):
+        self.graph = load()
+        self.temp_dir = Path(tempfile.mkdtemp(prefix="test_state_"))
+        self.agents_dir = self.temp_dir / "agents"
+        populate_clean_agents_directory(self.agents_dir, self.graph)
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_init_state_creates_valid_state(self):
+        state = init_state("v1_0_feature", self.graph)
+        self.assertEqual(state["moniker"], "v1_0_feature")
+        self.assertEqual(state["graph_version"], self.graph["graph_version"])
+        self.assertEqual(state["phase"], "0")
+        self.assertIn("simplifier", state["nodes"])
+        self.assertIn("spec-deliberator", state["nodes"])
+        self.assertIn("plan-deliberator", state["nodes"])
+        self.assertEqual(validate_state(state, self.graph), [])
+
+    def test_validate_state_detects_missing_keys_and_invalid_status(self):
+        state = init_state("v1_0_feature", self.graph)
+        state["nodes"]["spec-validator"]["status"] = "bogus_status"
+        del state["gates"]["plan-approval"]
+        problems = validate_state(state, self.graph)
+        self.assertTrue(any("bogus_status" in p for p in problems))
+        self.assertTrue(any("plan-approval" in p for p in problems))
+
+    def test_cli_init_and_validate_state(self):
+        state_path = self.temp_dir / "plans" / "active_milestones" / "v1_0_test" / "state.json"
+        stdout_buf = io.StringIO()
+        with redirect_stdout(stdout_buf):
+            rc = main(["init-state", "v1_0_test", "--output", str(state_path)])
+        self.assertEqual(rc, 0)
+        self.assertTrue(state_path.is_file())
+
+        stdout_buf2 = io.StringIO()
+        with redirect_stdout(stdout_buf2):
+            rc2 = main(["validate-state", str(state_path)])
+        self.assertEqual(rc2, 0)
+        self.assertIn("OK", stdout_buf2.getvalue())
+
+    def test_supervisor_missing_graph_json_rejected(self):
+        sup_file = self.agents_dir / "supervisor" / "agent.md"
+        content = sup_file.read_text(encoding="utf-8").replace("graph.json", "some_other_file")
+        sup_file.write_text(content, encoding="utf-8")
+        problems = validate_agents(self.agents_dir, self.graph)
+        self.assertTrue(any("must reference 'graph.json'" in p for p in problems))
+
+    def test_deliberator_parallel_round1_rejected(self):
+        delib_file = self.agents_dir / "spec-deliberator" / "agent.md"
+        content = delib_file.read_text(encoding="utf-8") + "\nParallel Round 1 Dispatch: invoke all 3 delegates in parallel.\n"
+        delib_file.write_text(content, encoding="utf-8")
+        problems = validate_agents(self.agents_dir, self.graph)
+        self.assertTrue(any("contains parallel Round 1 deliberation phrase" in p for p in problems))
 
 
 if __name__ == "__main__":

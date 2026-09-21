@@ -56,9 +56,9 @@ reliably the noise. Recall is the skeptic's job; precision is the gate's.
 
 ## Process
 
-### 1. Gather inputs & templates in one parallel batch
-- Read `plan.md`, `references/skeptic-prompt.md`, and `references/review-template.md` in a **single parallel `view_file` tool-call batch** (`references/worked-example.md` is author documentation — do **not** read it at runtime).
-- Embed the full `{PLAN}` text and the **repository root** (`{REPO_ROOT}`) directly into each skeptic prompt so none of the 3 skeptics waste Turn 1 calling `view_file` on `plan.md`.
+### 1. Gather inputs
+- The plan text (paste it, or give an absolute path).
+- The **repository root** the agents should read — they must be able to open the files the plan touches.
 
 ### 2. Author the skeptic prompt
 Fill the template in `references/skeptic-prompt.md`, which also carries the aggregation

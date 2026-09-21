@@ -41,9 +41,9 @@ Orient before attacking:
 
 ## Running under Antigravity CLI (`agy`)
 
-- **Dispatching skeptics.** Spawn the 3 skeptics in a **single parallel `invoke_subagent` call** using
-  `TypeName: research` and `Model: "flash"` for routine pre-merge gates (reserve `Model: "inherit"` for security-critical diffs, concurrency-heavy changes, or re-validation after fixes).
-- **Pre-fetched diff payload (eliminates 6 redundant `git diff` shell calls).** Run a **single combined shell command** (`BASE_SHA=$(git rev-parse origin/main 2>/dev/null || git rev-parse HEAD~1); HEAD_SHA=$(git rev-parse HEAD); git diff --stat "$BASE_SHA".."$HEAD_SHA"; git diff "$BASE_SHA".."$HEAD_SHA"`) and embed `{DIFF_STAT}` and `{DIFF_CONTENT}` (for diffs ≤ 400 lines) directly in the **Shared Preamble** so the 3 skeptics start inspecting their lenses in Turn 1 without each spawning 2 shell subcommands (`git diff --stat` and `git diff`).
+- **Dispatching skeptics.** Spawn the 3 skeptics with `invoke_subagent` using
+  `TypeName: research` — they only need read-only capability: run `git diff`/`git
+  rev-parse` and read files, but never modify source.
 - **Disjoint evidence lenses.** Dispatch **once per lens**, three lenses in parallel.
   Each lens gets the **Shared Preamble**, its dedicated **Lens** section, and the
   **Shared Tail**. The runs must be independent (no shared scratchpad).
@@ -102,9 +102,12 @@ run two.
 
 ## Process
 
-1. **Gather inputs (1 combined shell call):** run `git rev-parse` + `git diff --stat {BASE}..{HEAD}` + `git diff {BASE}..{HEAD}` in a single command, and inline `{DIFF_STAT}` and `{DIFF_CONTENT}` (for diffs ≤ 400 lines) alongside `{BASE_SHA}..{HEAD_SHA}` into the Shared Preamble so the 3 skeptics do not re-run `git diff` themselves.
+1. **Gather inputs:** the diff range `BASE_SHA`/`HEAD_SHA` (so agents can run
+   `git diff {BASE}..{HEAD}`), a one-line description of what the change claims, and
+   for claim-refutation the explicit claim list. Get SHAs with
+   `git rev-parse origin/main` and `git rev-parse HEAD`.
 2. **Run the Asymmetry Test:** verify that all 3 lenses have disjoint reading assignments.
-3. **Dispatch 3 skeptics in parallel** in a single `invoke_subagent` call (`TypeName: research`, `Model: "flash"`):
+3. **Dispatch 3 skeptics in parallel** via `invoke_subagent` (`TypeName: research`):
    - Skeptic 1: Shared Preamble + Lens 1 + Shared Tail (or Claim-Refutation per claim)
    - Skeptic 2: Shared Preamble + Lens 2 + Shared Tail (or Claim-Refutation per claim)
    - Skeptic 3: Shared Preamble + Lens 3 + Shared Tail (or Claim-Refutation per claim)

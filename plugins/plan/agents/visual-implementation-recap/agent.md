@@ -84,23 +84,32 @@ review the whole change at the **commit gate** before approving.
    `plans/active_milestones/`. You never run `git commit` — that remains the Supervisor's
    responsibility after a green audit and explicit user confirmation.
 
-## Rendering Protocol (2-Turn Fast-Path — run after the audit exists, ideally PASS)
+## Rendering Protocol (run after the audit exists, ideally PASS)
 The git diff + `plan.md` + audit report are the source of truth; the HTML is derived.
 
-### 1. Turn 1: Instantiate Template & Gather Grounding in One Parallel Batch
-Issue all of the following in a **single parallel tool call batch**:
-- **Shell (`run_command`):** Copy the bundled template at `assets/template.html` (in this agent's own folder) to `plans/active_milestones/{moniker}/visual-recap.html` AND run `git status --short`, `git diff --stat HEAD`, and `git diff HEAD` in one combined command:
-  `cp <agent-dir>/assets/template.html plans/active_milestones/{moniker}/visual-recap.html && git status --short && echo "=== STAT ===" && git diff --stat HEAD && echo "=== DIFF ===" && git diff HEAD`
-- **Parallel `view_file` calls:**
-  - `plans/active_milestones/{moniker}/plan.md` (for task checklist and `[x]` annotations)
-  - `plans/audit/AUDIT_[Plan_Name].md` (for verdict, per-step evidence, anti-shortcut scan, and findings)
-  - `plans/active_milestones/{moniker}/spec.md` (optional, for outcome brief phrasing)
-  - `references/component-catalog.md` (skip reading `references/exemplar.md` on routine runs to save tokens)
-- **Never `view_file` or regenerate the 355 lines of `<head>`, `<style>`, `<nav>`, or bottom `<script>` chrome** in `assets/template.html`. The 9 paired marker blocks (`<!-- VIR:OVERVIEW -->` … `<!-- /VIR:OVERVIEW -->`, `<!-- VIR:TASKS -->`, `<!-- VIR:FILES -->`, `<!-- VIR:DIFFS -->`, `<!-- VIR:ARCHITECTURE -->`, `<!-- VIR:CONTRACTS -->`, `<!-- VIR:UI -->`, `<!-- VIR:VERIFICATION -->`, `<!-- VIR:NOTES -->`) are invariant anchors.
+### 1. Instantiate the template
+- Copy the bundled template at `assets/template.html` (in this agent's own folder) to
+  `plans/active_milestones/{moniker}/visual-recap.html`.
+- Replace `{{MONIKER}}` with the moniker and `{{TIMESTAMP}}` with `date` output.
+- **Do not modify** the template's `<head>`, `<style>`, `<nav>`, or bottom `<script>`.
+  You author only section content.
 
-### 2. Turn 2: Fill the Nine Surfaces in a Single `multi_replace_file_content` Call
-Replace `{{MONIKER}}`, `{{TIMESTAMP}}`, and the demo content between each paired marker (`<!-- VIR:OVERVIEW -->` …
-`<!-- /VIR:OVERVIEW -->`, etc.) in a **single `multi_replace_file_content` call** on `plans/active_milestones/{moniker}/visual-recap.html`. Map evidence → surface:
+### 2. Gather the grounding (read-only)
+- **The diff:** run `git diff HEAD` (the engineer has not committed yet),
+  `git diff --stat HEAD`, and `git status` to enumerate created/modified/deleted files
+  and per-file line counts. Use these verbatim — do not estimate.
+- **The plan:** read `plans/active_milestones/{moniker}/plan.md` for the task checklist
+  and the engineer's `[x]` / `(Status: …)` annotations.
+- **The audit:** read `plans/audit/AUDIT_[Plan_Name].md` for the verdict, per-step
+  evidence, the anti-shortcut scan, and any findings (including
+  `implementation-validator` severity calibrations).
+- **The spec (optional):** read `spec.md` to phrase the outcome brief in user terms.
+
+### 3. Fill the nine surfaces
+Replace the demo content between each paired marker (`<!-- VIR:OVERVIEW -->` …
+`<!-- /VIR:OVERVIEW -->`, etc.) with content authored from the grounding. Use the
+bundled `references/component-catalog.md` for the exact HTML fragment per surface and
+`references/exemplar.md` for a worked example. Map evidence → surface:
 - Outcome + headline numbers → **Overview** (1–3-sentence brief + metric cards: files
   changed, +insertions/−deletions, tasks X/Y, audit PASS/FAIL).
 - `plan.md` checklist × audit verdict → **Tasks Completed** (each task → ✅ Done /

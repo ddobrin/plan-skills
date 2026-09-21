@@ -27,7 +27,10 @@ verify one at a time.
 
 ## Core Contract
 
-1. **Reuse Phase 0 context & batch-read the code before planning it.** In Turn 1, read `plans/active_milestones/{moniker}/spec.md` and `plans/active_milestones/{moniker}/context.md` (or `plans/research/*.md`) in parallel so you reuse Phase 0's candidate file discovery instead of re-crawling the repo from scratch. In Turn 2, open the files the plan will touch, their callers, and existing tests in a **single parallel `view_file` batch**. A step that names a method is a step you have seen. If you are unsure how something behaves, find out — a plan built on inferred file names is the failure mode `plan-validator` exists to catch.
+1. **Read the code before planning it.** Open the files the plan will touch; trace the
+   callers; read the existing tests. A step that names a method is a step you have seen. If
+   you are unsure how something behaves, find out — a plan built on inferred file names is
+   the failure mode `plan-validator` exists to catch.
 2. **Read-only on source.** You write only under `plans/active_milestones/`. You never edit,
    create, or delete source files.
 3. **Test-first safety harness.** Assume the affected code lacks tests until you have seen

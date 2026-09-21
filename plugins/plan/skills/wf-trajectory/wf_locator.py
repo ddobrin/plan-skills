@@ -19,16 +19,12 @@ def _projects_dir() -> str:
     return os.path.join(_claude_root(), "projects")
 
 
-_NON_ALNUM_RE = re.compile(r"[^a-zA-Z0-9]")
-_TIMESTAMP_HEAD_RE = re.compile(r'"timestamp"\s*:\s*"([^"]*)"')
-
-
 def encode_path(p: str) -> str:
     # Claude Code encodes the launch dir by replacing EVERY non-alphanumeric
     # character with '-' (verified against ~/.claude/projects; e.g. a dotted path
     # /Users/x/.claude -> -Users-x--claude). Not a '/'-only replacement — each
     # separator maps individually and consecutive separators are not collapsed.
-    return _NON_ALNUM_RE.sub("-", os.path.abspath(p))
+    return re.sub(r"[^a-zA-Z0-9]", "-", os.path.abspath(p))
 
 
 def find_project_dir(cwd: str, projects: str | None = None):
@@ -47,11 +43,6 @@ def find_project_dir(cwd: str, projects: str | None = None):
 def _run_timestamp(path: str) -> str:
     try:
         with open(path, "r", encoding="utf-8") as f:
-            head = f.read(4096)
-            m = _TIMESTAMP_HEAD_RE.search(head)
-            if m:
-                return m.group(1)
-            f.seek(0)
             return json.load(f).get("timestamp", "")
     except Exception:
         return ""

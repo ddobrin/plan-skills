@@ -143,6 +143,32 @@ def validate(graph: dict) -> list[str]:
         elif node["kind"] != "human-gate":
             problems.append(f"gate {gate['id']!r}: node {gate['node']!r} is not a human-gate")
 
+    # orchestrator skills (starter, plan-swarm) must reference graph.json, plan-swarm@2.1, and state.json schema
+    for orch_skill in ("starter", "plan-swarm"):
+        orch_path = PLUGIN_ROOT / "skills" / orch_skill / "SKILL.md"
+        if orch_path.is_file():
+            orch_text = orch_path.read_text(encoding="utf-8")
+            if "graph.json" not in orch_text:
+                problems.append(f"skill {orch_skill!r}: must reference 'graph.json'")
+            if graph.get("graph_version", "plan-swarm@2.1") not in orch_text:
+                problems.append(f"skill {orch_skill!r}: must reference graph_version {graph.get('graph_version')!r}")
+            if "plans/active_milestones/{moniker}/state.json" not in orch_text:
+                problems.append(f"skill {orch_skill!r}: must reference 'plans/active_milestones/{{moniker}}/state.json'")
+            for req_key in ('"graph_version"', '"gates"', '"nodes"', '"groups"'):
+                if req_key not in orch_text:
+                    problems.append(f"skill {orch_skill!r}: missing state.json schema field {req_key}")
+
+    # deliberation skills must enforce sequential Round 1 turns and not parallel Round 1 fan-out
+    for delib_skill in ("spec-deliberator", "plan-deliberator"):
+        delib_path = PLUGIN_ROOT / "skills" / delib_skill / "SKILL.md"
+        if delib_path.is_file():
+            delib_text = delib_path.read_text(encoding="utf-8")
+            for phrase in FORBIDDEN_PARALLEL_DELIBERATION_PHRASES:
+                if phrase in delib_text.lower():
+                    problems.append(
+                        f"skill {delib_skill!r}: contains parallel Round 1 deliberation phrase: {phrase!r}"
+                    )
+
     return problems
 
 
@@ -168,6 +194,149 @@ FORBIDDEN_CORRELATED_PHRASES: list[str] = [
     "three times, unchanged",
     "three times**, unchanged",
 ]
+
+FORBIDDEN_PARALLEL_DELIBERATION_PHRASES: list[str] = [
+    "dispatch round 1 in parallel",
+    "fast-path round 1 disjoint fan-out",
+    "spawn all 3 delegates concurrently",
+    "parallel disjoint territory investigation",
+    "parallel round 1 dispatch",
+    "invoke all 3 delegates in parallel",
+]
+
+VALID_NODE_STATUSES = {
+    "pending",
+    "running",
+    "complete",
+    "passed",
+    "findings",
+    "converged",
+    "unresolved",
+    "skipped",
+    "pass",
+    "fail",
+}
+
+
+def init_state(moniker: str, graph: dict | None = None, phase: str = "0") -> dict:
+    """Construct a canonical initial state.json payload governed by graph.json."""
+    if graph is None:
+        graph = load()
+    import datetime
+    import hashlib
+
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    short_hash = hashlib.sha256(f"{moniker}:{now}".encode("utf-8")).hexdigest()[:4]
+
+    gates: dict[str, dict] = {}
+    for g in graph.get("gates", []):
+        gid = g["id"]
+        if gid == "commit-gate":
+            gates[gid] = {"status": "pending", "audit": None, "approved_by": None, "approved_at": None}
+        else:
+            gates[gid] = {"status": "pending", "approved_by": None, "approved_at": None}
+
+    nodes_state: dict[str, dict] = {}
+    for node in graph.get("nodes", []):
+        nid = node["id"]
+        kind = node.get("kind")
+        if kind in {"entry", "human-gate", "terminal"}:
+            continue
+        if nid == "research" and phase == "0":
+            nodes_state[nid] = {
+                "status": "running",
+                "artifact": f"plans/active_milestones/{moniker}/context.md",
+            }
+        elif kind == "panel":
+            entry: dict = {
+                "status": "pending",
+                "report": f"plans/active_milestones/{moniker}/adversarial-reviews/{nid.replace('-validator', '-validation')}.md",
+                "lenses": list(node.get("panel", {}).get("lenses", [])),
+                "confirmed": 0,
+                "single_vote": 0,
+                "cross_lens": 0,
+                "single_vote_triaged": False,
+            }
+            if nid == "plan-validator":
+                entry["first_domino"] = None
+            nodes_state[nid] = entry
+        elif kind == "deliberation":
+            nodes_state[nid] = {
+                "status": "pending",
+                "reason": None,
+                "rounds": 0,
+                "delegates": [],
+                "unresolved_items": 0,
+            }
+        else:
+            nodes_state[nid] = {"status": "pending"}
+
+    return {
+        "graph_version": graph.get("graph_version", "plan-swarm@2.1"),
+        "run_id": f"ms_{moniker}_{short_hash}",
+        "moniker": moniker,
+        "phase": phase,
+        "updated": now,
+        "gates": gates,
+        "nodes": nodes_state,
+        "groups": [],
+    }
+
+
+def validate_state(state: dict, graph: dict | None = None) -> list[str]:
+    """Validate a milestone's runtime state.json dictionary against graph.json contracts."""
+    if graph is None:
+        graph = load()
+
+    problems: list[str] = []
+    expected_version = graph.get("graph_version", "plan-swarm@2.1")
+    if state.get("graph_version") != expected_version:
+        problems.append(
+            f"state.json graph_version={state.get('graph_version')!r} does not match graph.json {expected_version!r}"
+        )
+
+    for req_field in ("run_id", "moniker", "phase", "updated", "gates", "nodes", "groups"):
+        if req_field not in state:
+            problems.append(f"state.json missing required top-level field {req_field!r}")
+
+    declared_gates = {g["id"] for g in graph.get("gates", [])}
+    raw_gates = state.get("gates", {})
+    if isinstance(raw_gates, dict):
+        state_gates = set(raw_gates.keys())
+    elif isinstance(raw_gates, list):
+        state_gates = {g.get("id") for g in raw_gates if isinstance(g, dict)}
+    else:
+        state_gates = set()
+    missing_gates = declared_gates - state_gates
+    if missing_gates:
+        problems.append(f"state.json missing declared gate(s): {', '.join(sorted(missing_gates))}")
+
+    node_map = by_id(graph)
+    state_nodes = state.get("nodes", {})
+    if isinstance(state_nodes, dict):
+        for nid, nval in state_nodes.items():
+            if nid not in node_map:
+                problems.append(f"state.json nodes contains unknown node id {nid!r} not in graph.json")
+                continue
+            if not isinstance(nval, dict):
+                problems.append(f"state.json node {nid!r} must be an object")
+                continue
+            status = nval.get("status")
+            if status not in VALID_NODE_STATUSES:
+                problems.append(
+                    f"state.json node {nid!r} has invalid status {status!r} (expected one of {sorted(VALID_NODE_STATUSES)})"
+                )
+            if status == "skipped" and not str(nval.get("reason", "")).strip():
+                problems.append(f"state.json node {nid!r} has status 'skipped' without a non-empty 'reason'")
+            gnode = node_map[nid]
+            if gnode.get("kind") == "panel" and status in {"passed", "findings"}:
+                expected_lenses = gnode.get("panel", {}).get("lenses", [])
+                if nval.get("lenses") != expected_lenses:
+                    problems.append(
+                        f"state.json panel {nid!r} lenses={nval.get('lenses')!r} do not match graph.json {expected_lenses!r}"
+                    )
+
+    return problems
 
 
 def validate_agents(agents_dir: Path, graph: dict | None = None) -> list[str]:
@@ -307,7 +476,7 @@ def validate_agents(agents_dir: Path, graph: dict | None = None) -> list[str]:
                     f"agent {agent_name!r}: outdated invariant — refers to Auditor as committer instead of Supervisor"
                 )
 
-        # 6. Supervisor: designated sole committer requiring passing audit + explicit user confirmation, and state.json management
+        # 6. Supervisor: designated sole committer requiring passing audit + explicit user confirmation, graph.json & state.json management
         if agent_name == "supervisor":
             if not re.search(
                 r"(?i)(?:sole\s+committer|only\s+(?:role|agent)\s+(?:permitted|allowed)\s+to\s+(?:run\s+)?`?git commit`?|only\s+role\s+that\s+runs\s+`?git commit`?)",
@@ -326,8 +495,10 @@ def validate_agents(agents_dir: Path, graph: dict | None = None) -> list[str]:
                 r"plans/active_milestones/.*?/state\.json", text
             ):
                 problems.append("supervisor: must specify reading and managing 'plans/active_milestones/{moniker}/state.json'")
+            if "graph.json" not in text:
+                problems.append("supervisor: must reference 'graph.json' as the authoritative topology declaration")
 
-        # 7. Deliberators: mandate asymmetry test and refuse deliberation if the test fails
+        # 7. Deliberators: mandate asymmetry test, refuse deliberation if the test fails, and enforce sequential Round 1
         if agent_name in {"spec-deliberator", "plan-deliberator"}:
             if not re.search(r"(?i)asymmetry\s+test", text):
                 problems.append(f"deliberator {agent_name!r}: must mandate the asymmetry test")
@@ -336,6 +507,11 @@ def validate_agents(agents_dir: Path, graph: dict | None = None) -> list[str]:
                 text,
             ):
                 problems.append(f"deliberator {agent_name!r}: must refuse deliberation if the asymmetry test fails")
+            for phrase in FORBIDDEN_PARALLEL_DELIBERATION_PHRASES:
+                if phrase in text.lower():
+                    problems.append(
+                        f"deliberator {agent_name!r}: contains parallel Round 1 deliberation phrase: {phrase!r}"
+                    )
 
     return problems
 
@@ -652,6 +828,14 @@ def main(argv: list[str] | None = None) -> int:
         help="path to agents directory (defaults to plugins/plan/agents/ or repo root agents/)",
     )
 
+    ist = sub.add_parser("init-state", help="initialize plans/active_milestones/<moniker>/state.json from graph.json")
+    ist.add_argument("moniker", help="milestone moniker slug (e.g. oauth-login)")
+    ist.add_argument("--phase", default="0", help="initial phase (default: '0')")
+    ist.add_argument("--output", type=Path, default=None, help="override output file path")
+
+    vst = sub.add_parser("validate-state", help="validate a milestone state.json file against graph.json")
+    vst.add_argument("state_file", type=Path, help="path to state.json")
+
     r = sub.add_parser("render", help="print a diagram")
     r.add_argument("flavor", choices=["ascii", "mermaid", "svg"])
     s = sub.add_parser("sync", help="rewrite the generated blocks in the READMEs")
@@ -659,6 +843,28 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     graph = load()
+
+    if args.cmd == "init-state":
+        state_payload = init_state(args.moniker, graph, phase=args.phase)
+        out_path = args.output or (Path.cwd() / "plans" / "active_milestones" / args.moniker / "state.json")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(state_payload, indent=2) + "\n", encoding="utf-8")
+        print(f"initialized {out_path} (graph_version={state_payload['graph_version']}, phase={state_payload['phase']})")
+        return 0
+
+    if args.cmd == "validate-state":
+        if not args.state_file.is_file():
+            print(f"state.json not found: {args.state_file}", file=sys.stderr)
+            return 1
+        state_data = json.loads(args.state_file.read_text(encoding="utf-8"))
+        problems = validate_state(state_data, graph)
+        if problems:
+            print(f"{len(problems)} problem(s) in {args.state_file}:", file=sys.stderr)
+            for p in problems:
+                print(f"  - {p}", file=sys.stderr)
+            return 1
+        print(f"state.json OK — {args.state_file} conforms to {graph.get('graph_version', 'plan-swarm@2.1')}")
+        return 0
 
     if args.cmd == "validate-agents":
         agents_dir = _resolve_agents_dir(args.agents_dir)

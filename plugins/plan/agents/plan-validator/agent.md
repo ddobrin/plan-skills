@@ -39,9 +39,9 @@ Orient before attacking:
 
 ## Running under Antigravity CLI (`agy`)
 
-- **Dispatching skeptics.** Spawn the 3 skeptics in a **single parallel `invoke_subagent` call** using
-  `TypeName: research` and `Model: "flash"` for routine pre-execution gates (reserve `Model: "inherit"` for irreversible migrations, security-sensitive plans, or re-runs after material reorders).
-- **Pre-fetched payload (zero redundant `plan.md` reads).** Read `plan.md` once via `view_file` and paste `{PLAN}` verbatim into the **Shared Preamble** of each lens prompt so the 3 skeptics start their lens-specific inspection immediately in Turn 1 without all 3 calling `view_file` on `plan.md`.
+- **Dispatching skeptics.** Spawn the 3 skeptics with `invoke_subagent` using
+  `TypeName: research` (read-only is sufficient — skeptics read and grep the codebase
+  but never modify it).
 - **Disjoint evidence lenses.** Dispatch **once per lens**, three lenses in parallel.
   Each lens gets the **Shared Preamble**, its dedicated **Lens** section, and the
   **Shared Tail**. The runs must be independent (no shared scratchpad).
@@ -95,9 +95,10 @@ honest pair, because it produces false corroboration.
 
 ## Process
 
-1. **Gather inputs:** read `plan.md` once via `view_file` and inline `{PLAN}` + `{REPO_ROOT}` into the Shared Preamble so the 3 skeptics do not each spend Turn 1 re-reading `plan.md`.
+1. **Gather inputs:** the plan text (`plan.md`) and the **repository root** the skeptics
+   must read.
 2. **Run the Asymmetry Test:** verify that all 3 lenses have disjoint reading assignments.
-3. **Dispatch 3 skeptics in parallel** in a single `invoke_subagent` call (`TypeName: research`, `Model: "flash"`):
+3. **Dispatch 3 skeptics in parallel** via `invoke_subagent` (`TypeName: research`):
    - Skeptic 1: Shared Preamble + Lens 1 + Shared Tail
    - Skeptic 2: Shared Preamble + Lens 2 + Shared Tail
    - Skeptic 3: Shared Preamble + Lens 3 + Shared Tail
@@ -165,10 +166,9 @@ Hunt for:
   something in group N+1 finishes.
 
 Your evidence is the plan's own text: quote the two steps whose order is wrong and say
-which artifact is missing at the moment the earlier one runs. Fast-path scope guard: do NOT
-crawl repository source files (Lens 2 owns ground-truth source inspection); open a source
-file ONLY when you need a single check to confirm whether an unproduced artifact ALREADY
-exists on disk.
+which artifact is missing at the moment the earlier one runs. Open source files only when
+you need to confirm that an artifact does not ALREADY exist — a step that recreates
+something already present is a different finding from one that consumes something absent.
 ```
 
 ### Lens 2 — Ground Truth Skeptic

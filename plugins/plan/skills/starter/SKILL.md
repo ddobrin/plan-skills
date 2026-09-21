@@ -35,45 +35,106 @@ execution starts and before anything is committed.
    the file wins — or the file is wrong and should be corrected first. Never let the two
    drift; that is the failure this artifact exists to prevent.
 3. **The phase is read, not inferred.** Each milestone carries
-   `plans/active_milestones/{moniker}/state.json` (schema:
-   `lib/graph/STATE.md`). Read it to resume; update it at every phase transition, every
-   gate decision, and every node completion. Inferring the phase from which files happen to
-   exist is how a resumed run re-enters the wrong phase.
+   `plans/active_milestones/{moniker}/state.json` (`"graph_version": "plan-swarm@2.1"`, schema
+   below and in `lib/graph/STATE.md`). **On any new request, your VERY FIRST file write MUST be
+   creating `plans/active_milestones/{moniker}/state.json` via `write_to_file` (or
+   `python3 plugins/plan/lib/graph/graph.py init-state {moniker}`) BEFORE dispatching `research`
+   or `product-owner`.** Read it to resume; update it at every phase transition, every gate
+   decision, and every node completion. Inferring the phase from which files happen to exist is
+   how a resumed run re-enters the wrong phase.
 4. **The gates hold.** Stop for user approval after planning and before every commit. These
    are the two irreversibles.
 5. **You hold the commit.** You are the only role that runs `git commit`, and only after the
    auditor passes and the user says yes. Other roles are explicitly barred from committing
    because they have no user-facing turn in which to obtain that approval.
-6. **Delegate what is worth delegating.** Dispatch a subagent for work that is genuinely
-   sizeable or independently parallelizable. Do not dispatch one for something you can finish
-   in a handful of tool calls, and where one agent suffices, use one rather than several.
-7. **Coalesce state writes with dispatches.** Read `plans/00-ROADMAP.md` and `state.json` in a
-   single parallel `view_file` call. Whenever you transition phases, record a skipped
-   deliberator (`"status": "skipped"`), or mark a node `"running"`, emit the `state.json`
-   write and the next `invoke_subagent` call in the **same parallel tool-call batch** — never
-   burn an entire LLM round-trip solely to write `"status": "running"` before spawning a subagent.
+6. **Delegate role work.** You are the orchestrator, never a role worker. Always dispatch the
+   designated role subagent (`research`, `product-owner`, `architect`, `engineer`, `auditor`,
+   validators, deliberators) with file paths rather than doing role work yourself.
+
+## State Machine Schema (`plans/active_milestones/{moniker}/state.json`)
+
+You are the **exclusive writer** of `state.json`. Every other node is read-only.
+
+```json
+{
+  "graph_version": "plan-swarm@2.1",
+  "run_id": "ms_{moniker}_{hash}",
+  "moniker": "{moniker}",
+  "phase": "0 | 1 | 1.gate | 2 | 2.gate | 3 | 4 | 4.gate | 5",
+  "updated": "ISO-8601 UTC timestamp",
+  "gates": [
+    { "id": "plan-approval", "state": "not-reached | pending | approved | rejected" },
+    { "id": "commit", "state": "not-reached | pending | approved | rejected" }
+  ],
+  "nodes": {
+    "research": { "status": "pending | running | done | failed", "artifact": "plans/active_milestones/{moniker}/context.md" },
+    "product-owner": { "status": "pending | running | done | failed", "artifact": "spec.md" },
+    "spec-deliberator": { "status": "pending | running | done | skipped", "reason": "asymmetry test failed — context was mergeable" },
+    "spec-validator": {
+      "status": "pending | running | passed | findings | failed",
+      "report": "adversarial-reviews/spec-validation.md",
+      "lenses": ["internal-consistency", "missing-requirement", "malicious-compliance"],
+      "confirmed": 0, "single_vote": 0, "cross_lens": 0, "single_vote_triaged": true
+    },
+    "architect": { "status": "pending | running | done | failed", "artifact": "plan.md" },
+    "plan-deliberator": { "status": "pending | running | done | skipped", "reason": "asymmetry test failed — context was mergeable" },
+    "plan-validator": {
+      "status": "pending | running | passed | findings | failed",
+      "report": "adversarial-reviews/plan-validation.md",
+      "lenses": ["sequencing", "ground-truth", "blast-radius"],
+      "confirmed": 0, "single_vote": 0, "cross_lens": 0, "first_domino": null, "single_vote_triaged": true
+    },
+    "engineer": { "status": "pending | running | done | failed", "artifact": "plan.md#todos" },
+    "simplifier": { "status": "pending | running | done | skipped", "reason": "optional clarity pass skipped" },
+    "auditor": { "status": "pending | running | passed | failed", "artifact": "plans/audit/AUDIT_{moniker}.md" },
+    "implementation-validator": {
+      "status": "pending | running | passed | findings | failed",
+      "report": "adversarial-reviews/implementation-validation.md",
+      "lenses": ["claim-vs-reality", "failure-paths", "blast-radius"],
+      "confirmed": 0, "single_vote": 0, "cross_lens": 0, "single_vote_triaged": true
+    },
+    "visual-implementation-recap": { "status": "pending | running | done | skipped", "reason": "optional visual recap skipped" }
+  },
+  "groups": [
+    {
+      "id": "1",
+      "tasks": { "1.A": "done", "1.B": "done" },
+      "audit": "not-reached | passed | failed",
+      "audit_rounds": 1,
+      "implementation_validation": "adversarial-reviews/implementation-validation.md",
+      "committed": "git_commit_sha"
+    }
+  ]
+}
+```
 
 ## The State Machine
 
-Read `state.json` (or, for a milestone that predates it, reconstruct once from the artifacts
-and write the file). Execute immediately from the phase it names, stopping only at the two
-human gates (Phase 3 and the Phase 4 Commit Gate) or Phase 5 release confirmation.
+Read `plans/00-ROADMAP.md` and `plans/active_milestones/{moniker}/state.json` (or, for a new
+request or a milestone that predates it, immediately create `state.json` on disk via
+`write_to_file` before doing anything else). Execute from the phase `state.json` names.
 
 ### Phase 0 — Strategic Research
 **Trigger:** a new request.
-Understand the affected area of the codebase and record it as a context report in
-`plans/research/`, named for the topic (e.g. `plans/research/oauth_context.md`). Dispatch an
-investigation agent when the surface is wide enough to warrant one; for a narrow, well-located
-change, investigate directly and write the report yourself.
+1. **Bootstrap `state.json` FIRST:** Derive a kebab-case `{moniker}` for the milestone (e.g.
+   `oauth-login`) and write `plans/active_milestones/{moniker}/state.json` (`write_to_file` or
+   `python3 plugins/plan/lib/graph/graph.py init-state {moniker}`) with `phase: "0"` and
+   `nodes.research.status: "running"`.
+2. **Dispatch `research`:** Dispatch a codebase investigation subagent (`TypeName: research`) to
+   record a context report in `plans/research/{moniker}_context.md` and
+   `plans/active_milestones/{moniker}/context.md`.
+3. **Record completion:** Update `plans/active_milestones/{moniker}/state.json` with
+   `nodes.research.status: "done"` and advance `phase: "1"`.
 
 ### Phase 1 — Product Discovery
-**Trigger:** a context report exists.
+**Trigger:** a context report exists and `state.json` is at `phase: "1"`.
 
-1. **Spec.** Dispatch `product-owner` (or `visual-product-owner` when the review benefits
-   from visuals): *"Read the context report at `{path}`. If trivial, update
-   `plans/00-ROADMAP.md` directly. Otherwise grill the request, create the milestone, move the
-   context report to `plans/active_milestones/{moniker}/context.md`, and write
-   `plans/active_milestones/{moniker}/spec.md`."*
+1. **Spec.** Update `state.json` (`nodes["product-owner"].status: "running"`) and dispatch
+   `product-owner` (or `visual-product-owner` when the review benefits from visuals): *"Read the
+   context report at `plans/active_milestones/{moniker}/context.md`. If trivial, update
+   `plans/00-ROADMAP.md` directly. Otherwise grill the request, update `plans/00-ROADMAP.md` for
+   milestone `{moniker}`, and write `plans/active_milestones/{moniker}/spec.md`."* When complete,
+   update `state.json` (`nodes["product-owner"].status: "done"`).
 2. **Deliberate — optional.** If the spec depends on knowledge siloed across stakeholders,
    docs, or repos, dispatch `spec-deliberator`. Run its asymmetry test first: name a fact
    only one delegate would hold. If you cannot, skip it and revise centrally — a panel of

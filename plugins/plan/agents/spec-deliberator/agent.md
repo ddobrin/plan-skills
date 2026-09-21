@@ -10,7 +10,6 @@ description: >-
   on the result afterward.
 tools:
   - invoke_subagent
-  - send_message
   - view_file
   - write_to_file
   - replace_file_content
@@ -34,7 +33,7 @@ Orient before convening the panel:
    **MANDATORY REFUSAL RULE:** If the asymmetry test fails — the context fits in one
    prompt or can be merged — you **MUST REFUSE DELIBERATION**: STOP immediately, do NOT
    convene delegates, and instruct the user and supervisor to revise centrally instead.
-3. If and only if the asymmetry test passes, partition disjoint bundles and begin round 1.
+3. If and only if the asymmetry test passes, partition disjoint bundles and begin round 1 (sequential turns).
 
 Relay turns verbatim across bounded rounds (hard cap of 4 rounds), require earned acceptance basis, then hand the revised spec to spec-validator.
 
@@ -42,10 +41,16 @@ Relay turns verbatim across bounded rounds (hard cap of 4 rounds), require earne
 
 ## Running under Antigravity CLI (`agy`)
 
-- **Dispatching delegates.** Spawn each delegate with `invoke_subagent` (`TypeName: research`, `Model: "flash"` for routine deliberation; only you, the orchestrator, edit `spec.md`).
-- **Low-latency Round 1 disjoint fan-out + `send_message` continuation:**
-  1. **Round 1 (Parallel Disjoint Bundle Disclosure):** Because the 3 delegates' private context bundles are disjoint by construction, dispatch all 3 delegates **in parallel in a single `invoke_subagent` call** for Round 1 (`empty transcript`, `v0`). Collect all 3 JSON turns in 1 wall-clock turn, append all 3 utterances verbatim to `{TRANSCRIPT}`, and merge non-conflicting amendments into **Proposal `v1`**.
-  2. **Rounds 2+ (`send_message` Continuation or Cached Re-Invocation):** Prefer continuing the live delegate subagents via `send_message` (passing the verbatim Round 1 transcript + Proposal `v1`). If Proposal `v1` has zero cross-bundle conflicts, message all 3 delegates in parallel to verify `v1` against their bundles and return earned `acceptance_basis` (converging in **2 wall-clock turns**); if conflicting edits exist, relay turns sequentially across the disputing delegates. If a harness requires fresh `invoke_subagent` calls in Rounds 2+, supply the **FULL verbatim transcript** plus each delegate's own Round 1 `disclosures` (`bundle_evidence_digest`) and instruct it **not** to re-read files already inspected in Round 1.
+- **Dispatching delegates.** Spawn each delegate with `invoke_subagent` — use
+  `TypeName: research` when its bundle includes "go read this code/these docs";
+  read-only is sufficient because only you, the orchestrator, edit `spec.md`.
+- **Multi-round dialogue — important caveat.** Antigravity's `invoke_subagent` is
+  **fire-and-return**: there is no persistent channel to continue a subagent across
+  rounds (the Claude "SendMessage / never respawn" mechanism is unavailable). For each
+  round after the first, **re-invoke the delegate fresh and supply the FULL verbatim
+  transcript** plus its private bundle, so it can reconstruct its position. Relay stays
+  **verbatim, never paraphrased** — lossy relay reintroduces the exact information loss
+  deliberation exists to overcome.
 - Your own writes are limited to `spec.md` and the record under
   `plans/active_milestones/{moniker}/deliberations/`.
 - The model is selected globally (`/model`).
@@ -99,8 +104,15 @@ roles: **disjoint bundles, jointly covering everything the spec depends on**.
 2. **Author delegate prompts** from the template below, varying only role, private
    bundle, and concerns. Keep "acceptance requires a basis" and "final message MUST
    be JSON" verbatim.
-3. **Dispatch round 1 in parallel (disjoint bundle disclosure → Proposal `v1`):** spawn all 3 delegates concurrently in a single `invoke_subagent` call (each with `spec.md` + its disjoint private bundle, empty transcript); parse all 3 JSON turns, record all 3 utterances verbatim in `{TRANSCRIPT}`, and synthesize non-conflicting amendments into Proposal `v1`.
-4. **Run rounds 2+ via `send_message` (or re-invocation with cached `disclosures`):** if Proposal `v1` has zero conflicting amendments, query all 3 delegates in parallel with the verbatim Round 1 transcript + Proposal `v1` to confirm earned `acceptance_basis`; if conflicting amendments exist, relay turns sequentially across the disputing delegates (preserving the FULL verbatim transcript and instructing delegates not to re-read files already inspected in Round 1).
+3. **Dispatch round 1 sequentially** (NOT parallel — delegate 2 must see delegate 1's
+   utterance). Spawn delegate 1 (spec + its bundle, empty transcript) via
+   `invoke_subagent`; parse its JSON. Spawn delegate 2 with its prompt + the transcript
+   so far (verbatim); then 3. Track `current_proposal` as a versioned edit list (v1,
+   v2, …) and record which version each delegate accepted.
+4. **Run rounds 2+ by re-invoking each delegate with the full verbatim transcript**
+   (see the `agy` caveat above — there is no persistent channel, so each round is a
+   fresh `invoke_subagent` seeded with everything said so far, its private bundle, and
+   the current proposal version).
 5. **Terminate:** convergence = every delegate accepted the *same* version. Round cap
    (4) without convergence → arbitrate: adopt the majority position per disputed edit,
    record unresolved disputes for the user. **Never silently pick a side where a
