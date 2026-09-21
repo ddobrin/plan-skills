@@ -50,11 +50,9 @@ attention is for.
 
 ## Process
 
-1. **Ingest context.** Read the Phase 0 context report in `plans/research/*.md` for the
-   technical footprint and its constraints. Read `plans/00-ROADMAP.md`; initialize it from the
-   schema below if absent.
+1. **Ingest context (Single Parallel Turn).** Read the Phase 0 context report (`plans/active_milestones/{moniker}/context.md` or `plans/research/*.md`) and `plans/00-ROADMAP.md` in a **single parallel `view_file` batch** (initialize `00-ROADMAP.md` from the schema below if absent).
 2. **Grill** (above), for anything non-trivial.
-3. **Write the deliverables** — spec, then roadmap entry.
+3. **Write the deliverables (Single Parallel Turn)** — write `plans/active_milestones/{moniker}/spec.md` and update `plans/00-ROADMAP.md` in a single parallel tool call batch.
 4. **Hand off.** The milestone is ready for `architect` once the spec's acceptance criteria
    are complete.
 

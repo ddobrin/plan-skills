@@ -22,8 +22,9 @@ description: "The Visual Software Architect. Does the architect's planning work,
 Produce `plan.md` first, using the same discipline as `architect`:
 
 ### 1. Investigation Phase
+*   **Reuse Phase 0 Context First (Fast-Path):** In Turn 1, read `plans/active_milestones/{moniker}/spec.md` and `plans/active_milestones/{moniker}/context.md` (or `plans/research/*.md`) in parallel. Use the candidate files and architectural patterns already discovered in Phase 0 so you can batch-read the target source and test files directly in Turn 2 instead of re-crawling the directory tree.
 *   **Deep Investigation:** Comprehensively analyze the codebase to understand existing patterns, dependencies, and business logic.
-*   **Action:** Map the affected area by opening the files, tracing the callers, and reading the existing tests. Never plan against inferred file names.
+*   **Action:** Map the affected area by opening the files in parallel `view_file` batches, tracing the callers, and reading the existing tests. Never plan against inferred file names.
 *   **Mandatory Questions to Answer Internally:**
     *   Which specific existing files will be modified?
     *   What is the established architectural pattern we must adhere to?
@@ -86,14 +87,14 @@ Create `plans/active_milestones/{moniker}/plan.md` with **exactly** this structu
 ## 🎨 VISUAL RENDERING PROTOCOL
 Run this **only after `plan.md` is complete**. `plan.md` is the source of truth; the HTML is derived.
 
-### 1. Instantiate the template
-*   Copy `${CLAUDE_PLUGIN_ROOT}/skills/visual-architect/assets/template.html` to `plans/active_milestones/{moniker}/visual-plan.html`.
-*   Replace `{{MONIKER}}` with the milestone moniker and `{{TIMESTAMP}}` with the current date/time.
-*   **Do not modify** the template's `<head>`, `<style>`, `<nav>`, or bottom `<script>` (the "chrome"). You author only section content.
+### 1. Instantiate the template (Zero-Chrome-Read Fast-Path)
+*   Copy `${CLAUDE_PLUGIN_ROOT}/skills/visual-architect/assets/template.html` to `plans/active_milestones/{moniker}/visual-plan.html` via `cp` in `run_command` (can be batched in the same turn as writing `plan.md`).
+*   **Never `view_file` or regenerate the 355 lines of `<head>`, `<style>`, `<nav>`, or bottom `<script>` chrome.** The 9 paired marker blocks (`<!-- VA:OVERVIEW -->` … `<!-- /VA:OVERVIEW -->`, `<!-- VA:ARCHITECTURE -->`, `<!-- VA:FILE-MAP -->`, `<!-- VA:CODE -->`, `<!-- VA:API -->`, `<!-- VA:SCHEMA -->`, `<!-- VA:WIREFRAMES -->`, `<!-- VA:QUESTIONS -->`, `<!-- VA:COMMENTS -->`) are invariant anchors.
+*   Replace `{{MONIKER}}` with the milestone moniker, `{{TIMESTAMP}}` with the current date/time, and all 9 marker sections in a **single `multi_replace_file_content` call** on `visual-plan.html`.
 
-### 2. Fill the nine surfaces
-*   For each section, replace the demo content between its paired markers (`<!-- VA:OVERVIEW -->` … `<!-- /VA:OVERVIEW -->`, etc.) with content authored from `plan.md` (+ `spec.md` for grounding, + `data-model.md` / `api-contracts.md` when present).
-*   Use **`${CLAUDE_PLUGIN_ROOT}/skills/visual-architect/references/component-catalog.md`** for the exact HTML fragment per surface, and **`references/exemplar.md`** for a worked example of selecting surfaces for a real plan.
+### 2. Fill the nine surfaces (Single-Batch Replacement)
+*   For each section, replace the demo content between its paired markers (`<!-- VA:OVERVIEW -->` … `<!-- /VA:OVERVIEW -->`, etc.) with content authored from `plan.md` (+ `spec.md` for grounding, + `data-model.md` / `api-contracts.md` when present) in one `multi_replace_file_content` call.
+*   Use **`${CLAUDE_PLUGIN_ROOT}/skills/visual-architect/references/component-catalog.md`** for the exact HTML fragment per surface. Only read **`references/exemplar.md`** if surface selection is ambiguous — skip it on routine runs to save context tokens.
 *   Mapping from plan → surface:
     *   Objective / context → **Overview** (lead with one concrete product walkthrough).
     *   System structure & data flow → **Architecture** (Mermaid `flowchart` / `sequenceDiagram`).

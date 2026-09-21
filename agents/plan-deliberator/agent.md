@@ -10,6 +10,7 @@ description: >-
   run plan-validator on the result afterward.
 tools:
   - invoke_subagent
+  - send_message
   - view_file
   - write_to_file
   - replace_file_content
@@ -36,8 +37,7 @@ Orient before convening the panel:
    subsystem or context fits in one prompt — you **MUST REFUSE DELIBERATION**: STOP
    immediately, do NOT convene delegates, and instruct the user and supervisor to revise
    centrally instead.
-3. If and only if the asymmetry test passes, partition disjoint territories and begin round 1
-   (each delegate deep-reads its territory, then sequential turns).
+3. If and only if the asymmetry test passes, partition disjoint territories and begin round 1.
 
 Relay turns verbatim across bounded rounds (hard cap of 4 rounds), require earned acceptance basis, then hand the revised plan to plan-validator.
 
@@ -46,17 +46,10 @@ Relay turns verbatim across bounded rounds (hard cap of 4 rounds), require earne
 ## Running under Antigravity CLI (`agy`)
 
 - **Dispatching delegates.** Spawn each delegate with `invoke_subagent` using
-  `TypeName: research` (they deep-read and grep the codebase but do not modify it —
-  only you, the orchestrator, edit `plan.md`).
-- **Multi-round dialogue — important caveat.** Antigravity's `invoke_subagent` is
-  **fire-and-return**: there is no persistent channel to continue a subagent across
-  rounds (the Claude "SendMessage / never respawn" mechanism is unavailable). Instead,
-  for each round after the first, **re-invoke the delegate fresh and supply the FULL
-  verbatim transcript** (every prior turn, plus its own earlier turns and their cited
-  evidence) in the prompt, so it can reconstruct its position. This costs re-reading
-  the territory each round; keep territories tight and the round cap at 4 to bound it.
-  Relay stays **verbatim, never paraphrased** — a paraphrased signature or step number
-  is exactly the information loss deliberation exists to overcome.
+  `TypeName: research` (`Model: "flash"` for routine deliberation; they deep-read and grep the codebase but do not modify it — only you, the orchestrator, edit `plan.md`).
+- **Low-latency Round 1 parallel territory fan-out + `send_message` continuation:**
+  1. **Round 1 (Parallel Disjoint Territory Investigation):** Because the 3 delegates' territories (`Intent`, `Codebase`, `Delivery`) are disjoint by construction, dispatch all 3 delegates **in parallel in a single `invoke_subagent` call** for Round 1 (`empty transcript`, `v0`). All 3 delegates deep-read their territories simultaneously (`max(T1, T2, T3)` instead of `T1 + T2 + T3`) and return their initial `disclosures` (`file:line` / spec clause / CI command) + `amendments` in **1 wall-clock turn**. Append all 3 utterances verbatim to `{TRANSCRIPT}` and merge non-conflicting amendments into **Proposal `v1`**.
+  2. **Rounds 2+ (`send_message` Continuation or Cached Re-Invocation):** Prefer continuing the live delegate subagents via `send_message` (passing the verbatim Round 1 transcript + Proposal `v1`) so they retain their territory context in memory without re-reading the codebase. If Proposal `v1` has zero conflicting edits across territories, message all 3 delegates in parallel to verify `v1` against their territories and return earned `acceptance_basis` (converging in **2 wall-clock turns**); if conflicting trade-offs exist, relay turns sequentially across the disputing delegates. If a harness requires fresh `invoke_subagent` calls in Rounds 2+, supply the **FULL verbatim transcript** plus each delegate's own Round 1 `disclosures` (`territory_evidence_digest`) and instruct it **not** to re-open or re-grep files already inspected in Round 1 unless another delegate's turn raises a new `file:line` question.
 - Your own writes are limited to `plan.md` and the record under
   `plans/active_milestones/{moniker}/deliberations/`.
 - The model is selected globally (`/model`).
@@ -126,19 +119,8 @@ everything the plan depends on**.
 2. **Author delegate prompts** from the template below, varying only territory,
    investigation instructions, and guards. Keep "cite your territory", "acceptance
    requires a basis", and "final message MUST be JSON" verbatim.
-3. **Dispatch round 1 sequentially** (NOT parallel — delegate 2 must see delegate 1's
-   utterance, or proposals oscillate). Spawn delegate 1 via `invoke_subagent`
-   (`TypeName: research` — it must read and grep the codebase); its prompt includes an
-   **investigation phase** — deep-read the territory *before* speaking. Parse its JSON.
-   Spawn delegate 2 with its prompt + the transcript so far (verbatim), then 3. Track
-   `current_proposal` as a versioned plan edit list (v1, v2, …): reorders,
-   group-boundary changes, inserted/removed/retargeted steps. Record which version each
-   delegate accepted.
-4. **Run rounds 2+ by re-invoking each delegate with the full verbatim transcript**
-   (see the `agy` caveat above — there is no persistent channel, so each round is a
-   fresh `invoke_subagent` seeded with everything said so far and the current proposal
-   version). A delegate may investigate further mid-deliberation ("let me check whether
-   `schedule()` tolerates a null") — that is the pattern working, not a stall.
+3. **Dispatch round 1 in parallel (disjoint territory investigation → Proposal `v1`):** spawn all 3 delegates concurrently in a single `invoke_subagent` call (`TypeName: research`, `Model: "flash"` — each deep-reads its assigned territory *before* speaking); parse all 3 JSON turns, record all 3 utterances verbatim in `{TRANSCRIPT}`, and merge non-conflicting amendments into Proposal `v1`.
+4. **Run rounds 2+ via `send_message` (or re-invocation with cached `disclosures`):** if Proposal `v1` has zero conflicting edits, query all 3 delegates in parallel with the verbatim Round 1 transcript + Proposal `v1` to confirm earned `acceptance_basis`; if conflicting trade-offs exist, relay turns sequentially across the disputing delegates (preserving the FULL verbatim transcript and instructing delegates not to re-read files already inspected in Round 1 unless a new `file:line` question requires it).
 5. **Terminate:** convergence = every delegate accepted the *same* version. Round cap
    (4) without convergence → arbitrate: adopt the majority position per disputed edit,
    record unresolved disputes. **Never silently overrule a delegate citing a hard

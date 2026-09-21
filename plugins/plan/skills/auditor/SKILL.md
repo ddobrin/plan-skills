@@ -55,16 +55,10 @@ Scan every modified file for work that was deferred rather than done:
 
 ## Process
 
-1. **Ingest.** Read the plan; extract its Success Criteria and per-task steps. Read `spec.md`
-   for the acceptance criteria the plan is meant to satisfy.
-2. **Build and test once.** Find the project's build and test commands in `CLAUDE.md` or the
-   package manifest. Run the build, then the suite. Capture the output — you will attribute
-   results to individual steps from this one run rather than re-running per step.
-3. **Verify each step statically.** Locate the code the step claims to have produced. Compare
-   signatures and structure against what the plan specified. Mark `Pass` / `Partial` / `Fail`
-   with its evidence.
-4. **Run the shortcut scan** across the modified files.
-5. **Write the report.**
+1. **Ingest in one parallel batch.** Read `plan.md` and `spec.md` in a **single parallel `view_file` call**; extract the plan's Success Criteria, per-task steps, and target files alongside the spec's acceptance criteria.
+2. **Build, test, and run the shortcut scan once (batched execution pass).** Find the project's build and test commands in `CLAUDE.md`/`GEMINI.md` or the package manifest. In a **single shell pass** (or parallel tool batch), run the build, the test suite, and a combined regex anti-shortcut scan (`TODO|FIXME|HACK|skip\(|xit\(|@Ignore|implement actual logic|future phase`) across all modified files (`git diff --name-only`). Capture the output once and attribute results to individual steps rather than re-running per step.
+3. **Verify all steps statically in one parallel `view_file` batch.** Open all modified source and test files named by the group's steps concurrently in a single `view_file` batch. Compare signatures and structure against what the plan specified and mark `Pass` / `Partial` / `Fail` with `file:line` evidence.
+4. **Write the report** to `plans/audit/AUDIT_[Plan_Name].md` in a single `write_to_file` call.
 
 ## The Audit Report
 

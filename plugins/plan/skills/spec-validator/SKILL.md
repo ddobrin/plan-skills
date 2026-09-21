@@ -53,9 +53,9 @@ reliably the noise. Recall is the skeptic's job; precision is the gate's.
 
 ## Process
 
-### 1. Gather inputs
-- The spec text (paste it into each prompt, or give an absolute path the agents can read).
-- Any context the spec depends on but does not restate (linked docs, constraints).
+### 1. Gather inputs & templates in one parallel batch
+- Read `spec.md`, any linked `context.md` / `00-ROADMAP.md`, `references/skeptic-prompt.md`, and `references/review-template.md` in a **single parallel `view_file` tool-call batch** (`references/worked-example.md` is author documentation — do **not** read it at runtime).
+- Embed the full `{SPEC}` and `{CONTEXT}` text directly into each skeptic prompt so the 3 skeptics never waste a tool-call turn reading `spec.md` or `context.md` from disk.
 
 ### 2. Author the skeptic prompt
 Fill the template in `references/skeptic-prompt.md`, which also carries the aggregation

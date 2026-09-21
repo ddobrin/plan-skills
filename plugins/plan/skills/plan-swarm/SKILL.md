@@ -37,3 +37,7 @@ When invoked via `/plan-swarm [arguments]`:
 5. **Two Mandatory Human Gates & Sole Committer Invariant:**
    - **Phase 3 (`plan-approval` gate):** STOP after `plan-validator` passes and wait for the user to explicitly approve `spec.md` and `plan.md` before dispatching `engineer`.
    - **Phase 4 (`commit` gate):** You are the **ONLY** role permitted to run `git commit`. Commit only after `auditor` reports PASS, `implementation-validator` has no open confirmed defects, AND the user explicitly confirms (`"yes"`).
+6. **Low-Latency Execution & Tool Batching:**
+   - **Parallel Orientation:** Always read `plans/00-ROADMAP.md` and `plans/active_milestones/{moniker}/state.json` in a single parallel `view_file` tool batch. When invoked with an actionable request or `resume`, transition immediately into the target non-gate phase in the same turn without an extra confirmation stop.
+   - **Coalesced State & Dispatch Turns:** Emit `state.json` updates (`write_to_file` / `replace_file_content`) in the **same parallel tool-call batch** as the downstream `invoke_subagent` call (e.g. recording `"status": "skipped"` for an optional deliberator while simultaneously dispatching the validator panel) to avoid standalone bookkeeping turns.
+   - **Phase 0 Fast-Path:** If a request targets a narrow, well-located surface (≤ 3 known files), read those files in one parallel `view_file` batch and write `plans/research/{topic}_context.md` directly; spawn a `research` subagent (`Model: "flash"`) only when wide repo exploration is needed.

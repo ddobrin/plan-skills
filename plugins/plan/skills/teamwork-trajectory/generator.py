@@ -4,16 +4,35 @@ import json
 import re
 import sys
 
+ROSTER_ROW_RE = re.compile(
+    r'^\|\s*([a-zA-Z0-9_]+)\s*\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|',
+    re.MULTILINE,
+)
+CONV_ID_RE = re.compile(r'Conversation ID:\s*([a-f0-9\-]+)', re.IGNORECASE)
+ORCH_ID_RE = re.compile(r'Orchestrator:\s*([a-f0-9\-]+)', re.IGNORECASE)
+ROLES_RE = re.compile(r'Roles:\s*\[?([^\]\r\n]+)\]?', re.IGNORECASE)
+NEWLINES_RE = re.compile(r'[\r\n]+')
+
+
 def main():
     print("Initializing Teamwork Trajectory parser...")
     
-    # Resolve the workspace root containing .agents
-    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # Resolve the workspace root containing .agents (check cwd tree first so
+    # global plugin installations resolve the active project workspace immediately)
+    current_dir = os.path.abspath(os.getcwd())
     workspace_root = current_dir
     while workspace_root and workspace_root != os.path.dirname(workspace_root):
         if os.path.exists(os.path.join(workspace_root, '.agents')):
             break
         workspace_root = os.path.dirname(workspace_root)
+
+    if not os.path.exists(os.path.join(workspace_root, '.agents')):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        workspace_root = current_dir
+        while workspace_root and workspace_root != os.path.dirname(workspace_root):
+            if os.path.exists(os.path.join(workspace_root, '.agents')):
+                break
+            workspace_root = os.path.dirname(workspace_root)
         
     agents_dir = os.path.join(workspace_root, '.agents')
     if not os.path.exists(agents_dir):
@@ -32,7 +51,7 @@ def main():
             content = f.read()
         
         # Match table rows containing agent definitions
-        roster_matches = re.findall(r'^\|\s*([a-zA-Z0-9_]+)\s*\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|', content, re.MULTILINE)
+        roster_matches = ROSTER_ROW_RE.findall(content)
         for match in roster_matches:
             agent_name = match[0].strip()
             agent_type = match[1].strip()
@@ -110,16 +129,16 @@ def main():
             
             # Find Conversation ID
             if not agent.get('conv_id') or agent['conv_id'] == 'unknown' or len(agent['conv_id']) < 10:
-                cid_match = re.search(r'Conversation ID:\s*([a-f0-9\-]+)', b_content, re.IGNORECASE)
+                cid_match = CONV_ID_RE.search(b_content)
                 if cid_match:
                     agent['conv_id'] = cid_match.group(1).strip()
                 else:
-                    cid_match2 = re.search(r'Orchestrator:\s*([a-f0-9\-]+)', b_content, re.IGNORECASE)
+                    cid_match2 = ORCH_ID_RE.search(b_content)
                     if cid_match2:
                         agent['conv_id'] = cid_match2.group(1).strip()
                         
             # Match Roles array
-            roles_match = re.search(r'Roles:\s*\[?([^\]\r\n]+)\]?', b_content, re.IGNORECASE)
+            roles_match = ROLES_RE.search(b_content)
             if roles_match:
                 roles = [r.strip().replace("'", "").replace('"', '') for r in roles_match.group(1).split(',')]
                 
@@ -135,7 +154,7 @@ def main():
                 paragraphs = paragraphs[1:]
                 
             summary = " ".join(paragraphs[:2]) if paragraphs else "Handoff report completed."
-            summary = re.sub(r'[\r\n]+', ' ', summary)
+            summary = NEWLINES_RE.sub(' ', summary)
             
         # Discover all produced MD documents
         produced_docs = []

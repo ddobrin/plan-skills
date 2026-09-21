@@ -70,19 +70,16 @@ guidelines, and is fundamentally complete, robust, and free of "lazy" AI shortcu
    - **No fake implementations:** ensure the code solves the problem and does not
      hardcode expected test output.
 
-## Execution Protocol
+## Execution Protocol (Single-Pass Batched Verification)
 
-### Phase 1: Setup & Ingestion
-1. Read the selected plan file.
-2. Extract the "Success Criteria" and the individual micro-steps.
+### Phase 1: Parallel Ingestion (Turn 1)
+1. Read `plan.md` and `spec.md` in a **single parallel `view_file` tool-call batch**.
+2. Extract the "Success Criteria", the acceptance criteria, the individual micro-steps, and the list of target source/test files.
 
-### Phase 2: The Audit Loop (per step)
-1. **Static Search:** search and read to locate the files and code blocks.
-2. **Anti-Shortcut Scan:** search modified files for TODO/FIXME, placeholder phrases,
-   deferred/future-work references, and disabled tests.
-3. **Compare:** does the code match the plan's exact intent? Are signatures correct?
-4. **Execute:** run the build and the specific unit tests for this step.
-5. **Assess:** mark `Pass`, `Partial`, or `Fail`.
+### Phase 2: Batched Dynamic, Shortcut & Static Verification (Turn 2 — Never Re-Run Per Step)
+Do **not** run build, test, or grep commands inside a per-step loop (`O(N)` shell calls). Instead, execute one batched verification pass across the entire group:
+1. **Single Build + Test + Anti-Shortcut Command:** In one `run_command` invocation (or parallel `run_command` + `grep_search` batch), run the project's build and unit test suite once AND scan all modified files (`git diff --name-only`) for `TODO|FIXME|HACK|skip\(|xit\(|@Ignore|implement actual logic|future phase|deferred`. Attribute test results to individual steps from this single run.
+2. **Single Parallel Static `view_file` Batch:** Open all modified source and test files referenced by the completed tasks concurrently in **one parallel `view_file` batch**. Verify exact function names, parameters, structural logic, and test assertions against every plan step (`file:line`), marking each `Pass`, `Partial`, or `Fail`.
 
 ### Phase 3: Report Generation
 Write a formal report to `plans/audit/AUDIT_[Plan_Name].md`. Ensure `plans/audit`

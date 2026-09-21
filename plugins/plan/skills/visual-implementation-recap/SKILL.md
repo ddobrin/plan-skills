@@ -17,23 +17,22 @@ description: "The Implementation Recap renderer. After the engineer has implemen
 4.  **Honest Reflection:** Surface what is unfinished or risky. A `⚠️ Partial` step, a downgraded finding, or a deferred follow-up belongs in the recap — never airbrushed out.
 5.  **Read-Only & No Commit:** You read the codebase and the diff; you write only to `plans/active_milestones/`. You never run `git commit` — that belongs to the `starter` / supervisor role, after a passing audit and explicit user approval.
 
-## ⚡ RENDERING PROTOCOL
+## ⚡ RENDERING PROTOCOL (2-TURN FAST-PATH)
 Run this **after the audit exists** (ideally PASS). The git diff + `plan.md` + audit report are the source of truth; the HTML is derived.
 
-### 1. Instantiate the template
-*   Copy `${CLAUDE_PLUGIN_ROOT}/skills/visual-implementation-recap/assets/template.html` to `plans/active_milestones/{moniker}/visual-recap.html`.
-*   Replace `{{MONIKER}}` with the milestone moniker and `{{TIMESTAMP}}` with the current date/time.
-*   **Do not modify** the template's `<head>`, `<style>`, `<nav>`, or bottom `<script>` (the "chrome"). You author only section content.
+### 1. Turn 1: Instantiate Template & Gather Grounding in One Parallel Turn
+Issue all of the following in a **single parallel tool call batch**:
+*   **Shell (`run_command`):** Copy `${CLAUDE_PLUGIN_ROOT}/skills/visual-implementation-recap/assets/template.html` to `plans/active_milestones/{moniker}/visual-recap.html` AND capture `git status --short`, `git diff --stat HEAD`, and `git diff HEAD` in one combined shell command:
+    `cp "${CLAUDE_PLUGIN_ROOT}/skills/visual-implementation-recap/assets/template.html" "plans/active_milestones/{moniker}/visual-recap.html" && git status --short && echo "=== STAT ===" && git diff --stat HEAD && echo "=== DIFF ===" && git diff HEAD`
+*   **File Reads (`view_file` in parallel):**
+    *   `plans/active_milestones/{moniker}/plan.md` (for the task checklist and `[x]` annotations)
+    *   `plans/audit/AUDIT_[Plan_Name].md` (for the verdict, per-step evidence, anti-shortcut scan, and findings)
+    *   `plans/active_milestones/{moniker}/spec.md` (optional, for outcome phrasing)
+    *   `${CLAUDE_PLUGIN_ROOT}/skills/visual-implementation-recap/references/component-catalog.md` (skip reading `references/exemplar.md` on routine runs to save tokens)
+*   **Never `view_file` or regenerate the 355 lines of `<head>`, `<style>`, `<nav>`, or bottom `<script>` chrome** in `template.html`. The 9 paired marker blocks (`<!-- VIR:OVERVIEW -->` … `<!-- /VIR:OVERVIEW -->`, `<!-- VIR:TASKS -->`, `<!-- VIR:FILES -->`, `<!-- VIR:DIFFS -->`, `<!-- VIR:ARCHITECTURE -->`, `<!-- VIR:CONTRACTS -->`, `<!-- VIR:UI -->`, `<!-- VIR:VERIFICATION -->`, `<!-- VIR:NOTES -->`) are invariant anchors.
 
-### 2. Gather the grounding (read-only)
-*   **The diff:** run `git diff HEAD` (the engineer has not committed yet), `git diff --stat HEAD`, and `git status` to enumerate created/modified/deleted files and per-file line counts. Use these verbatim — do not estimate.
-*   **The plan:** read `plans/active_milestones/{moniker}/plan.md` for the task checklist and the engineer's `[x]` / `(Status: …)` annotations.
-*   **The audit:** read `plans/audit/AUDIT_[Plan_Name].md` for the verdict, per-step evidence, the anti-shortcut scan, and any findings (including `implementation-validator` severity calibrations).
-*   **The spec (optional):** read `spec.md` to phrase the outcome brief in user terms.
-
-### 3. Fill the nine surfaces
-*   For each section, replace the demo content between its paired markers (`<!-- VIR:OVERVIEW -->` … `<!-- /VIR:OVERVIEW -->`, etc.) with content authored from the grounding above.
-*   Use **`${CLAUDE_PLUGIN_ROOT}/skills/visual-implementation-recap/references/component-catalog.md`** for the exact HTML fragment per surface, and **`references/exemplar.md`** for a worked example.
+### 2. Turn 2: Fill the Nine Surfaces in a Single `multi_replace_file_content` Call
+*   Replace `{{MONIKER}}`, `{{TIMESTAMP}}`, and the demo content between each paired marker (`<!-- VIR:OVERVIEW -->` … `<!-- /VIR:OVERVIEW -->`, etc.) in a **single `multi_replace_file_content` call** on `plans/active_milestones/{moniker}/visual-recap.html`.
 *   Mapping from evidence → surface:
     *   Outcome + headline numbers → **Overview** (1–3-sentence brief + metric cards: files changed, +insertions/−deletions, tasks X/Y, audit PASS/FAIL).
     *   `plan.md` checklist × audit verdict → **Tasks Completed** (each task → ✅ Done / ⚠️ Partial / ❌ Failed with the files it touched).

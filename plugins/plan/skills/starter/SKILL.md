@@ -47,11 +47,17 @@ execution starts and before anything is committed.
 6. **Delegate what is worth delegating.** Dispatch a subagent for work that is genuinely
    sizeable or independently parallelizable. Do not dispatch one for something you can finish
    in a handful of tool calls, and where one agent suffices, use one rather than several.
+7. **Coalesce state writes with dispatches.** Read `plans/00-ROADMAP.md` and `state.json` in a
+   single parallel `view_file` call. Whenever you transition phases, record a skipped
+   deliberator (`"status": "skipped"`), or mark a node `"running"`, emit the `state.json`
+   write and the next `invoke_subagent` call in the **same parallel tool-call batch** — never
+   burn an entire LLM round-trip solely to write `"status": "running"` before spawning a subagent.
 
 ## The State Machine
 
 Read `state.json` (or, for a milestone that predates it, reconstruct once from the artifacts
-and write the file). Execute from the phase it names.
+and write the file). Execute immediately from the phase it names, stopping only at the two
+human gates (Phase 3 and the Phase 4 Commit Gate) or Phase 5 release confirmation.
 
 ### Phase 0 — Strategic Research
 **Trigger:** a new request.

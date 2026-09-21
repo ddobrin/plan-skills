@@ -37,9 +37,9 @@ Orient before attacking:
 
 ## Running under Antigravity CLI (`agy`)
 
-- **Dispatching skeptics.** Spawn the 3 skeptics with `invoke_subagent` using
-  `TypeName: research` (read-only — they attack the spec's language and may read any
-  referenced files, but never modify source).
+- **Dispatching skeptics.** Spawn the 3 skeptics in a **single parallel `invoke_subagent` call** using
+  `TypeName: research` and `Model: "flash"` for routine pre-planning gates (reserve `Model: "inherit"` for security-critical specs or re-runs after material rewrites).
+- **Pre-fetched payload (zero redundant file reads).** Read `spec.md` and `context.md` / `00-ROADMAP.md` in a **single parallel `view_file` batch** and paste `{SPEC}` and `{CONTEXT}` verbatim into the **Shared Preamble** of each lens prompt so the 3 skeptics begin analyzing in Turn 1 without calling `view_file` on the same files.
 - **Disjoint evidence lenses.** Dispatch **once per lens**, three lenses in parallel.
   Each lens gets the **Shared Preamble**, then its own **Lens** section, then the
   **Shared Tail**. The runs must be independent (no shared scratchpad).
@@ -95,10 +95,10 @@ and lens 2 has nothing external to read — merge it and run two.
 
 ## Process
 
-1. **Gather inputs:** the spec text (`spec.md`) and any context the spec depends on
-   (context report from `plans/research/`, roadmap, constraints).
+1. **Gather inputs (1 parallel `view_file` batch):** read `spec.md` and any context the spec depends on
+   (context report from `plans/research/` or `context.md`, `00-ROADMAP.md`) concurrently, and inline `{SPEC}` and `{CONTEXT}` into the Shared Preamble so skeptics do not re-read them from disk.
 2. **Run the Asymmetry Test:** verify that all 3 lenses have disjoint reading assignments.
-3. **Dispatch 3 skeptics in parallel** via `invoke_subagent` (`TypeName: research`):
+3. **Dispatch 3 skeptics in parallel** in a single `invoke_subagent` call (`TypeName: research`, `Model: "flash"`):
    - Skeptic 1: Shared Preamble + Lens 1 + Shared Tail
    - Skeptic 2: Shared Preamble + Lens 2 + Shared Tail
    - Skeptic 3: Shared Preamble + Lens 3 + Shared Tail

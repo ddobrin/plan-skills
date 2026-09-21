@@ -91,31 +91,19 @@ the partition: **disjoint bundles, jointly covering everything the spec depends 
 - Run the **asymmetry test** (Core Principle 1). If it fails, stop and revise
   centrally instead — say so to the user.
 
-### 2. Author delegate prompts
-Fill the template in `references/delegate-prompt.md` once per delegate, varying only the
-role, the private bundle, and the concern list. That file also carries the orchestrator's
-**Output Contract**.
+### 2. Author delegate prompts (1 parallel template read)
+Read `references/delegate-prompt.md` and `references/deliberation-record.md` in a **single parallel `view_file` batch** (`references/worked-example.md` is author documentation — do **not** read it at runtime). Fill `references/delegate-prompt.md` once per delegate, varying only the role, the private bundle, and the concern list.
 
-### 3. Dispatch round 1 (sequential turns)
-Turns are **sequential, not parallel** — delegate 2 must see delegate 1's utterance,
-or proposals oscillate instead of converging.
+### 3. Dispatch round 1 (parallel disjoint investigation → unified Proposal v1, then sequential dispute resolution)
+- **Fast-Path Round 1 Disjoint Fan-Out:** Because the 3 delegates' private context bundles are **disjoint by construction**, their initial bundle inspection and private fact disclosures (`disclosures` + initial `amendments` against `v0`) do not depend on one another. Spawn all 3 delegates **concurrently in a single tool-call message** (`Agent` / `invoke_subagent`, empty transcript) so all 3 bundles are analyzed in **1 wall-clock turn** instead of 3 sequential turns.
+- Parse all 3 JSON turns, append all 3 Round 1 utterances **verbatim** to `{TRANSCRIPT}`, and merge all non-conflicting Round 1 amendments into `current_proposal` (**Proposal `v1`**), flagging any directly conflicting edits.
+- Use `subagent_type: "general-purpose"` (or `"Explore"` / `TypeName: research` if a bundle is "go read this part of the codebase").
 
-- Spawn delegate 1 via the `Agent` tool with its prompt (spec + private bundle,
-  empty transcript). Parse its JSON turn.
-- Spawn delegate 2 with its own prompt **plus the transcript so far** (verbatim).
-  Then delegate 3.
-- Track `current_proposal` as a **versioned edit list** (v1, v2, …): whenever a
-  delegate's turn contains amendments, apply them to produce the next version and
-  record which version each delegate has accepted.
-- Use `subagent_type: "general-purpose"` (or `"Explore"` if a bundle is "go read this
-  part of the codebase").
-
-### 4. Run subsequent rounds via SendMessage
-For rounds 2+, **continue the same agents with `SendMessage`** — never respawn. A
-respawned delegate loses its private reasoning context and its memory of why it
-objected; continuation is what makes its stance consistent across rounds. Each
-message contains only the new transcript entries since that delegate's last turn,
-verbatim, plus the current proposal version.
+### 4. Run subsequent rounds via `SendMessage` / `send_message`
+For rounds 2+, **continue the same agents with `SendMessage` (`send_message`)** — never respawn when continuation is supported. A respawned delegate loses its private reasoning context and its memory of why it objected; continuation is what makes its stance consistent across rounds.
+- **Fast-Path Round 2 Convergence:** If Round 1 amendments had **zero cross-bundle conflicts**, message all 3 delegates concurrently with the verbatim Round 1 transcript + unified **Proposal `v1`** to verify `v1` against their private bundles and return an earned `acceptance_basis` (allowing conflict-free specs to converge in **2 wall-clock turns** instead of 6+ sequential turns).
+- **Sequential Dispute Relay:** Whenever two delegates propose conflicting amendments or `stance: "object"`, relay turns **sequentially** across the disputing delegates so each reacts to the latest version (`v2`, `v3`, …) verbatim until convergence or the 4-round cap.
+- If a harness lacks `send_message` and requires re-invoking delegates, embed each delegate's own Round 1 `disclosures` (`territory_evidence_digest`) into its Round 2+ prompt and instruct it **not** to re-read files already inspected in Round 1 unless a new cross-bundle question requires it.
 
 ### 5. Terminate
 - **Convergence:** every delegate has accepted the *same* proposal version → done.

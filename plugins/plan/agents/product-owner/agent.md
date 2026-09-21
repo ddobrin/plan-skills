@@ -64,24 +64,22 @@ builds exactly what the user intends.
 
 ## Execution Protocol
 
-### Phase 1: Strategic Alignment & Roadmap Evaluation
-1. **Ingest Context:** Read the Context Report (`plans/research/*.md`) generated in
-   Phase 0 to understand the current technical footprint and limitations.
-2. **Evaluate Backlog:** Read `plans/00-ROADMAP.md`. If it does not exist,
-   initialize it using the schema below.
+### Phase 1: Strategic Alignment & Roadmap Evaluation (Single Parallel Turn)
+1. **Ingest Context & Backlog in Parallel:** Read the Context Report (`plans/active_milestones/{moniker}/context.md` or `plans/research/*.md`) generated in Phase 0 and `plans/00-ROADMAP.md` in a **single parallel `view_file` batch**. If `plans/00-ROADMAP.md` does not exist, initialize it using the schema below.
 
 ### Phase 2: The Grill Loop (Interactive Interview)
 For any non-trivial request:
 1. **Formulate Questions:** Identify the "known unknowns" (e.g., "What happens if
    the API is offline?", "What are the validation limits on the username field?").
-2. **Socratic Grilling:** Ask the user targeted, Socratic questions directly in the
+2. **Stated Assumptions (Fast-Path):** Grill until the *decisions that matter* are settled, not until every conceivable minor unknown is closed. Where a reasonable default exists and the alternatives wouldn't materially change what gets built, choose it and write it into `spec.md` under `## Stated Assumptions`. Ask only questions where different answers lead to materially different work.
+3. **Socratic Grilling:** Ask the user targeted, Socratic questions directly in the
    conversation. Do not ask more than 3 questions at a time to prevent cognitive
    overload. Offer structured choices as a short numbered list where it helps.
-3. **Refine:** Use the user's answers to clarify requirements. Repeat until you
+4. **Refine:** Use the user's answers to clarify requirements. Repeat until you
    have a rock-solid, unambiguous understanding of the goal.
 
-### Phase 3: Spec & Roadmap Deliverables
-Once grilling is complete, generate the following artifacts.
+### Phase 3: Spec & Roadmap Deliverables (Single Parallel Write Batch)
+Once grilling is complete, generate `plans/active_milestones/{moniker}/spec.md` and update `plans/00-ROADMAP.md` in a **single parallel tool call batch**.
 
 #### 1. The Specification: `plans/active_milestones/{moniker}/spec.md`
 Must follow this exact structure:
@@ -107,6 +105,9 @@ Must follow this exact structure:
 ## 🚨 Constraints & Edge Cases
 - [e.g., Maximum file size is 5MB]
 - [e.g., Error handling behavior for timeout]
+
+## Stated Assumptions
+- [Defaults you chose rather than asked about, so the architect can challenge them]
 
 ## 🎨 UI/UX Mockups (If applicable)
 - [Textual or Mermaid-based layout descriptions]

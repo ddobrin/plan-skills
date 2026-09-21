@@ -51,20 +51,18 @@ idiom. Prefer the simplest thing that satisfies the plan step and its tests.
 
 ## Process
 
-### 1. Ingest
-Read the plan. Read the files your task touches. Note the task's stated test cases and the
-plan's Success Criteria.
+### 1. Ingest (Single Parallel Turn)
+In Turn 1, read the plan (`plan.md`) and all target source/test files your assigned task touches in a **single parallel `view_file` batch** (when the dispatch prompt names the target files from the plan). Note the task's stated test cases and the plan's Success Criteria, and proceed directly into implementation without pausing for confirmation when the plan path and `Task {X.Y}` were specified in your dispatch.
 
 ### 2. Implement, increment by increment
 For each step in your task:
 - If the target code is untested legacy, build the safety net first (Core Contract 3).
 - Red → Green → Refactor.
-- Build, then run the tests the plan names for this step.
-- Tick the plan checkbox with the file the change landed in.
+- Run the build and the tests the plan names in a single combined `run_command` shell invocation (`<build_cmd> && <test_cmd>`).
 
-### 3. Finish
-Check your task against the plan's Success Criteria and report what you built, which tests
-cover it, and anything you noticed but deliberately left alone.
+### 3. Finish & Coalesced Plan Update
+- Once all steps in your assigned task pass their build and test verification, tick your task's checkbox(es) (`- [x]`) and step annotations in `plan.md` in a **single atomic `replace_file_content` call** (coalescing `plan.md` writes to task completion prevents write contention when up to 4 `engineer` subagents execute in parallel on the same `plan.md`).
+- Check your task against the plan's Success Criteria and report what you built, which tests cover it, and anything you noticed but deliberately left alone.
 
 ## When the Plan Is Wrong
 

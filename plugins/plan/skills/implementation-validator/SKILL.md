@@ -58,16 +58,15 @@ noise. Recall is the skeptic's job; precision is the gate's.
 
 ## Process
 
-### 1. Gather inputs
-- The diff range: `BASE_SHA` and `HEAD_SHA` (so agents can run `git diff {BASE}..{HEAD}`).
-- A one-line description of what the change *claims* to do.
-- For claim-refutation mode: the explicit list of acceptance claims.
-
-Get the SHAs:
+### 1. Gather inputs & pre-fetch diff in one batch
+- Run a **single combined shell command** to capture `BASE_SHA`, `HEAD_SHA`, `--stat`, and the diff itself (`git diff`), in parallel with reading `references/skeptic-prompts.md` and `references/review-template.md` (`references/worked-example.md` is author documentation — do **not** read it at runtime):
 ```bash
-BASE_SHA=$(git rev-parse origin/main)   # or HEAD~1, or the branch point
+BASE_SHA=$(git rev-parse origin/main 2>/dev/null || git rev-parse HEAD~1)
 HEAD_SHA=$(git rev-parse HEAD)
+git diff --stat "$BASE_SHA".."$HEAD_SHA" && git diff "$BASE_SHA".."$HEAD_SHA"
 ```
+- Embed `{DIFF_STAT}` and `{DIFF_CONTENT}` (for diffs ≤ 400 lines; or file-scoped diff hunks for larger diffs) directly into the 3 skeptic prompts so none of the 3 skeptics waste 2 shell tool-call turns running `git diff --stat` and `git diff` themselves.
+- Include a one-line description of what the change *claims* to do (and explicit acceptance claims for claim-refutation mode).
 
 ### 2. Author the skeptic prompt
 Pick the **Finding-Hunt** or **Claim-Refutation** template in

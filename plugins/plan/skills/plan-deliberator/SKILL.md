@@ -95,31 +95,18 @@ plan depends on**.
 - Run the **asymmetry test** (Core Principle 1). If it fails, revise centrally and say
   so to the user.
 
-### 2. Author delegate prompts
-Fill the template in `references/delegate-prompt.md` once per delegate, varying the
-territory, the investigation instructions, and the guard list. That file also carries the
-orchestrator's **Output Contract**.
+### 2. Author delegate prompts (1 parallel template read)
+Read `references/delegate-prompt.md` and `references/deliberation-record.md` in a **single parallel `view_file` batch** (`references/worked-example.md` is author documentation — do **not** read it at runtime). Fill `references/delegate-prompt.md` once per delegate, varying the territory, the investigation instructions, and the guard list.
 
-### 3. Dispatch round 1 (investigate, then sequential turns)
-Turns are **sequential, not parallel** — delegate 2 must see delegate 1's utterance, or
-proposals oscillate instead of converging.
+### 3. Dispatch round 1 (parallel disjoint territory investigation → unified Proposal v1, then sequential dispute resolution)
+- **Fast-Path Round 1 Territory Fan-Out:** Because the 3 delegates' assigned territories (`Intent`, `Codebase`, `Delivery`) are **disjoint by construction**, their initial territory deep-reads and initial `disclosures` (`file:line` / spec clause / CI command) + `amendments` against `v0` do not depend on one another. Spawn all 3 delegates **concurrently in a single tool-call message** (`Agent` / `invoke_subagent`, empty transcript) so all 3 territories are deep-read in **1 wall-clock turn** instead of 3 sequential turns (`max(T1, T2, T3)` instead of `T1 + T2 + T3`).
+- Parse all 3 JSON turns, append all 3 Round 1 utterances **verbatim** to `{TRANSCRIPT}`, and merge all non-conflicting Round 1 amendments into `current_proposal` (**Proposal `v1`**), flagging any directly conflicting trade-offs or edits.
 
-- Spawn delegate 1 via the `Agent` tool with `subagent_type: "general-purpose"` (it
-  must read and grep the codebase). Its first turn includes an **investigation phase**:
-  deep-read the territory *before* speaking. Parse its JSON turn.
-- Spawn delegate 2 with its own prompt **plus the transcript so far** (verbatim), then
-  delegate 3.
-- Track `current_proposal` as a **versioned plan edit list** (v1, v2, …): reorders,
-  group boundary changes, inserted/removed/retargeted steps. Apply each turn's
-  amendments to produce the next version; record which version each delegate accepted.
-
-### 4. Run subsequent rounds via SendMessage
-For rounds 2+, **continue the same agents with `SendMessage`** — never respawn. A
-respawned delegate loses everything it read in its territory and why it objected;
-continuation is what makes its authority real across rounds. Each message carries only
-the new transcript entries since that delegate's last turn, verbatim, plus the current
-proposal version. A delegate may investigate further mid-deliberation ("let me check
-whether `schedule()` tolerates a null") — that is the pattern working, not a stall.
+### 4. Run subsequent rounds via `SendMessage` / `send_message`
+For rounds 2+, **continue the same agents with `SendMessage` (`send_message`)** — never respawn when continuation is supported. A respawned delegate loses everything it read in its territory and why it objected; continuation is what makes its authority real across rounds.
+- **Fast-Path Round 2 Convergence:** If Round 1 amendments had **zero cross-territory conflicts**, message all 3 delegates concurrently with the verbatim Round 1 transcript + unified **Proposal `v1`** to verify `v1` against their territories and return an earned `acceptance_basis` (allowing compatible territory refinements to converge in **2 wall-clock turns** instead of 6–9 sequential turns).
+- **Sequential Trade-Off & Dispute Relay:** Whenever two delegates propose conflicting amendments or `stance: "object"` on a trade-off, relay turns **sequentially** across the disputing delegates so each reacts to the latest version (`v2`, `v3`, …) verbatim until convergence or the 4-round cap.
+- If a harness lacks `send_message` and requires re-invoking delegates, embed each delegate's own Round 1 `disclosures` (`territory_evidence_digest`) into its Round 2+ prompt and instruct it **not** to re-open or re-grep files already inspected in Round 1 unless another delegate's turn raises a new `file:line` question.
 
 ### 5. Terminate
 - **Convergence:** every delegate has accepted the *same* proposal version → done.

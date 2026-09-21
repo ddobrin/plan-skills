@@ -74,17 +74,17 @@ Mark the new feature as a "Milestone" under the active or upcoming release targe
 - [ ] **Milestone 3: [Name]** - STATUS: PENDING
 ```
 
-## 🎨 VISUAL RENDERING PROTOCOL
+## 🎨 VISUAL RENDERING PROTOCOL (LOW-LATENCY FAST-PATH)
 Run this **only after `spec.md` is complete**. `spec.md` is the source of truth; the HTML is derived.
 
-### 1. Instantiate the template
-*   Copy `${CLAUDE_PLUGIN_ROOT}/skills/visual-product-owner/assets/template.html` to `plans/active_milestones/{moniker}/visual-spec.html`.
-*   Replace `{{MONIKER}}` with the milestone moniker and `{{TIMESTAMP}}` with the current date/time.
+### 1. Instantiate the template (Zero-Chrome-Read Fast-Path)
+*   Copy `${CLAUDE_PLUGIN_ROOT}/skills/visual-product-owner/assets/template.html` to `plans/active_milestones/{moniker}/visual-spec.html` via `cp` (`run_command`).
+*   **NEVER read (`view_file`) the `<style>` (lines 30–220) or bottom `<script>` (lines 440+) chrome of `assets/template.html`**, and **NEVER re-generate the full 571-line HTML file via `write_to_file`** (which wastes ~8,500 input tokens and ~7,500 output tokens of unchanged CSS/JS). If you need to inspect section markers, `view_file` only `StartLine: 220, EndLine: 440`.
 *   **Do not modify** the template's `<head>`, `<style>`, `<nav>`, or bottom `<script>` (the "chrome"). You author only section content.
 
-### 2. Fill the eight surfaces
-*   For each section, replace the demo content between its paired markers (`<!-- VPO:OVERVIEW -->` … `<!-- /VPO:OVERVIEW -->`, etc.) with content authored from `spec.md`.
-*   Use **`${CLAUDE_PLUGIN_ROOT}/skills/visual-product-owner/references/component-catalog.md`** for the exact HTML fragment per surface, and **`references/exemplar.md`** for a worked example of selecting surfaces for a real spec.
+### 2. Fill the eight surfaces in one single batch (`multi_replace_file_content`)
+*   Replace `{{MONIKER}}`, `{{TIMESTAMP}}`, and the demo content between all paired section markers (`<!-- VPO:OVERVIEW -->` … `<!-- /VPO:OVERVIEW -->`, etc.) in **one single `multi_replace_file_content` call** (or a single `python3` marker-substitution command via `run_command`) — **never** make 8 separate sequential `replace_file_content` calls.
+*   Read **`${CLAUDE_PLUGIN_ROOT}/skills/visual-product-owner/references/component-catalog.md`** once for the exact HTML fragment per surface (`references/exemplar.md` is an optional reference — skip reading it at runtime unless surface gating is ambiguous).
 *   Mapping from spec → surface:
     *   Executive Summary → **Overview** (lead with one concrete user walkthrough).
     *   User Stories & Workflows → **User Stories** (one As-a / I-want / So-that card per story).
