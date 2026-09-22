@@ -175,27 +175,37 @@ Runs **after a plan is drafted, before `plan-validator`**, when the plan spans m
 
 ---
 
-### Adversarial Validators
+### Adversarial Validators (TypeSafe System One Accelerated)
 
-All three share the same machinery: dispatch **3 independent skeptic agents in parallel** (no shared scratchpad), each framed to *break* the artifact with a **default-to-reject** posture, then keep only findings confirmed by a **2-of-3 majority** (1-vote findings are surfaced as "Unconfirmed (FYI)", never silently dropped).
+All three validators operate on a **Hybrid System One + System Two** architecture:
+- **System Two (LLM Skeptics):** Dispatches **3 independent skeptic agents in parallel** (no shared scratchpad), each framed to *break* the artifact with a **default-to-reject** posture.
+- **System One (TypeSafe Jev):** Provides sub-second classification, discrete alignment, and probability estimation via `plugins/plan/tools/typesafe_validator_engine.py`:
+  1. **Pre-flight Sieve (<250ms):** Fast-screens for untestable buzzwords, missing error paths, or unverifiable steps before spawning heavy skeptics.
+  2. **Semantic Deduplication & Quorum:** Clusters findings across skeptics using TypeSafe semantic Choice alignment, eliminating fragile kebab-case string collisions.
+  3. **1-Vote Tail SDE Cascade:** Automatically evaluates 1-vote tail findings; promotes high-confidence solo catches ($P \ge 0.85$) and filters noise ($P < 0.40$) without requiring expensive deliberator mini-panels.
+  4. **Continuous Severity Scoring:** Evaluates confirmed defects against an objective 4-level descriptive Score rubric (`critical`, `high`, `medium`, `low`).
+  5. **First Domino Ranking:** Ranks plan findings deterministically by evaluating cascading failure impact.
+  6. **Graceful Offline Fallback:** If `TYPESAFE_API_KEY` is not set, the zero-dependency Python engine automatically degrades to deterministic heuristics (token overlap, mode voting), ensuring offline runs never fail.
 
 Every panel then writes a **human-readable Markdown report** to `plans/active_milestones/{moniker}/adversarial-reviews/{stage}-validation.md` — written on every run (even a clean pass), with re-runs preserved as `-r2`/`-r3` — so the verdict is browsable without opening an agent transcript.
 
 #### `spec-validator` — Attack the Spec
 Runs **after a spec is drafted, before a plan is written** — defects are cheapest to fix here.
 - **Attack Surface:** Ambiguity, missing requirements (errors, empty/huge inputs, concurrency, auth, limits, units, time), contradictions, untestable acceptance criteria, and *malicious compliance* (the laziest implementation that passes every criterion yet is useless).
+- **TypeSafe Acceleration:** Fast preflight sieve flags unquantified buzzwords in advisory mode; findings are semantically clustered into quorum.
 - **Output:** Confirmed findings each carry a `tightening` — a concrete reworded/added requirement to fold back into the spec.
 
 #### `plan-validator` — Attack the Plan
 Runs **after a plan is written, before execution**. Unlike spec skeptics, these **read the codebase** to check the plan's assumptions against reality.
 - **Attack Surface:** Ordering/dependency bugs, false assumptions about existing code (a named function/field/signature that doesn't exist — *open the file and check*), unverifiable "verify" steps, missing rollback, missing migration/compat, hidden coupling.
-- **Output:** Each finding cites `file:line` evidence and a `fix`; the panel names the **`first_domino`** — the earliest failure that invalidates later steps.
+- **TypeSafe Acceleration:** Evaluates cascading failure risk to pinpoint the definitive **`first_domino`** — the earliest step whose failure topples downstream tasks.
+- **Output:** Each finding cites `file:line` evidence and a `fix`; the panel names the **`first_domino`**.
 
 #### `implementation-validator` — Attack the Diff
 Runs **after code is written, before merge**. Reasons about the code (it does *not* launch the app).
 - **Two Modes:** *finding-hunt* (default — hunt the diff for defects) and *claim-refutation* (try to refute explicit acceptance claims).
 - **Attack Surface:** Claim vs. reality, broken/swallowed failure paths, edge cases, concurrency races, resource/correctness, regressions.
-- **Signature Output:** Severity calibration. The panel's most valuable product is *corrected severity* (e.g., three reviewers call a singleton race "Critical"; it's confirmed real but downgraded to "High" because impact is gated on concurrent requests). Always surface the calibration delta.
+- **Signature Output — Calibrated Severity:** TypeSafe's probability-weighted Score rubric produces continuous calibrated severity (e.g., three reviewers call a singleton race "Critical"; it's confirmed real but calibrated to "High" [Score: 2.85] because impact is gated on concurrent requests). Always surface the calibration delta.
 
 ---
 

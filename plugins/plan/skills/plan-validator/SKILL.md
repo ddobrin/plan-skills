@@ -2,6 +2,7 @@
 name: plan-validator
 description: Use after an implementation plan is written and BEFORE executing it, to catch ordering bugs and false assumptions while they are still cheap. Dispatches independent skeptic agents that assume the plan WILL fail, read the codebase to check its assumptions, and find the first domino that topples the rest — keeping only findings confirmed by a 2-of-3 majority. Symptoms - "validate this plan", "will this plan work", "review the plan before we start", a freshly written plans/*.md from architect / visual-architect, about to run engineer or starter.
 tools:
+  - run_command
   - invoke_subagent
   - view_file
   - write_to_file
@@ -12,7 +13,7 @@ tools:
   - grep_search
 ---
 
-# Adversarial Plan Validation
+# Adversarial Plan Validation (TypeSafe Accelerated)
 
 ## Overview
 
@@ -23,7 +24,15 @@ reality. The highest-value finding is almost always a sequencing or false-assump
 "step 4 modifies a method that step 2 was supposed to create but didn't," or "the plan
 says edit `X.dispatch()` but that method does not exist."
 
-**Announce at start:** "I'm using the plan-validator skill to attack this plan with an independent skeptic panel."
+This skill is powered by a **Hybrid System One (TypeSafe Jev) + System Two (LLM Skeptics)**
+architecture:
+1. **Pre-flight Sieve (<250ms)**: Fast-screens the plan for unverifiable steps or missing rollbacks.
+2. **System Two Skeptics**: 3 parallel LLMs actively read the codebase to attack assumptions.
+3. **Semantic Dedup & Quorum**: Clusters findings by root cause via TypeSafe rather than brittle kebab-case matching.
+4. **First Domino Ranking**: Determines the earliest step whose failure invalidates subsequent tasks via TypeSafe cascading risk Score.
+5. **SDE Tail Cascade**: Automatically promotes high-confidence solo catches ($P \ge 0.85$) and filters noise ($P < 0.40$).
+
+**Announce at start:** "I'm using the plan-validator skill to attack this plan with a TypeSafe-accelerated skeptic panel."
 
 ## When to Use
 
@@ -43,7 +52,7 @@ Three things turn an ordinary review into adversarial findings. All three are re
 
 1. **Adversarial framing** — the agent assumes the plan fails and hunts for the failure, rather than judging whether it "seems reasonable."
 2. **Default-to-reject** — uncertainty about whether a step is safe resolves *against* the plan. "Looks fine" is a failed review unless the agent shows what it verified.
-3. **Independent quorum** — run **N = 3** skeptics that never see each other's output, then keep only findings confirmed by a **majority (2 of 3)**.
+3. **Independent quorum + TypeSafe alignment** — run **N = 3** skeptics that never see each other's output, cluster them semantically, and rank the first domino with TypeSafe.
 
 The difference from spec stage: plan skeptics must **verify assumptions in the source**.
 A predicted failure that the agent did not check against the actual code is a guess, not a
@@ -64,42 +73,44 @@ finding — the template forces them to cite `file:line`.
 - The plan text (paste it, or give an absolute path).
 - The **repository root** the agents should read — they must be able to open the files the plan touches.
 
-### 2. Author the skeptic prompt
+### 2. Run Pre-Flight Sieve (Advisory Screen)
+Run the fast pre-flight screen via `run_command` in advisory mode:
+```bash
+python3 plugins/plan/tools/typesafe_validator_engine.py preflight --stage plan --file path/to/plan.md
+```
+- Advisory warnings (e.g. unverifiable verify commands, missing rollbacks) are flagged and injected into skeptic prompts.
+- Add `--strict` if you want to abort immediately on missing verification steps.
+
+### 3. Author the skeptic prompt
 Fill the template in **Skeptic Prompt Template**. Keep the "default to reject", "verify in
 source", and "final message MUST be JSON" clauses verbatim.
 
-### 3. Dispatch 3 skeptics in parallel
+### 4. Dispatch 3 skeptics in parallel
 Spawn the **3 skeptics in parallel via `invoke_subagent`**, using `TypeName: research`
 (or `research-google` / `self` instructed to stay read-only — it can read and grep the
 codebase). Each runs independently — no shared scratchpad.
 
-### 4. Collect verdicts
-Parse each agent's fenced JSON. Re-dispatch any agent that returns prose instead of JSON.
+### 5. Collect verdicts
+Parse each agent's fenced JSON block. Save them to `/tmp/p1.json`, `/tmp/p2.json`, `/tmp/p3.json`.
 
-### 5. Dedup by identity
-Group findings by stable `id` + the `step` they target. Two skeptics describing the same
-ordering bug should collapse to one entry, not three.
+### 6. Synthesize with TypeSafe Engine (First Domino & Quorum)
+Run the validator engine synthesizer to cluster findings, rank the first domino, calibrate
+severity, and generate the review markdown report:
+```bash
+python3 plugins/plan/tools/typesafe_validator_engine.py synthesize \
+  --stage plan \
+  --target path/to/plan.md \
+  --skeptics /tmp/p1.json /tmp/p2.json /tmp/p3.json \
+  --out plans/active_milestones/{moniker}/adversarial-reviews/plan-validation.md
+```
+- **Quorum gate:** Confirmed when ≥2 skeptics identify the same underlying issue.
+- **First Domino:** Deterministically calculated by evaluating step ordering against TypeSafe cascading failure impact scores.
+- **SDE Tail Triage:** Promotes solo high-confidence catches ($P \ge 0.85$) and filters noise ($P < 0.40$).
+*(If `TYPESAFE_API_KEY` is not set, the engine automatically falls back to heuristic token matching and earliest step index.)*
 
-### 6. Apply the majority gate
-- **Confirmed:** appears in **≥ 2 of 3** outputs.
-- **Unconfirmed (1 vote):** keep under "Unconfirmed (FYI)" — never silently drop.
-- Severity: most common among agreeing skeptics; tie → higher.
-
-> **Tuning the gate:** 2-of-3 is the default. Drop to **any-one** for a high-risk plan (irreversible migrations, prod data); raise to **unanimous** when re-planning churn is costly.
-
-### 7. Persist the review
-Write the aggregated result as a Markdown report to
-`plans/active_milestones/{moniker}/adversarial-reviews/plan-validation.md` (create the
-folder if it does not exist). Derive `{moniker}` from the plan's path — the plan you
-reviewed lives at `plans/active_milestones/{moniker}/plan.md`; if you were handed a bare
-plan with no milestone, write to `plans/adversarial-reviews/plan-validation.md` and say so.
-**Always write this file, even on a clean pass** — "zero confirmed findings, here are the
-assumptions verified" is the evidence the gate produced. A re-run after a material reorder
-goes to `plan-validation-r2.md`, `-r3.md`, … so every round is preserved. Fill the **The
-Review Document** template below verbatim.
-
-### 8. Act
+### 7. Act
 - For each **confirmed** finding, apply its `fix` to the plan (reorder steps, add a missing prerequisite step, add a rollback/verify step, correct an assumption).
+- Start with the **First Domino** — fixing it often eliminates or reorganizes subsequent steps.
 - List **unconfirmed** findings for the user.
 - If you reordered or added steps materially, re-run the panel once.
 - Tick the **Actions Taken** checklist in the review file as you apply each fix.

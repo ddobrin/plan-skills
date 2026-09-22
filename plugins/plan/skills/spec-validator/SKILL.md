@@ -2,6 +2,7 @@
 name: spec-validator
 description: Use after a spec or design doc is drafted and BEFORE writing an implementation plan, to find defects while they are still cheap to fix. Dispatches independent skeptic agents that attack the spec for ambiguity, missing or contradictory requirements, and untestable acceptance criteria, then keeps only findings confirmed by a 2-of-3 majority. Symptoms - "validate this spec", "poke holes in this design", "is this spec ready to plan against", finishing brainstorming before writing-plans, a freshly written specs/*.md.
 tools:
+  - run_command
   - invoke_subagent
   - view_file
   - write_to_file
@@ -12,7 +13,7 @@ tools:
   - grep_search
 ---
 
-# Adversarial Spec Validation
+# Adversarial Spec Validation (TypeSafe Accelerated)
 
 ## Overview
 
@@ -21,11 +22,15 @@ Dispatch a panel of independent **skeptic** agents whose only job is to break a 
 so the attack surface is the **language of the spec itself**: ambiguity, gaps,
 contradictions, and acceptance criteria that cannot actually be verified.
 
-A skeptic plays the role of a hostile or careless implementer who will satisfy the
-*letter* of the spec while violating its *intent*. Anything they can twist is a defect
-in the spec, not the implementer.
+This skill is powered by a **Hybrid System One (TypeSafe Jev) + System Two (LLM Skeptics)**
+architecture:
+1. **Pre-flight Sieve (<250ms)**: Fast-screens the spec for untestable buzzwords or missing error paths before launching skeptics.
+2. **System Two Skeptics**: 3 parallel LLMs actively attack the spec with a default-to-reject posture.
+3. **Semantic Dedup & Quorum**: Clusters findings by semantic root cause via TypeSafe rather than brittle kebab-case slug matching.
+4. **SDE Tail Cascade**: Automatically promotes high-confidence solo catches ($P \ge 0.85$) and filters noise ($P < 0.40$).
+5. **Calibrated Severity**: Uses TypeSafe's continuous 4-level ordinal Score rubric.
 
-**Announce at start:** "I'm using the spec-validator skill to attack this spec with an independent skeptic panel."
+**Announce at start:** "I'm using the spec-validator skill to attack this spec with a TypeSafe-accelerated skeptic panel."
 
 ## When to Use
 
@@ -45,10 +50,7 @@ Three things turn an ordinary review into adversarial findings. All three are re
 
 1. **Adversarial framing** — the agent's success metric is "how many real holes did I find," not "is this good." It is told to *break* the spec, not evaluate it.
 2. **Default-to-reject** — uncertainty resolves *against* the spec. Returning "looks complete" is a failed review unless the agent lists what it attacked and why each attack failed.
-3. **Independent quorum** — run **N = 3** skeptics that never see each other's output, then keep only findings confirmed by a **majority (2 of 3)**.
-
-Aggressive framing raises *recall* (catches more real holes) but lowers *precision*
-(more noise). The majority quorum restores precision. One without the other is a bad trade.
+3. **Independent quorum + TypeSafe alignment** — run **N = 3** skeptics that never see each other's output, cluster them semantically, and keep findings confirmed by a **majority (2 of 3)** or promoted via SDE cascade.
 
 ## Attack Surface (what each skeptic hunts for)
 
@@ -64,47 +66,46 @@ Aggressive framing raises *recall* (catches more real holes) but lowers *precisi
 - The spec text (paste it into each prompt, or give an absolute path the agents can read).
 - Any context the spec depends on but does not restate (linked docs, constraints).
 
-### 2. Author the skeptic prompt
+### 2. Run Pre-Flight Sieve (Advisory Screen)
+Run the fast pre-flight screen via `run_command` in advisory mode:
+```bash
+python3 plugins/plan/tools/typesafe_validator_engine.py preflight --stage spec --file path/to/spec.md
+```
+- If advisory warnings are flagged (e.g. unquantified buzzwords or missing error paths), inject them into the skeptic prompt so skeptics specifically attack those weaknesses.
+- Add `--strict` if you want to abort immediately on fatal structural gaps.
+
+### 3. Author the skeptic prompt
 Fill the template in **Skeptic Prompt Template** below. Keep the framing verbatim — the
 "default to reject" and "your final message MUST be JSON" clauses are load-bearing.
 
-### 3. Dispatch 3 skeptics in parallel
+### 4. Dispatch 3 skeptics in parallel
 Spawn the **3 skeptics in parallel via `invoke_subagent`** so they run concurrently and
 independently. Use `TypeName: research` (or `research-google` / `self` instructed to stay
 read-only if the spec lives in files they must read). Do **not** let them share a
 scratchpad — independence is what makes the vote mean something.
 
-### 4. Collect verdicts
-Each agent's final message is a fenced JSON block (see **Output Contract**). Parse all three.
-If an agent returns prose instead of JSON, re-dispatch that one — do not hand-guess its findings.
+### 5. Collect verdicts
+Each agent's final message is a fenced JSON block (see **Output Contract**). Save each
+fenced JSON to a temporary file (e.g. `/tmp/s1.json`, `/tmp/s2.json`, `/tmp/s3.json`).
 
-### 5. Dedup by identity
-Three skeptics will phrase the same hole three different ways. Group findings by a **stable
-identity**, not by exact wording. Use `id` (a kebab-case slug each agent assigns) plus the
-quoted `clause`. If you tally on raw text you get three 1-vote findings and nothing reaches
-quorum.
+### 6. Semantic Dedup, Tail Triage & Report Synthesis
+Run the validator engine synthesizer to cluster findings by semantic root cause, triage the
+1-vote tail, calibrate severity, and generate the review markdown report:
+```bash
+python3 plugins/plan/tools/typesafe_validator_engine.py synthesize \
+  --stage spec \
+  --target path/to/spec.md \
+  --skeptics /tmp/s1.json /tmp/s2.json /tmp/s3.json \
+  --out plans/active_milestones/{moniker}/adversarial-reviews/spec-validation.md
+```
+- **Quorum gate:** Confirmed when ≥2 skeptics land on the same semantic root cause.
+- **SDE Tail Triage:** 1-vote findings with $P(\text{defect}) \ge 0.85$ are auto-promoted to confirmed; noise ($P < 0.40$) is filtered out.
+- **Calibrated Severity:** Scored against an objective 4-level descriptive rubric.
+*(If `TYPESAFE_API_KEY` is not set, the engine automatically falls back to heuristic token matching and mode severity.)*
 
-### 6. Apply the majority gate
-- A finding is **confirmed** when it appears in **≥ 2 of 3** skeptic outputs.
-- A finding with **exactly 1 vote** is **unconfirmed** — do not silently drop it; list it under "Unconfirmed (FYI)". A single skeptic spotting a real hole is exactly the recall you traded for precision.
-- For severity, take the **most common** severity among the agreeing skeptics; on a tie, take the higher.
-
-> **Tuning the gate:** 2-of-3 is the default. For a high-stakes or security-sensitive spec, drop to **any-one** (1 of 3) for maximum recall and triage the noise yourself. When fix-churn is expensive, raise to **unanimous** (3 of 3).
-
-### 7. Persist the review
-Write the aggregated result as a Markdown report to
-`plans/active_milestones/{moniker}/adversarial-reviews/spec-validation.md` (create the
-folder if it does not exist). Derive `{moniker}` from the spec's path — the spec you
-reviewed lives at `plans/active_milestones/{moniker}/spec.md`; if you were handed a bare
-spec with no milestone, write to `plans/adversarial-reviews/spec-validation.md` and say so.
-**Always write this file, even on a clean pass** — "zero confirmed findings, here is what
-was attacked" is itself the evidence the gate produced. A re-run after a material revision
-goes to `spec-validation-r2.md`, `-r3.md`, … so every round is preserved for comparison.
-Fill the **The Review Document** template below verbatim.
-
-### 8. Act
+### 7. Act
 - For each **confirmed** finding, apply its `tightening` to the spec (or surface it to the user if it changes intent).
-- List **unconfirmed** findings so the user can eyeball the tail.
+- Review surviving **unconfirmed** tail items.
 - If you rewrote the spec materially, re-run the panel once on the revision.
 - Tick the **Actions Taken** checklist in the review file as you apply each fix.
 

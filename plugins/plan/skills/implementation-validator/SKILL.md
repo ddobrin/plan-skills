@@ -13,7 +13,7 @@ tools:
   - grep_search
 ---
 
-# Adversarial Implementation Validation
+# Adversarial Implementation Validation (TypeSafe Accelerated)
 
 ## Overview
 
@@ -23,12 +23,20 @@ adversarial verification earns its keep twice over: it culls plausible-but-wrong
 **and** it *calibrates severity* — a defect three reviewers agree is real may still be
 over-rated, and the corrected severity is part of the output.
 
+This skill is powered by a **Hybrid System One (TypeSafe Jev) + System Two (LLM Skeptics)**
+architecture:
+1. **System Two Skeptics**: 3 parallel LLMs actively construct break inputs against `git diff`.
+2. **Citation Verification**: Verifies cited `file:line` locations exist and tests semantic support via TypeSafe Choice.
+3. **Semantic Dedup & Quorum**: Clusters findings by semantic root cause via TypeSafe rather than fragile string slugs.
+4. **Calibrated Severity (Score Rubric)**: Produces an authoritative continuous score (1.0 to 4.0) using TypeSafe's probability-weighted 4-level ordinal rubric.
+5. **SDE Tail Cascade**: Automatically promotes high-confidence solo catches ($P \ge 0.85$) and filters noise ($P < 0.40$).
+
 Two modes, same machinery:
 
 - **Finding-hunt (default):** each skeptic independently hunts the diff for defects with a default-to-reject posture. Best when you want "what's broken in this change."
 - **Claim-refutation (variant):** you supply explicit acceptance claims (e.g. from the spec's acceptance criteria) and each skeptic tries to *refute* each one. Best when you have a checklist the code must satisfy.
 
-**Announce at start:** "I'm using the implementation-validator skill to attack this diff with an independent skeptic panel."
+**Announce at start:** "I'm using the implementation-validator skill to attack this diff with a TypeSafe-accelerated skeptic panel."
 
 ## When to Use
 
@@ -48,7 +56,7 @@ Three things turn an ordinary review into adversarial findings. All three are re
 
 1. **Adversarial framing** — the agent's job is to construct the input or sequence that breaks the code, not to judge whether it "looks good."
 2. **Default-to-reject** — for finding-hunt, default `isReal=false` (only confirmed, code-grounded defects count). For claim-refutation, default `refuted=true` (a claim survives only if the agent actively tried and failed to break it).
-3. **Independent quorum** — run **N = 3** skeptics that never see each other's output, then keep only findings confirmed by a **majority (2 of 3)**.
+3. **Independent quorum + TypeSafe calibration** — run **N = 3** skeptics that never see each other's output, cluster them semantically, and calibrate severity using TypeSafe's probability-weighted Score rubric.
 
 ## Attack Surface (what each skeptic hunts for)
 
@@ -82,39 +90,27 @@ Spawn the **3 skeptics in parallel via `invoke_subagent`**, using `TypeName: sel
 read files) or `TypeName: research` / `research-google` (passing the diff if shell access
 is unavailable to them). Independent runs, no shared scratchpad.
 
-> **Perspective-diverse variant:** instead of three identical skeptics, give each a distinct lens — e.g. one `correctness`, one `concurrency`, one `failure-paths`. Diversity catches failure modes that three identical refuters would all miss together. Then the "majority" becomes "≥2 lenses independently land on the same defect."
-
 ### 4. Collect verdicts
-Parse each agent's fenced JSON. Re-dispatch any agent that returns prose.
+Parse each agent's fenced JSON block. Save them to `/tmp/i1.json`, `/tmp/i2.json`, `/tmp/i3.json`.
 
-### 5. Dedup by identity
-**This is the hard part.** Group findings by a stable identity: `file:location` + the
-`id` slug. Three skeptics will phrase "NPE on empty list in `parseTasks`" three ways; if
-you tally on raw text, nothing reaches quorum. Normalize to `file:line::id` before counting.
+### 5. Synthesize with TypeSafe Engine (Severity Calibration & Quorum)
+Run the validator engine synthesizer:
+```bash
+python3 plugins/plan/tools/typesafe_validator_engine.py synthesize \
+  --stage implementation \
+  --target /tmp/current.diff \
+  --skeptics /tmp/i1.json /tmp/i2.json /tmp/i3.json \
+  --out plans/active_milestones/{moniker}/adversarial-reviews/implementation-validation.md
+```
+- **Quorum gate:** Confirmed when ≥2 skeptics identify the same underlying issue.
+- **Severity Calibration:** Evaluated against the 4-level descriptive Score rubric (`critical`, `high`, `medium`, `low`), providing continuous calibrated scores and distribution confidence.
+- **SDE Tail Triage:** Evaluates solo catches; high-confidence catches ($P \ge 0.85$) are promoted to confirmed.
+*(If `TYPESAFE_API_KEY` is not set, the engine falls back to heuristic string matching and mode severity.)*
 
-### 6. Apply the majority gate + severity calibration
-- **Finding-hunt:** a finding is **confirmed** when **≥ 2 of 3** skeptics report it with `isReal=true`. Its severity is the **most common `correctedSeverity`** among the agreeing skeptics (tie → higher).
-- **Claim-refutation:** a claim **survives** when **≥ 2 of 3** skeptics return `refuted=false`. A claim **fails** (the code is broken) when ≥2 return `refuted=true` — those become defects to fix.
-- **Unconfirmed (1 vote):** never silently drop. List under "Unconfirmed (FYI)".
-
-> **Tuning the gate:** 2-of-3 is the default. For a security-critical change, drop to **any-one** so a single skeptic's real catch isn't lost. When fix-churn is expensive, raise to **unanimous**.
-
-### 7. Persist the review
-Write the aggregated result as a Markdown report to
-`plans/active_milestones/{moniker}/adversarial-reviews/implementation-validation.md`
-(create the folder if it does not exist). `{moniker}` is the active milestone whose
-`plan.md`/`spec.md` this diff implements — the orchestrator knows it; if the diff belongs
-to no milestone, write to `plans/adversarial-reviews/implementation-validation.md` and say
-so. **Always write this file, even on a clean pass** — "zero confirmed defects, here is
-what was attacked" is the evidence the gate produced, and the **severity calibration**
-table is the highest-value thing this stage emits. A re-validation after fixes goes to
-`implementation-validation-r2.md`, `-r3.md`, … so each round is preserved. Fill the **The
-Review Document** template below verbatim.
-
-### 8. Act
+### 6. Act
 - Fix **confirmed** defects (and **failed claims**) at their calibrated severity, highest first.
 - Surface **unconfirmed** findings for human eyeballing.
-- Report the calibration explicitly: "3 findings claimed Critical; all 3 confirmed real but downgraded to High because impact is conditional on concurrent requests." This is the single most useful sentence the panel produces — see Calibration Note.
+- Report the calibration explicitly: "3 findings claimed Critical; all 3 confirmed real but calibrated to High because impact is conditional on concurrency."
 - Tick the **Actions Taken** checklist in the review file as you fix each defect.
 
 ## Finding-Hunt Template (default)

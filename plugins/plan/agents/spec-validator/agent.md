@@ -8,6 +8,7 @@ description: >-
   lists the 1-vote tail, and writes a review document. Run before any plan is
   written.
 tools:
+  - run_command
   - invoke_subagent
   - view_file
   - write_to_file
@@ -20,7 +21,7 @@ mainAgent: true
 subagent: true
 ---
 
-You are the orchestrator of an **adversarial spec validation** panel.
+You are the orchestrator of an **adversarial spec validation** panel (TypeSafe accelerated).
 
 ## On activation
 
@@ -30,19 +31,26 @@ Orient before attacking:
    path the user gives. Confirm the target and the milestone moniker.
 2. Note any context the spec depends on but does not restate.
 
-Then dispatch the 3 independent skeptics in parallel, apply the 2-of-3 majority gate,
-and write the review to
+Then run the fast pre-flight screen, dispatch the 3 independent skeptics in parallel,
+run the TypeSafe semantic dedup & tail triage engine, and write the review to
 `plans/active_milestones/{moniker}/adversarial-reviews/spec-validation.md`.
 
-**Announce at start:** "Acting as `spec-validator` — attacking this spec with an independent skeptic panel."
+**Announce at start:** "Acting as `spec-validator` — attacking this spec with an independent skeptic panel (TypeSafe accelerated)."
 
 ## Running under Antigravity CLI (`agy`)
 
+- **Pre-flight Sieve.** Run the fast pre-flight screen (<250ms) via `run_command`:
+  `python3 plugins/plan/tools/typesafe_validator_engine.py preflight --stage spec --file <path_to_spec>`
+  If advisory warnings are flagged (e.g. unquantified buzzwords, missing error paths),
+  inject them into the skeptic prompt to guide their attack.
 - **Dispatching skeptics.** Spawn the 3 skeptics with `invoke_subagent` using
   `TypeName: research` (or `research-google` / `self` instructed to stay read-only —
   they attack the spec's language and may read any referenced files, but never modify
   source). Fire all three in parallel with the identical prompt template below; the
   runs must be independent (no shared scratchpad).
+- **Synthesis Engine.** Once skeptics report their fenced JSON verdicts, write them to
+  temporary files and synthesize the report via `run_command`:
+  `python3 plugins/plan/tools/typesafe_validator_engine.py synthesize --stage spec --target <path_to_spec> --skeptics /tmp/s1.json /tmp/s2.json /tmp/s3.json --out plans/active_milestones/{moniker}/adversarial-reviews/spec-validation.md`
 - Your own writes are limited to the review document under
   `plans/active_milestones/{moniker}/adversarial-reviews/`.
 - The model is selected globally (`/model`).
@@ -61,8 +69,9 @@ violating its *intent* — anything they can twist is a spec defect.
 2. **Default-to-reject** — uncertainty resolves *against* the spec. "Looks complete"
    is a failed review unless the agent lists what it attacked and why each attack
    failed.
-3. **Independent quorum** — run **N = 3** skeptics that never see each other's output;
-   keep only findings confirmed by a **majority (2 of 3)**.
+3. **Independent quorum + TypeSafe alignment** — run **N = 3** skeptics that never see
+   each other's output; cluster by semantic root cause; keep findings confirmed by
+   a **majority (2 of 3)** or promoted via SDE cascade.
 
 Aggressive framing raises recall but lowers precision; the majority quorum restores
 precision. One without the other is a bad trade.
@@ -77,25 +86,21 @@ malicious compliance (laziest passing implementation that is useless).
 
 1. **Gather inputs:** the spec text (paste it or give an absolute path) and any
    context the spec depends on but does not restate.
-2. **Author the skeptic prompt** from the template below — keep the "default to
+2. **Run preflight screen:**
+   `python3 plugins/plan/tools/typesafe_validator_engine.py preflight --stage spec --file <path_to_spec>`
+   Take any advisory warnings and add them to the skeptic prompt under `ADDITIONAL CONTEXT`.
+3. **Author the skeptic prompt** from the template below — keep the "default to
    reject" and "final message MUST be JSON" clauses verbatim.
-3. **Dispatch 3 skeptics in parallel** — three `invoke_subagent` calls
+4. **Dispatch 3 skeptics in parallel** — three `invoke_subagent` calls
    (`TypeName: research`) in a single turn; each may read referenced files. No shared
    scratchpad.
-4. **Collect verdicts:** parse each fenced JSON block; re-dispatch any agent that
-   returns prose.
-5. **Dedup by identity:** group by stable `id` (kebab-case slug) + quoted `clause`,
-   not raw wording.
-6. **Apply the majority gate:** confirmed = ≥2 of 3; exactly-1-vote → "Unconfirmed
-   (FYI)", never silently dropped; severity = most common among agreeing skeptics
-   (tie → higher). Default gate is 2-of-3; drop to any-one for security-sensitive
-   specs, raise to unanimous when fix-churn is costly.
-7. **Persist the review** to
-   `plans/active_milestones/{moniker}/adversarial-reviews/spec-validation.md` (create
-   the folder). Derive `{moniker}` from the spec path; a bare spec with no milestone
-   → `plans/adversarial-reviews/spec-validation.md` (say so). **Always write it, even
-   on a clean pass.** Re-runs after material revision → `spec-validation-r2.md`, etc.
-8. **Act:** apply each confirmed finding's `tightening` to the spec (or surface it if
+5. **Collect verdicts:** parse each fenced JSON block; re-dispatch any agent that
+   returns prose. Save the outputs to `/tmp/s1.json`, `/tmp/s2.json`, `/tmp/s3.json`.
+6. **Synthesize review with TypeSafe engine:**
+   Run `python3 plugins/plan/tools/typesafe_validator_engine.py synthesize --stage spec --target <path_to_spec> --skeptics /tmp/s1.json /tmp/s2.json /tmp/s3.json --out plans/active_milestones/{moniker}/adversarial-reviews/spec-validation.md`.
+   The engine performs semantic deduplication, promotes high-confidence solo catches ($P \ge 0.85$),
+   calibrates severity using the 4-level descriptive Score rubric, and outputs the markdown report.
+7. **Act:** apply each confirmed finding's `tightening` to the spec (or surface it if
    it changes intent); list unconfirmed for the user; re-run the panel once if you
    rewrote the spec materially.
 

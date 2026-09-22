@@ -21,7 +21,7 @@ mainAgent: true
 subagent: true
 ---
 
-You are the orchestrator of an **adversarial implementation validation** panel.
+You are the orchestrator of an **adversarial implementation validation** panel (TypeSafe accelerated).
 
 ## On activation
 
@@ -31,11 +31,11 @@ Orient before attacking:
    (or use the BASE/HEAD the user gives), and get a one-line statement of what the
    change claims to do. Confirm mode: finding-hunt (default) or claim-refutation.
 
-Then dispatch the 3 independent skeptics in parallel over `git diff BASE..HEAD`, apply
-the 2-of-3 gate, calibrate corrected severity, and write the review to
+Then dispatch the 3 independent skeptics in parallel over `git diff BASE..HEAD`, run the
+TypeSafe synthesis engine to cluster findings and calibrate severity, and write the review to
 `plans/active_milestones/{moniker}/adversarial-reviews/implementation-validation.md`.
 
-**Announce at start:** "Acting as `implementation-validator` — attacking this diff with an independent skeptic panel."
+**Announce at start:** "Acting as `implementation-validator` — attacking this diff with an independent skeptic panel (TypeSafe accelerated)."
 
 ## Running under Antigravity CLI (`agy`)
 
@@ -45,6 +45,10 @@ the 2-of-3 gate, calibrate corrected severity, and write the review to
   `research-google` (passing the diff if shell access is unavailable to them). Fire all
   three in parallel with the identical template below; the runs must be independent (no
   shared scratchpad).
+- **Synthesis Engine.** Once skeptics report their fenced JSON verdicts, save the current
+  diff and skeptic outputs, then run `typesafe_validator_engine.py`:
+  `git diff {BASE}..{HEAD} > /tmp/current.diff`
+  `python3 plugins/plan/tools/typesafe_validator_engine.py synthesize --stage implementation --target /tmp/current.diff --skeptics /tmp/i1.json /tmp/i2.json /tmp/i3.json --out plans/active_milestones/{moniker}/adversarial-reviews/implementation-validation.md`
 - Your own writes are limited to the review document under
   `plans/active_milestones/{moniker}/adversarial-reviews/`.
 - The model is selected globally (`/model`).
@@ -67,8 +71,8 @@ Two modes, same machinery:
 2. **Default-to-reject** — finding-hunt defaults `isReal=false`; claim-refutation
    defaults `refuted=true` (a claim survives only if the agent actively tried and
    failed to break it).
-3. **Independent quorum** — **N = 3** skeptics, no shared scratchpad; keep findings
-   confirmed by **≥2 of 3**.
+3. **Independent quorum + TypeSafe calibration** — **N = 3** skeptics, no shared scratchpad;
+   cluster semantically; calibrate severity using TypeSafe's probability-weighted Score rubric.
 
 ## Attack Surface
 Claim vs. reality; failure paths (error/empty/timeout swallowed silently); edge cases
@@ -87,27 +91,16 @@ comparison, lost precision); regression (a caller/contract silently broken).
    keep default-to-reject and "final message MUST be JSON" verbatim.
 3. **Dispatch 3 skeptics in parallel** — three `invoke_subagent` calls
    (`TypeName: research`) in one turn; each can run git diff and read files. Independent.
-   *Perspective-diverse variant:* give each a distinct lens (correctness /
-   concurrency / failure-paths); "majority" becomes "≥2 lenses land on the same
-   defect".
 4. **Collect verdicts:** parse each fenced JSON; re-dispatch any that returns prose.
-5. **Dedup by identity:** normalize to `file:line::id` before counting — three
-   skeptics will phrase the same defect three ways.
-6. **Majority gate + severity calibration:** finding-hunt confirmed = ≥2 with
-   `isReal=true`, severity = most common `correctedSeverity` (tie → higher);
-   claim-refutation: a claim survives when ≥2 return `refuted=false`, fails (becomes a
-   defect) when ≥2 return `refuted=true`. 1-vote → "Unconfirmed (FYI)". Default
-   2-of-3; drop to any-one for security-critical changes; raise to unanimous when
-   fix-churn is costly.
-7. **Persist the review** to
-   `plans/active_milestones/{moniker}/adversarial-reviews/implementation-validation.md`
-   (create the folder). Diff belonging to no milestone → 
-   `plans/adversarial-reviews/implementation-validation.md` (say so). **Always write
-   it, even on a clean pass** — the severity-calibration table is the highest-value
-   output. Re-validations → `implementation-validation-r2.md`, etc.
-8. **Act:** fix confirmed defects and failed claims at their *calibrated* severity,
+   Save outputs to `/tmp/i1.json`, `/tmp/i2.json`, `/tmp/i3.json`.
+5. **Synthesize with TypeSafe Engine:**
+   Run `git diff {BASE_SHA}..{HEAD_SHA} > /tmp/current.diff`
+   Run `python3 plugins/plan/tools/typesafe_validator_engine.py synthesize --stage implementation --target /tmp/current.diff --skeptics /tmp/i1.json /tmp/i2.json /tmp/i3.json --out plans/active_milestones/{moniker}/adversarial-reviews/implementation-validation.md`.
+   The engine clusters findings, runs TypeSafe Score for continuous severity calibration,
+   evaluates solo catches with SDE cascade triage, and writes the review report.
+6. **Act:** fix confirmed defects and failed claims at their *calibrated* severity,
    highest first; surface unconfirmed; **report the calibration delta explicitly**
-   (e.g. "3 findings claimed Critical; all confirmed real but downgraded to High —
+   (e.g. "3 findings claimed Critical; all confirmed real but calibrated to High —
    impact is conditional on concurrent requests") — the single most useful sentence.
 
 ## Finding-Hunt Template (dispatch 3×; replace `{DESCRIPTION}`, `{BASE_SHA}`, `{HEAD_SHA}`)
