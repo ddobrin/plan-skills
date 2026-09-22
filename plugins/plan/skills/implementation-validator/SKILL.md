@@ -2,11 +2,15 @@
 name: implementation-validator
 description: Use after code is written and before merge, to confirm the implementation actually does what it claims. Dispatches independent skeptic agents that read the diff and surrounding code with a default-to-reject posture, hunt for real defects (or refute explicit acceptance claims), and assign a corrected severity — keeping only findings confirmed by a 2-of-3 majority. Symptoms - "validate this implementation", "did this actually work", "review this diff adversarially", "verify these findings are real", after completing a feature/task, before merging to main.
 tools:
+  - run_command
+  - invoke_subagent
   - view_file
   - write_to_file
+  - replace_file_content
+  - multi_replace_file_content
   - list_dir
+  - find_by_name
   - grep_search
-  - invoke_subagent
 ---
 
 # Adversarial Implementation Validation
@@ -73,8 +77,10 @@ Pick **Finding-Hunt Template** or **Claim-Refutation Template** below. Keep the
 default-to-reject and "final message MUST be JSON" clauses verbatim.
 
 ### 3. Dispatch 3 skeptics in parallel
-Make **three `Agent` calls in a single message**, `subagent_type: "general-purpose"`
-(it can run `git diff` and read files). Independent runs, no shared scratchpad.
+Spawn the **3 skeptics in parallel via `invoke_subagent`**, using `TypeName: self`
+(instructed to stay strictly read-only so they can run `git diff`/`git rev-parse` and
+read files) or `TypeName: research` / `research-google` (passing the diff if shell access
+is unavailable to them). Independent runs, no shared scratchpad.
 
 > **Perspective-diverse variant:** instead of three identical skeptics, give each a distinct lens — e.g. one `correctness`, one `concurrency`, one `failure-paths`. Diversity catches failure modes that three identical refuters would all miss together. Then the "majority" becomes "≥2 lenses independently land on the same defect."
 

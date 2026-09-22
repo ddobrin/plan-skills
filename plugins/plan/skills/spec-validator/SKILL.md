@@ -2,11 +2,14 @@
 name: spec-validator
 description: Use after a spec or design doc is drafted and BEFORE writing an implementation plan, to find defects while they are still cheap to fix. Dispatches independent skeptic agents that attack the spec for ambiguity, missing or contradictory requirements, and untestable acceptance criteria, then keeps only findings confirmed by a 2-of-3 majority. Symptoms - "validate this spec", "poke holes in this design", "is this spec ready to plan against", finishing brainstorming before writing-plans, a freshly written specs/*.md.
 tools:
+  - invoke_subagent
   - view_file
   - write_to_file
+  - replace_file_content
+  - multi_replace_file_content
   - list_dir
+  - find_by_name
   - grep_search
-  - invoke_subagent
 ---
 
 # Adversarial Spec Validation
@@ -66,9 +69,10 @@ Fill the template in **Skeptic Prompt Template** below. Keep the framing verbati
 "default to reject" and "your final message MUST be JSON" clauses are load-bearing.
 
 ### 3. Dispatch 3 skeptics in parallel
-Make **three `Agent` calls in a single message** so they run concurrently and independently.
-Use `subagent_type: "general-purpose"` (or `"Explore"` if the spec lives in files they must read).
-Do **not** let them share a scratchpad — independence is what makes the vote mean something.
+Spawn the **3 skeptics in parallel via `invoke_subagent`** so they run concurrently and
+independently. Use `TypeName: research` (or `research-google` / `self` instructed to stay
+read-only if the spec lives in files they must read). Do **not** let them share a
+scratchpad — independence is what makes the vote mean something.
 
 ### 4. Collect verdicts
 Each agent's final message is a fenced JSON block (see **Output Contract**). Parse all three.
@@ -106,7 +110,7 @@ Fill the **The Review Document** template below verbatim.
 
 ## Skeptic Prompt Template
 
-Dispatch this **three times, unchanged**, via the `Agent` tool. Replace only `{SPEC}`
+Dispatch this **three times, unchanged**, via `invoke_subagent`. Replace only `{SPEC}`
 (and `{CONTEXT}` if any).
 
 ```

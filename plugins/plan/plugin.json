@@ -1,4 +1,5 @@
 {
   "name": "plan",
-  "description": "Spec-driven planning swarm skills for Antigravity (AGY CLI)"
+  "description": "Spec-driven planning swarm skills and agents for Antigravity (AGY CLI)",
+  "version": "1.0.0"
 }

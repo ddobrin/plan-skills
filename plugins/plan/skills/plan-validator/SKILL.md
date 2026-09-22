@@ -1,12 +1,15 @@
 ---
 name: plan-validator
-description: Use after an implementation plan is written and BEFORE executing it, to catch ordering bugs and false assumptions while they are still cheap. Dispatches independent skeptic agents that assume the plan WILL fail, read the codebase to check its assumptions, and find the first domino that topples the rest — keeping only findings confirmed by a 2-of-3 majority. Symptoms - "validate this plan", "will this plan work", "review the plan before we start", a freshly written plans/*.md from writing-plans, about to run executing-plans or subagent-driven-development.
+description: Use after an implementation plan is written and BEFORE executing it, to catch ordering bugs and false assumptions while they are still cheap. Dispatches independent skeptic agents that assume the plan WILL fail, read the codebase to check its assumptions, and find the first domino that topples the rest — keeping only findings confirmed by a 2-of-3 majority. Symptoms - "validate this plan", "will this plan work", "review the plan before we start", a freshly written plans/*.md from architect / visual-architect, about to run engineer or starter.
 tools:
+  - invoke_subagent
   - view_file
   - write_to_file
+  - replace_file_content
+  - multi_replace_file_content
   - list_dir
+  - find_by_name
   - grep_search
-  - invoke_subagent
 ---
 
 # Adversarial Plan Validation
@@ -24,7 +27,7 @@ says edit `X.dispatch()` but that method does not exist."
 
 ## When to Use
 
-- A written implementation plan exists (e.g. from `superpowers:writing-plans`) and you are about to execute it.
+- A written implementation plan exists (e.g. from `architect` or `visual-architect`) and you are about to execute it.
 - The user asks to "validate", "sanity-check", "stress-test", or "review" a plan before work starts.
 - The plan touches existing code whose shape the plan *assumes* — exactly where plans rot.
 
@@ -66,8 +69,9 @@ Fill the template in **Skeptic Prompt Template**. Keep the "default to reject", 
 source", and "final message MUST be JSON" clauses verbatim.
 
 ### 3. Dispatch 3 skeptics in parallel
-Make **three `Agent` calls in a single message**. Use `subagent_type: "general-purpose"`
-(it can read and grep the codebase). Each runs independently — no shared scratchpad.
+Spawn the **3 skeptics in parallel via `invoke_subagent`**, using `TypeName: research`
+(or `research-google` / `self` instructed to stay read-only — it can read and grep the
+codebase). Each runs independently — no shared scratchpad.
 
 ### 4. Collect verdicts
 Parse each agent's fenced JSON. Re-dispatch any agent that returns prose instead of JSON.
@@ -102,7 +106,7 @@ Review Document** template below verbatim.
 
 ## Skeptic Prompt Template
 
-Dispatch this **three times, unchanged**, via the `Agent` tool. Replace only `{PLAN}`
+Dispatch this **three times, unchanged**, via `invoke_subagent`. Replace only `{PLAN}`
 and `{REPO_ROOT}`.
 
 ```

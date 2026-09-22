@@ -7,17 +7,21 @@ import sys
 def main():
     print("Initializing Teamwork Trajectory parser...")
     
-    # Resolve the workspace root containing .agents
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    workspace_root = current_dir
-    while workspace_root and workspace_root != os.path.dirname(workspace_root):
-        if os.path.exists(os.path.join(workspace_root, '.agents')):
+    # Resolve the workspace root containing .agents (prefer cwd ancestor tree when installed globally)
+    workspace_root = None
+    for start in (os.getcwd(), os.path.dirname(os.path.abspath(__file__))):
+        cur = start
+        while cur and cur != os.path.dirname(cur):
+            if os.path.exists(os.path.join(cur, '.agents')):
+                workspace_root = cur
+                break
+            cur = os.path.dirname(cur)
+        if workspace_root:
             break
-        workspace_root = os.path.dirname(workspace_root)
-        
-    agents_dir = os.path.join(workspace_root, '.agents')
-    if not os.path.exists(agents_dir):
-        sys.stderr.write(f"Error: .agents/ directory not found in parent path tree of {current_dir}\n")
+
+    agents_dir = os.path.join(workspace_root, '.agents') if workspace_root else ''
+    if not agents_dir or not os.path.exists(agents_dir):
+        sys.stderr.write(f"Error: .agents/ directory not found in parent path tree of {os.getcwd()}\n")
         sys.exit(1)
         
     print(f"Discovered .agents/ directory at: {agents_dir}")
@@ -777,6 +781,15 @@ def main():
       });
     }
 
+    function escapeHtml(val) {
+      return String(val == null ? '' : val)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     function createAgentBox(agent) {
       const box = document.createElement('div');
       box.className = 'agent-box';
@@ -785,17 +798,18 @@ def main():
       }
       box.onclick = () => toggleDetails(box);
 
-      const avatarLetter = agent.name.split('_').map(n => n[0].toUpperCase()).join('').substring(0, 2);
+      const avatarLetter = escapeHtml(agent.name.split('_').filter(Boolean).map(n => n[0].toUpperCase()).join('').substring(0, 2));
       let avatarClass = 'avatar-worker';
       if (agent.name.includes('critic')) avatarClass = 'avatar-critic';
       else if (agent.name.includes('auditor')) avatarClass = 'avatar-auditor';
       else if (agent.name.includes('reviewer')) avatarClass = 'avatar-reviewer';
 
       const modeClass = agent.mode === 'parallel' ? 'badge-parallel' : 'badge-serial';
-      const modeText = agent.name === 'victory_auditor' ? 'Clean / Verified' : agent.mode;
+      const modeText = escapeHtml(agent.name === 'victory_auditor' ? 'Clean / Verified' : agent.mode);
+      const safeConvId = escapeHtml(agent.conv_id || 'unknown');
 
       const docsHTML = agent.docs.map(doc => `
-        <a class="doc-link-item" href="${doc.path}">${doc.name}</a>
+        <a class="doc-link-item" href="${escapeHtml(doc.path)}">${escapeHtml(doc.name)}</a>
       `).join('');
 
       box.innerHTML = `
@@ -803,25 +817,25 @@ def main():
           <div class="agent-identity">
             <div class="agent-avatar ${avatarClass}">${avatarLetter}</div>
             <div class="agent-name-role">
-              <div class="agent-name">${agent.name}</div>
-              <div class="agent-role-badge">${agent.type || agent.name}</div>
+              <div class="agent-name">${escapeHtml(agent.name)}</div>
+              <div class="agent-role-badge">${escapeHtml(agent.type || agent.name)}</div>
             </div>
           </div>
           <div class="execution-badge ${modeClass}">${modeText}</div>
         </div>
-        <div class="handoff-summary">${agent.summary}</div>
+        <div class="handoff-summary">${escapeHtml(agent.summary)}</div>
         <div class="box-expand-details">
           <div class="detail-grid">
             <div>
               <div class="detail-label">Conversation ID</div>
-              <div class="id-tag" onclick="copyId('${agent.conv_id || 'unknown'}', event)">
+              <div class="id-tag" onclick="copyId('${safeConvId}', event)">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                ID: ${agent.conv_id || 'unknown'}
+                ID: ${safeConvId}
               </div>
             </div>
             <div>
               <div class="detail-label">Task Definition</div>
-              <div class="detail-value" style="font-size: 0.85rem; color: var(--text-muted);">${agent.task}</div>
+              <div class="detail-value" style="font-size: 0.85rem; color: var(--text-muted);">${escapeHtml(agent.task)}</div>
             </div>
           </div>
           <div>
@@ -909,8 +923,8 @@ def main():
 </body>
 </html>"""
     
-    # Inject processed JSON data into placeholder
-    agents_json_str = json.dumps(parsed_agents, indent=2)
+    # Inject processed JSON data into placeholder (escape </ to prevent script breakout)
+    agents_json_str = json.dumps(parsed_agents, indent=2).replace("</", "<\\/")
     output_html_content = html_template.replace("__AGENTS_DATA_PLACEHOLDER__", agents_json_str)
     
     output_path = os.path.join(agents_dir, 'trajectory.html')

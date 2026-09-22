@@ -2,11 +2,15 @@
 name: plan-deliberator
 description: Use when a drafted implementation plan spans territories no single agent can hold at once — the spec's intent, multiple subsystems of the real codebase, and the delivery pipeline — BEFORE plan-validator, to improve the plan by deliberation rather than attack. Dispatches delegate agents each assigned a different territory to deep-read and speak for, who deliberate over bounded rounds until they converge on a single jointly revised plan, negotiating the trade-offs (migration strategy, group boundaries, scope) that a validator can only flag, never decide. Symptoms - "deliberate on this plan", "improve this plan from multiple perspectives", "the plan touches three subsystems", "we need to pick a migration strategy", plan.md spans code no one context window can deep-read whole, resolving the unconfirmed tail of a plan-validator run.
 tools:
+  - invoke_subagent
+  - send_message
   - view_file
   - write_to_file
+  - replace_file_content
+  - multi_replace_file_content
   - list_dir
+  - find_by_name
   - grep_search
-  - invoke_subagent
 ---
 
 # Deliberative Plan Improvement
@@ -111,22 +115,26 @@ load-bearing — keep them verbatim.
 Turns are **sequential, not parallel** — delegate 2 must see delegate 1's utterance, or
 proposals oscillate instead of converging.
 
-- Spawn delegate 1 via the `Agent` tool with `subagent_type: "general-purpose"` (it
-  must read and grep the codebase). Its first turn includes an **investigation phase**:
-  deep-read the territory *before* speaking. Parse its JSON turn.
+- Spawn delegate 1 via `invoke_subagent` using `TypeName: research` (or
+  `research-google` / `self` instructed to stay read-only — it must read and grep the
+  codebase). Its first turn includes an **investigation phase**: deep-read the territory
+  *before* speaking. Parse its JSON turn.
 - Spawn delegate 2 with its own prompt **plus the transcript so far** (verbatim), then
   delegate 3.
 - Track `current_proposal` as a **versioned plan edit list** (v1, v2, …): reorders,
   group boundary changes, inserted/removed/retargeted steps. Apply each turn's
   amendments to produce the next version; record which version each delegate accepted.
 
-### 4. Run subsequent rounds via SendMessage
-For rounds 2+, **continue the same agents with `SendMessage`** — never respawn. A
-respawned delegate loses everything it read in its territory and why it objected;
-continuation is what makes its authority real across rounds. Each message carries only
-the new transcript entries since that delegate's last turn, verbatim, plus the current
-proposal version. A delegate may investigate further mid-deliberation ("let me check
-whether `schedule()` tolerates a null") — that is the pattern working, not a stall.
+### 4. Run subsequent rounds
+For rounds 2+, if `send_message` is available in your runtime to continue a subagent by
+its `conversationId`, **continue the same agents with `send_message`** — each message
+carries only the new transcript entries since that delegate's last turn, verbatim, plus
+the current proposal version. When `invoke_subagent` is fire-and-return without a
+persistent channel, **re-invoke the delegate fresh for each round after the first and
+supply the FULL verbatim transcript** (every prior turn, plus its own earlier turns and
+their cited evidence) so it can reconstruct its position. A delegate may investigate
+further mid-deliberation ("let me check whether `schedule()` tolerates a null") — that is
+the pattern working, not a stall.
 
 ### 5. Terminate
 - **Convergence:** every delegate has accepted the *same* proposal version → done.
@@ -155,7 +163,7 @@ revised plan** before execution. Consensus is not adversarial survival.
 
 ## Delegate Prompt Template
 
-Dispatch once per delegate via the `Agent` tool. Replace `{ROLE}`, `{TERRITORY}`,
+Dispatch once per delegate via `invoke_subagent`. Replace `{ROLE}`, `{TERRITORY}`,
 `{GUARDS}`, `{PLAN}`, `{SPEC_PATH}`, `{REPO_ROOT}`, `{TRANSCRIPT}`, `{CURRENT_PROPOSAL}`.
 
 ```
@@ -363,7 +371,7 @@ The deliberation did both, and the revised plan then faces the validator anyway.
 | "A delegate asserted `dispatch()` doesn't exist but cited nothing." | Uncited territory claims are guesses. Send it back for `file:line` before the panel reacts to it. |
 | "I'll summarize the transcript between turns." | Verbatim relay is load-bearing — a paraphrased signature or step number corrupts exactly what deliberation transports. |
 | "They can keep talking until they agree." | Cap at 4 rounds; arbitrate, escalate hard-evidence disputes to the user. |
-| "I'll respawn fresh agents each round with the transcript." | A respawn forgets everything it read in its territory. Continue the same agents with SendMessage. |
+| "I'll respawn fresh agents each round without their full prior context." | A delegate without its full history forgets what it read in its territory. Continue the same agents with `send_message`, or re-invoke with the FULL verbatim transcript plus its territory evidence. |
 | "The panel agreed, so skip plan-validator." | The panel is invested in the trade-off it just negotiated. Consensus is not adversarial survival — run the validator. |
 | "More delegates, more coverage." | Each delegate adds a turn to every round. Split territories across 3 (max 4); never add headcount without a disjoint territory to assign. |
 

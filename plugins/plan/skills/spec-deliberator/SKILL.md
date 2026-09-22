@@ -2,11 +2,15 @@
 name: spec-deliberator
 description: Use when a drafted spec depends on knowledge that is siloed across stakeholders, documents, or repos — BEFORE adversarial validation — to improve the spec by deliberation rather than attack. Dispatches delegate agents with deliberately DISJOINT context bundles (product, engineering, ops/security) who deliberate over bounded rounds, relayed verbatim by the orchestrator, until they converge on a single jointly revised spec. Symptoms - "deliberate on this spec", "improve this spec from multiple perspectives", "get product/eng/security input on the spec", "the constraints live in different places", spec touches systems whose limits no single context window can hold, resolving the unconfirmed tail of a spec-validator run.
 tools:
+  - invoke_subagent
+  - send_message
   - view_file
   - write_to_file
+  - replace_file_content
+  - multi_replace_file_content
   - list_dir
+  - find_by_name
   - grep_search
-  - invoke_subagent
 ---
 
 # Deliberative Spec Improvement
@@ -106,22 +110,24 @@ the private bundle, and the concern list. The "acceptance requires a basis" and
 Turns are **sequential, not parallel** — delegate 2 must see delegate 1's utterance,
 or proposals oscillate instead of converging.
 
-- Spawn delegate 1 via the `Agent` tool with its prompt (spec + private bundle,
+- Spawn delegate 1 via `invoke_subagent` with its prompt (spec + private bundle,
   empty transcript). Parse its JSON turn.
 - Spawn delegate 2 with its own prompt **plus the transcript so far** (verbatim).
   Then delegate 3.
 - Track `current_proposal` as a **versioned edit list** (v1, v2, …): whenever a
   delegate's turn contains amendments, apply them to produce the next version and
   record which version each delegate has accepted.
-- Use `subagent_type: "general-purpose"` (or `"Explore"` if a bundle is "go read this
-  part of the codebase").
+- Use `TypeName: research` (or `research-google` / `self` instructed to stay read-only
+  if a bundle is "go read this part of the codebase").
 
-### 4. Run subsequent rounds via SendMessage
-For rounds 2+, **continue the same agents with `SendMessage`** — never respawn. A
-respawned delegate loses its private reasoning context and its memory of why it
-objected; continuation is what makes its stance consistent across rounds. Each
-message contains only the new transcript entries since that delegate's last turn,
-verbatim, plus the current proposal version.
+### 4. Run subsequent rounds
+For rounds 2+, if `send_message` is available in your runtime to continue a subagent by
+its `conversationId`, **continue the same agents with `send_message`** — each message
+contains only the new transcript entries since that delegate's last turn, verbatim, plus
+the current proposal version. When `invoke_subagent` is fire-and-return without a
+persistent channel, **re-invoke the delegate fresh for each round after the first and
+supply the FULL verbatim transcript** plus its private bundle so it can reconstruct its
+position without loss.
 
 ### 5. Terminate
 - **Convergence:** every delegate has accepted the *same* proposal version → done.
@@ -151,7 +157,7 @@ survives attack.
 
 ## Delegate Prompt Template
 
-Dispatch once per delegate via the `Agent` tool. Replace `{ROLE}`, `{CONCERNS}`,
+Dispatch once per delegate via `invoke_subagent`. Replace `{ROLE}`, `{CONCERNS}`,
 `{PRIVATE_BUNDLE}`, `{SPEC}`, `{TRANSCRIPT}`, and `{CURRENT_PROPOSAL}`.
 
 ```
@@ -333,7 +339,7 @@ none of which any single delegate held. The revised spec then goes to
 | "They all accepted in round 1, great." | Round-1 unanimous acceptance with thin `acceptance_basis` is sycophancy, not consensus. Re-prompt: acceptance requires a stated verification or a changed mind. |
 | "I'll summarize the transcript between turns to save tokens." | Verbatim relay is load-bearing. Paraphrase loses the exact constraint values whose transport is the point. |
 | "They can keep talking until they agree." | Cap at 4 rounds. Past that, positions are entrenched; arbitrate and escalate hard-constraint disputes. |
-| "I'll respawn a fresh agent each round with the transcript." | A respawn forgets its private reasoning and why it objected. Continue the same agent with SendMessage. |
+| "I'll respawn a fresh agent each round without its full prior context." | A delegate without its full history forgets why it objected. Continue the same agent with `send_message`, or re-invoke with the FULL verbatim transcript plus its private bundle. |
 | "The panel agreed, so the spec is validated." | The panel *built* it; builders share blind spots. Consensus is not adversarial survival — run `spec-validator`. |
 | "More delegates, more perspectives." | Each delegate adds a turn to every round. 3 is the default, 4 the max; split bundles, not headcount. |
 
