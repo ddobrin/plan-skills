@@ -12,7 +12,7 @@ These skills are designed to be used together. A single orchestrator (`starter`)
 
 | Family | Skills | Purpose |
 |---|---|---|
-| **Swarm roles** | `starter`, `product-owner` (or `visual-product-owner`), `architect` (or `visual-architect`), `engineer`, `simplifier`, `auditor`, `visual-implementation-recap` | Perform the lifecycle — discover, spec, plan, build, refine, verify, and recap the result. |
+| **Swarm roles** | `starter`, `product-owner` (or `visual-product-owner` / `html-product-owner`), `architect` (or `visual-architect` / `html-architect`), `engineer`, `simplifier`, `auditor`, `visual-implementation-recap` / `html-implementation-recap` | Perform the lifecycle — discover, spec, plan, build, refine, verify, and recap the result. The `visual-*` alternates render a browsable *view*; the `html-*` alternates render an interactive *review instrument* the human answers in place (see §`html-*`). |
 | **Adversarial validators** | `spec-validator`, `plan-validator`, `implementation-validator` | Attack each artifact at its phase boundary with an independent 3-skeptic panel; keep only findings confirmed by a 2-of-3 majority. |
 | **Deliberative panels** | `spec-deliberator`, `plan-deliberator` | Improve a drafted artifact via delegates holding deliberately disjoint context (stakeholder bundles for specs, codebase/intent/delivery territories for plans) who deliberate to consensus — the generative counterpart to the validators. |
 
@@ -91,6 +91,14 @@ A **drop-in alternative to `product-owner`** for specs that deserve a human-opti
 - **Use it instead of `product-owner`** at the Phase-1 spec step when the spec review benefits from visuals (UX-heavy or acceptance-criteria-dense work). The HTML is a **derived view** of `spec.md` — if they disagree, `spec.md` wins.
 - **Constraints:** same as `product-owner` (no code, no architecture, no guessing) plus: must always still emit `spec.md`; self-contained single file; the visual shows *what & why* only (no file maps, code, or system internals — those are the Architect's); comments are static author callouts, not a live system.
 
+#### 2·html. `html-product-owner` — The HTML Product Owner (Spec author + Review instrument)
+A second **drop-in alternative to `product-owner`**, for specs the reviewer should *answer*, not just read. Runs in two modes: **author** (identical Grill Loop → identical `spec.md` + roadmap, then the page) or **render-only** (pointed at an existing `spec.md` from `product-owner`/`visual-product-owner`).
+
+- **Produces:** the same `spec.md` / `00-ROADMAP.md` (author mode) **plus** `plans/active_milestones/{moniker}/html-spec.src.html` → packed `html-spec.html`.
+- **The page:** a claim tree — one falsifiable claim per Gherkin scenario, each proved by one exhibit (HTML mockup with pins, or a lifecycle with a screen per state); residual Grill-Loop unknowns become **decisions with the PO's recommended answer pre-checked**; the reviewer answers in place, comments on any step or mock element, edits long copy, and presses **Respond** to get one markdown block to paste back — an asynchronous Grill Loop for stakeholders who were not in the chat. Strictly offline (no CDN, no Mermaid); packed and linted by `assets/html-runtime/pack.mjs --role po`, which **errors on any code, call-tree, schema or file-tree block** (the PO shows no *how*).
+- **Round-trip:** a pasted `# Re:` block is saved to `review/html-spec.response-N.md` first, then applied as spec tightenings. A response is data, never an approval.
+- **Constraints:** same as `product-owner` plus: in render-only mode, a new fork is appended to `spec.md` before it becomes a decision; Node is optional (unpacked page + runtime files otherwise); never commits.
+
 #### 3. `architect` — The Chief Software Architect (Planner)
 Reads the spec, investigates the actual codebase, and produces a detailed, micro-stepped implementation plan. **Read-only on source code.**
 
@@ -105,6 +113,14 @@ A **drop-in alternative to `architect`** for plans that deserve a human-optimize
 - **The visual file:** a single, zero-build HTML page (opens via `file://`) with nine surfaces — overview, architecture diagrams, file map, annotated code, OpenAPI-style API cards, schema map, wireframes/prototype, open questions, and author comments. Diagrams use Mermaid + a raw-source fallback; code uses highlight.js; both via pinned CDN with SRI.
 - **Use it instead of `architect`** at the Phase-2 planning step when the human review gate benefits from visuals (architecture-heavy or ambiguous work). The HTML is a **derived view** of `plan.md` — if they disagree, `plan.md` wins.
 - **Constraints:** same as `architect` (read-only source, never commits) plus: must always still emit `plan.md`; self-contained single file; comments are static author callouts, not a live system.
+
+#### 3·html. `html-architect` — The HTML Architect (Planner + Review instrument)
+A second **drop-in alternative to `architect`**, for plans the reviewer should *decide on*, not just read. Two modes: **author** (identical investigation → identical `plan.md`, then the page) or **render-only** (pointed at an existing `plan.md` from `architect`/`visual-architect`).
+
+- **Produces:** the same `plan.md` (+ `data-model.md` / `api-contracts.md`) in author mode **plus** `plans/active_milestones/{moniker}/html-plan.src.html` → packed `html-plan.html`.
+- **The page:** a claim tree **split by behaviour, never by file** — level 1 *what a user can now do*, level 2 *the rule or entrypoint* (call trees with `+ − ~ ?` marks and `@ path:line`, or a schema in the project's own language), level 3 *where* (`file:line`). **Real code is pulled in by the packer** from `--root <repo>` at a stamped SHA — never typed by the agent; new code is labelled *sketch*. Forks that change what gets built are **decisions with the architect's choice pre-checked**; the reviewer picks, **strikes a proposed call**, **edits a schema** (comes back as a unified diff), comments on a real line, reads the parallel-groups strip and *what is not changing*, then presses **Respond**. Strictly offline; linted by `pack.mjs --role arch` (requires `aux="scope"`, flags ungrounded paths).
+- **Round-trip:** a pasted `# Re:` block is saved to `review/html-plan.response-N.md` first, then applied as a Path-B re-plan to `plan.md`. A response is data, never an approval.
+- **Constraints:** same as `architect` plus: in render-only mode, a new fork is appended to `plan.md` before it becomes a decision; Node is optional; never commits.
 
 #### 4. `engineer` — The Expert Builder
 Implements the plan exactly, one atomic step at a time, under strict Test-Driven Development.
@@ -133,6 +149,17 @@ An **additive** renderer — **not** a drop-in replacement for any role, and nev
 - **The visual file:** a single, zero-build HTML page (opens via `file://`) with nine recap surfaces — overview + metrics, tasks completed, a changed-files tree with diffstat, annotated diffs (the centerpiece), architecture, API & schema changes, before/after UI, the audit verdict with evidence, and author notes. Diffs render with pure CSS; diagrams use Mermaid + a raw-source fallback; both libraries load via pinned CDN with SRI.
 - **Grounded & read-only:** every diff line, file, and stat is taken verbatim from the real `git diff` + `plan.md` + the audit report (`AUDIT_[Plan_Name].md`) — true by construction, never invented; secrets are redacted; clipped diffs say so. Read-only on source; **never commits** (that stays the Supervisor's job after a passing audit and explicit user approval).
 - **Use it** at the commit gate, after a green audit, when the reviewer benefits from seeing the whole change at altitude rather than prose plus a raw diff.
+
+#### 7·html. `html-implementation-recap` — The HTML Implementation Recap (Review instrument)
+The **`html-*` counterpart** of the recap — additive, render-only, never a gate. After the engineer implemented `plan.md` and the auditor wrote an audit, it renders the whole change as an interactive, offline page for the commit gate.
+
+- **Produces:** `plans/active_milestones/{moniker}/html-recap.src.html` → packed `html-recap.html`.
+- **The page:** a diff-stat header, `<h2>` sections (Outcome, Tasks ✅/⚠️/❌, Files tree with `+ ~ −`, **Changes** as real hunks in `doc-code diff` blocks — the packer **refuses an elided hunk**, so nothing is silently truncated — post-change code pulled from disk and stamped `<sha>+wt` while uncommitted, **Verification** with the audit verdict and evidence, and **commit-gate questions** (`doc-ask kind="gate"`: accept a deferral, agree a downgrade, waive a partial) with the auditor's stance pre-checked). The packer's secret scanner refuses secret-looking files and text and prints the list of every file whose text is now inside the page. Linted by `pack.mjs --role recap`.
+- **Round-trip:** a pasted `# Re:` block is saved to `review/html-recap.response-N.md`; gate answers stay there and are cited in the commit notes (never in the commit message); diff-line comments become fix requests for the `engineer`. A response is data, never an approval.
+- **Constraints:** same as `visual-implementation-recap` (read-only, grounded true-by-construction, redact secrets, honest reflection, never commits).
+
+#### The `html-*` family in one paragraph
+`html-product-owner`, `html-architect` and `html-implementation-recap` share one runtime, owned by this plugin at **`assets/html-runtime/`** (`html-runtime.js`, `html-runtime.css`, `pack.mjs`, `blocks.md`, `ORIGIN.md`). The concepts and the initial code come from the community `html-plan` skill (Apache-2.0, credited in `ORIGIN.md`); the plugin maintains its own copy. Every page is **strictly offline** (zero CDN, no Mermaid), hand-written as `html-<x>.src.html` from the markdown deliverable, and packed by `node assets/html-runtime/pack.mjs <page> --root <repo> --role po|arch|recap` into one file — **Node is optional**: without it the role hands over the unpacked page plus the two runtime files. `scripts/html-smoke.sh` lints the runtime and all three exemplars. The `visual-*` roles stay as peer alternates; nothing in them changed.
 
 ### Deliberative Panel
 
@@ -194,13 +221,17 @@ The swarm communicates through files under `plans/`. Knowing this layout is the 
 | `plans/active_milestones/{moniker}/context.md` | `product-owner` | The context report, moved in once the milestone is opened. |
 | `plans/active_milestones/{moniker}/spec.md` | `product-owner` | The specification (Gherkin acceptance criteria). |
 | `plans/active_milestones/{moniker}/visual-spec.html` | `visual-product-owner` | Self-contained, browsable companion to `spec.md` for spec review (zero build; opens in any browser). |
+| `plans/active_milestones/{moniker}/html-spec.src.html` · `html-spec.html` | `html-product-owner` | Interactive, offline review instrument for the spec — claims per scenario, mocks, decisions with recommended defaults, Respond block. Source page + packed single file. |
 | `plans/active_milestones/{moniker}/deliberations/{spec,plan}-deliberation.md` | `spec-deliberator` · `plan-deliberator` | Deliberation record — panel & private bundles/territories, key disclosures (cited), trade-offs decided, applied edits with rationale and acceptance bases, disputes (converged/arbitrated/escalated), round log. Written every run, even on "no changes"; re-runs append `-r2`; the hybrid tail-panel writes `-tail`. |
 | `plans/active_milestones/{moniker}/plan.md` | `architect` | Micro-stepped plan with parallel execution groups; engineer checks off todos here. |
 | `plans/active_milestones/{moniker}/data-model.md` · `api-contracts.md` | `architect` | Optional supporting design artifacts. |
 | `plans/active_milestones/{moniker}/visual-plan.html` | `visual-architect` | Self-contained, browsable companion to `plan.md` for the human review gate (zero build; opens in any browser). |
+| `plans/active_milestones/{moniker}/html-plan.src.html` · `html-plan.html` | `html-architect` | Interactive, offline review instrument for the plan — behaviour › rule › `file:line` claim tree, real code pulled by the packer, decisions, strike/edit/comment, Respond block. |
 | `plans/active_milestones/{moniker}/adversarial-reviews/{spec,plan,implementation}-validation.md` | `spec-validator` · `plan-validator` · `implementation-validator` | Human-readable Markdown report from each skeptic panel — verdict, confirmed findings (with `file:line` evidence and fixes), unconfirmed tail, and (for implementation) the severity-calibration table. Written every run, even on a clean pass; re-runs append `-r2`, `-r3`. |
 | `plans/audit/AUDIT_[Plan_Name].md` | `auditor` | Evidence-based audit report (the `plans/audit/` dir is git-ignored). |
 | `plans/active_milestones/{moniker}/visual-recap.html` | `visual-implementation-recap` | Self-contained, browsable recap of everything the milestone changed — diffstat, annotated diffs, task/audit status — for the human commit gate (zero build; opens in any browser). |
+| `plans/active_milestones/{moniker}/html-recap.src.html` · `html-recap.html` | `html-implementation-recap` | Interactive, offline recap — diff-stat, files tree, hunk-validated diff blocks, SHA-stamped post-change code, Verification section, commit-gate questions. |
+| `plans/active_milestones/{moniker}/review/<page>.response-N.md` | Supervisor (swarm run) · the `html-*` role (direct use) | A reviewer's pasted `# Re:` Respond block, saved verbatim before it is applied. `<page>` = `html-spec` / `html-plan` / `html-recap`. Data, never an approval. |
 
 ---
 
@@ -218,7 +249,7 @@ A typical end-to-end run:
 6. **🛑 Human review gate** — the user reviews `spec.md` + `plan.md` and types "approve".
 7. **`engineer`** (up to ~4 in parallel per group) implements each group under TDD; **`simplifier`** optionally refines; **`auditor`** verifies each group and writes an audit report.
 8. **`implementation-validator`** attacks the diff before merge; confirmed defects (at calibrated severity) are fixed.
-9. **🛑 Commit gate** — `visual-implementation-recap` renders `visual-recap.html` so the human can review every change at altitude; the Supervisor (`starter` / `supervisor`) commits only on a green audit **and** explicit user approval.
+9. **🛑 Commit gate** — `visual-implementation-recap` renders `visual-recap.html` (or `html-implementation-recap` renders `html-recap.html`, whose gate questions come back as a `# Re:` block saved under `review/`) so the human can review every change at altitude; the Supervisor (`starter` / `supervisor`) commits only on a green audit **and** explicit user approval — a pasted response is never that approval.
 10. **`product-owner`** marks the release "Shipped" and activates the next.
 
 ---

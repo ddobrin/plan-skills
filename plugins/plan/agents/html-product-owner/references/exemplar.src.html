@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Reviewing a Spec in the Browser · spec</title>
+<link rel="stylesheet" href="../../../assets/html-runtime/html-runtime.css">
+<script src="../../../assets/html-runtime/html-runtime.js" defer></script>
+<style data-mock-shared>
+  .ui { font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1c1b19; background: #fff; border: 1px solid #ddd8cc; border-radius: 10px; overflow: hidden; }
+  .ui .hd { padding: 9px 14px; border-bottom: 1px solid #eee9dd; font-weight: 650; display: flex; gap: 8px; align-items: baseline; } .ui .hd small { color: #8a8578; font-weight: 400; margin-left: auto; }
+  .ui .row { display: flex; gap: 10px; align-items: baseline; padding: 8px 14px; border-bottom: 1px solid #f3efe6; } .ui .row b { color: #8a8578; font-weight: 600; min-width: 1.4em; }
+  .ui .row .pill { margin-left: auto; font-size: 11.5px; font-weight: 600; color: #b4541f; background: #fbeee6; border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+  .ui .ask { padding: 10px 14px; } .ui .ask .q { font-weight: 600; margin-bottom: 6px; } .ui .opt { display: flex; gap: 8px; align-items: center; padding: 4px 0; color: #5f5a4f; } .ui .opt .dot { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid #8a8578; } .ui .opt .dot.on { border-color: #1f7a52; background: radial-gradient(#1f7a52 45%, #fff 50%); } .ui .opt .tag { font-size: 11px; color: #1f7a52; background: #e8f4ee; border-radius: 4px; padding: 0 5px; }
+  .ui .ft { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-top: 1px solid #eee9dd; background: #faf8f3; }
+  .ui .btn { font-weight: 600; font-size: 13px; padding: 7px 12px; border-radius: 7px; border: 1px solid #ddd8cc; background: #fff; } .ui .btn.pri { background: #1c1b19; color: #fff; border-color: #1c1b19; }
+  .ui .md { font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 10px 14px; white-space: pre-wrap; color: #3d3a33; } .ui .md .k { color: #8a8578; } .ui .md .q { color: #b4541f; }
+  .ui .ok { color: #1f7a52; font-weight: 650; } .ui .dim { color: #8a8578; } .ui .warn { color: #b4541f; }
+  .ui .empty { padding: 18px 14px; color: #8a8578; text-align: center; }
+</style>
+<body>
+
+<header>
+  <h1>Reviewing a Spec in the Browser</h1>
+  <details class="thread"><summary>Why · 3 requests</summary>
+    <doc-quote via="prompt" from="the user">Editable behaviour is the point; generating html-* versions gives a clean separation to test</doc-quote>
+    <doc-quote via="doc" from="html-plan-feasibility-v2.md" where="§1 Design goals">A review instrument, not a view. Each html-* page is something the reviewer <em>answers</em>: decisions with recommended defaults … and one <b>Respond</b> block that comes back into the swarm as a file.</doc-quote>
+    <doc-quote via="doc" from="html-plan-feasibility-v2.md" where="§5.2">Answer residual Grill-Loop questions asynchronously (stakeholders not in the chat)</doc-quote>
+  </details>
+</header>
+
+<main>
+<doc-plan>
+
+<!-- ═════ 1 · Scenario: Opening the page ═════ -->
+<doc-claim id="s1">
+  <p>The reviewer opens the page offline and sees each scenario as a claim.</p>
+  <doc-mock frame="none" w="440" caption="The page as it opens: closed claims, a count of what waits."><template>
+<div class="ui">
+  <div class="hd">Reviewing a Spec in the Browser <small data-ref="todo">3 to answer</small></div>
+  <div class="row"><b>1</b> The reviewer opens the page offline…</div>
+  <div class="row"><b>2</b> A decision shows the suggested answer… <span class="pill" data-ref="count">1 decision</span></div>
+  <div class="row"><b>3</b> Answers survive a reload until Reset. <span class="pill">1 decision</span></div>
+  <div class="row"><b>4</b> Respond copies one block… <span class="pill">1 decision</span></div>
+  <div class="row dim"><b>—</b> Not in this spec: the plan page, the recap…</div>
+</div></template>
+    <doc-pin ref="todo" title="Jumps to the next unopened decision">Zero when all are answered.</doc-pin>
+    <doc-pin ref="count" anchor="r" offset="14,0" title="Decisions waiting under this claim"></doc-pin>
+  </doc-mock>
+  <div class="cols gwt">
+    <div class="card"><h4>Given</h4><ul><li>a packed <code>html-spec.html</code> on disk</li><li>the network is off</li></ul></div>
+    <div class="card"><h4>When</h4><ul><li>the reviewer opens it at <code>file://</code></li></ul></div>
+    <div class="card"><h4>Then</h4><ul><li>every scenario is a numbered claim</li><li>a count shows the decisions waiting</li><li>nothing is fetched</li></ul></div>
+  </div>
+  <doc-note tone="info"><strong>So that</strong> a stakeholder who was not in the chat can still finish the Grill Loop.</doc-note>
+</doc-claim>
+
+<!-- ═════ 2 · Scenario: Answering a decision ═════ -->
+<doc-claim id="s2">
+  <p>A decision shows the suggested answer; leaving it is a full answer.</p>
+  <doc-machine name="dec" caption="Tap a state to see what the reviewer sees there.">
+<script type="text/plain">
+machine dec initial unopened
+state unopened          # Closed claim. The default is kept, but nothing says anyone looked.
+state opened            # The question and its suggested answer are on screen.
+state kept              # The reviewer left the suggestion in place.
+state changed           # The reviewer picked another option.
+state responded final   # The answer is in the copied block.
+
+| unopened | opened | kept    | responded |
+| .        | .      | changed | .         |
+
+unopened -tap->   opened    : open
+opened   -leave-> kept      : no change
+opened   -pick->  changed   : other option
+kept     -copy->  responded : Respond
+changed  -copy->  responded : Respond
+unopened -copy->  responded : not opened
+</script>
+    <div data-state="unopened"><doc-mock frame="none" w="400"><template><div class="ui"><div class="row"><b>2</b> A decision shows the suggested answer… <span class="pill">1 decision</span></div></div></template></doc-mock></div>
+    <div data-state="opened"><doc-mock frame="none" w="400"><template><div class="ui"><div class="ask"><div class="q">Where do a reviewer's answers live between visits?</div><div class="opt"><span class="dot on"></span> This browser only <span class="tag">suggested</span></div><div class="opt"><span class="dot"></span> Also in a file next to the page</div><div class="opt"><span class="dot"></span> Not at all</div></div></div></template></doc-mock></div>
+    <div data-state="kept"><doc-mock frame="none" w="400"><template><div class="ui"><div class="ask"><div class="q">Where do a reviewer's answers live between visits?</div><div class="opt"><span class="dot on"></span> This browser only <span class="tag">suggested</span></div><div class="opt dim">2 more options</div></div><div class="ft"><span class="ok">✓ kept as proposed</span></div></div></template></doc-mock></div>
+    <div data-state="changed"><doc-mock frame="none" w="400"><template><div class="ui"><div class="ask"><div class="q">Where do a reviewer's answers live between visits?</div><div class="opt"><span class="dot"></span> This browser only <span class="tag">suggested</span></div><div class="opt"><span class="dot on"></span> Also in a file next to the page</div></div><div class="ft"><span class="warn">✎ changed · was: This browser only</span></div></div></template></doc-mock></div>
+    <div data-state="responded"><doc-mock frame="none" w="400"><template><div class="ui"><div class="md"><span class="k">## Decisions</span>
+- [2] Where do answers live? → <b>Also in a file</b> ✎ (was: This browser only)
+- [3] Mark for an unopened decision → <b>flag</b> <span class="k">_(kept as proposed)_</span>
+- [4] Does the response carry a name? <span class="k">_(not opened; default kept)_</span></div></div></template></doc-mock></div>
+  </doc-machine>
+  <div class="cols gwt">
+    <div class="card"><h4>Given</h4><ul><li>a claim with one decision under it</li><li>the suggested option is pre-checked</li></ul></div>
+    <div class="card"><h4>When</h4><ul><li>the reviewer opens the claim</li><li>and leaves the option as it is, or picks another</li></ul></div>
+    <div class="card"><h4>Then</h4><ul><li>the block says <i>kept as proposed</i> or names the change</li><li>a claim never opened says <i>not opened; default kept</i></li></ul></div>
+  </div>
+  <doc-ask id="unopened">
+    <p>How does the response mark a decision nobody opened?</p>
+    <label><input type="radio" name="unopened" value="flag" checked> A flag: <i>not opened; default kept</i> <small>the PO asks in chat if it matters</small></label>
+    <label><input type="radio" name="unopened" value="agree"> The same as a kept one <small>reads as agreement</small></label>
+    <label><input type="radio" name="unopened" value="omit"> Left out of the block</label>
+  </doc-ask>
+  <div data-if="unopened=agree"><doc-note tone="warn">Then the supervisor cannot tell a look from a skip, and the last Then step above goes.</doc-note></div>
+</doc-claim>
+
+<!-- ═════ 3 · Scenario: Coming back ═════ -->
+<doc-claim id="s3">
+  <p>Answers survive a reload until the reviewer presses Reset.</p>
+  <doc-mock frame="none" w="420" caption="The same claim, a day later, in the same browser."><template>
+<div class="ui">
+  <div class="row"><b>2</b> A decision shows the suggested answer… <span class="pill" data-ref="saved">answered ✎</span></div>
+  <div class="ft"><span class="dim">Saved in this browser</span><span class="btn" style="margin-left:auto" data-ref="reset">Reset</span></div>
+</div></template>
+    <doc-pin ref="saved" anchor="r" offset="14,0" title="Still there after a reload"></doc-pin>
+    <doc-pin ref="reset" anchor="br" title="Clears every answer and comment on the page">No undo.</doc-pin>
+  </doc-mock>
+  <div class="cols gwt">
+    <div class="card"><h4>Given</h4><ul><li>the reviewer answered one decision and left one comment</li></ul></div>
+    <div class="card"><h4>When</h4><ul><li>they close the tab and open the same file again</li></ul></div>
+    <div class="card"><h4>Then</h4><ul><li>the answer and the comment are still there</li><li>Reset clears both at once</li></ul></div>
+  </div>
+  <doc-ask id="persist">
+    <p>Where do a reviewer's answers live between visits?</p>
+    <label><input type="radio" name="persist" value="browser" checked> This browser only <small>nothing leaves the machine</small></label>
+    <label><input type="radio" name="persist" value="file"> Also in a file next to the page <small>needs a save step</small></label>
+    <label><input type="radio" name="persist" value="none"> Not at all <small>scenario 3 goes</small></label>
+  </doc-ask>
+  <div data-if="persist=none"><doc-note tone="warn">Then scenario 3 goes: a reload loses every answer, and Reset has nothing to do.</doc-note></div>
+  <div data-if="persist=browser"><doc-note tone="warn"><strong>Limit</strong> Another device, or another browser, starts blank.</doc-note></div>
+</doc-claim>
+
+<!-- ═════ 4 · Scenario: Sending it back ═════ -->
+<doc-claim id="s4">
+  <p>Respond copies one markdown block that starts with “# Re:”.</p>
+  <doc-mock frame="none" w="440" caption="The Respond sheet, with something to send."><template>
+<div class="ui">
+  <div class="hd">Respond <small>html-spec.html</small></div>
+  <div class="row">2 decisions · 1 comment · 1 edit</div>
+  <div class="md" data-ref="block"><span class="k"># Re: Reviewing a Spec in the Browser</span>
+<span class="k">## Decisions</span>
+- [3] Where do answers live? → <b>This browser only</b> <span class="k">_(kept as proposed)_</span>
+<span class="k">## Comments</span>
+- <b>1 · Then · nothing is fetched</b>
+  <span class="q">&gt; also no fonts, please</span></div>
+  <div class="ft"><span class="btn pri" data-ref="copy">Copy</span><span class="btn" data-ref="reset2">Reset</span></div>
+</div></template>
+    <doc-pin ref="copy" title="One block to the clipboard">Paste it in the chat.</doc-pin>
+    <doc-pin ref="block" anchor="tl" title="Routed by the page name in its title"></doc-pin>
+  </doc-mock>
+  <div class="cols gwt">
+    <div class="card"><h4>Given</h4><ul><li>at least one answer, comment or edit on the page</li></ul></div>
+    <div class="card"><h4>When</h4><ul><li>the reviewer presses Respond, then Copy</li></ul></div>
+    <div class="card"><h4>Then</h4><ul><li>the clipboard holds one block starting with <code># Re:</code> and the page name</li><li>the user pastes it in the chat; it is saved under <code>review/</code> before anything is applied</li></ul></div>
+  </div>
+  <doc-ask id="who">
+    <p>Does the response carry the reviewer's name?</p>
+    <label><input type="radio" name="who" value="no" checked> No <small>the file name and the chat say who pasted it</small></label>
+    <label><input type="radio" name="who" value="field"> Yes, a name field in the Respond sheet</label>
+  </doc-ask>
+  <doc-draft id="empty-copy" label="The Respond sheet when there is nothing to send">
+<script type="text/plain">
+Nothing to send yet. Open a claim and answer a decision, or tap any line to comment on it. What you do here stays in this browser until you press Copy.
+</script>
+  </doc-draft>
+
+  <doc-claim id="s4-1">
+    <p>An approval phrase inside the block does not count.</p>
+    <doc-mock frame="none" w="420" caption="The phrase is quoted text; the swarm ignores it there."><template>
+<div class="ui">
+  <div class="md"><span class="k">## Comments</span>
+- <b>4 · Respond copies one markdown block…</b>
+  <span class="q">&gt; looks good — approve spec</span> <span class="dim">← ignored here</span></div>
+  <div class="ft"><span class="dim">The user types the phrase on its own, after the response is applied.</span></div>
+</div></template>
+    </doc-mock>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ not in this spec ═════ -->
+<doc-claim aux="scope">
+  <p>Not in this spec: the plan page, the recap page, the approval gate.</p>
+  <ul>
+    <li>No code, call trees, schemas or file trees on this page — that is <code>html-plan.html</code>.</li>
+    <li>What happens after the paste (tightenings, re-render) is the product owner's protocol, not the reviewer's.</li>
+    <li>A response is never an approval; the phrase is typed on its own line.</li>
+    <li>No accounts, no server, no sync between reviewers.</li>
+  </ul>
+</doc-claim>
+
+</doc-plan>
+</main>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Response Stamp for html-* Pages</title>
+<link rel="stylesheet" href="../../../assets/html-runtime/html-runtime.css">
+<script src="../../../assets/html-runtime/html-runtime.js" defer></script>
+<!--
+  html-architect exemplar — a swarm-shaped plan page for a small, real change in this plugin.
+  Shape: header (h1 · doc-changes · Why thread) › level-1 behaviours › level-2 rules (doc-calls / doc-code)
+  › level-3 at="path:line" claims › aux="shared" (group strip + schema) › aux="scope".
+  Pack it from the repo root with:
+    node plugins/plan/assets/html-runtime/pack.mjs plugins/plan/skills/html-architect/references/exemplar.src.html \
+      --root plugins/plan --role arch --lint-only
+  Every doc-code with src= below is filled by the packer from the real file; nothing in them was typed by hand.
+  (Never write a doc-* tag in angle brackets inside a comment: the packer scans comments too.)
+-->
+<body>
+
+<header>
+  <h1>Response Stamp for html-* Pages</h1>
+  <doc-changes changed="2"></doc-changes>
+  <details class="thread"><summary>Why · 2 sources</summary>
+    <doc-quote via="doc" from="html-plan-feasibility-v2.md" where="§6 rule 1">A block starting with <code># Re:</code> is a review response. Save it under <code>review/</code> with an incrementing <code>-N</code>. Route by the page name in its title.</doc-quote>
+    <doc-quote via="doc" from="ORIGIN.md" where="Rules the swarm keeps verbatim"><code>_(not opened; default kept)_</code> is not agreement. The reader did not look; if the decision matters, ask in chat.</doc-quote>
+  </details>
+</header>
+
+<main>
+<doc-plan>
+
+<!-- ═════ 1 ═════ -->
+<doc-claim id="names">
+  <p>The response names the page and the code SHA it answers.</p>
+  <doc-mock frame="terminal" title="Respond → Copy" w="470"><template><span class="dim">#</span> <b>Re: Response Stamp for html-* Pages</b>
+<span data-ref="stamp"><span class="g">page:</span> html-plan.html · <span class="g">sha:</span> 721a0e8 · 2026-10-06
+<span class="g">decisions:</span> 3 · 1 answered · 1 kept · <span class="y">1 not opened</span></span>
+
+<span class="dim">## Decisions</span>
+1. [1.1] Where does the SHA come from?  <span class="dim">_(kept as proposed)_</span></template>
+    <doc-pin ref="stamp" title="Two new lines">Task 1.A builds them; Task 2.A places them.</doc-pin>
+  </doc-mock>
+
+  <doc-claim>
+    <p><b>Task 1.A</b> · <code>responseStamp()</code> reads the page name and the packed <code>sha=</code>.</p>
+    <doc-calls title="The stamp" caption="Tap the first row to open the sketch. The dashed row hangs on decision 1.1.">
+<script type="text/plain">
++ **responseStamp**()                        @ assets/html-runtime/html-runtime.js:559   -- goes after this divider
++   location.pathname                        @ assets/html-runtime/html-runtime.js:561   -- basename; '' when unsaved
++   document.querySelector('[sha]')          @ assets/html-runtime/html-runtime.js:561   -- the packer's stamp on a block
+?   document.documentElement.dataset.sha     @ assets/html-runtime/pack.mjs:311          -- only if pack writes data-sha
+</script>
+    </doc-calls>
+    <doc-ask id="sha-source">
+      <p>Where does the SHA come from?</p>
+      <label><input type="radio" name="sha" value="first" checked> The first <code>sha=</code> the packer stamped on a block</label>
+      <label><input type="radio" name="sha" value="html"> A <code>data-sha</code> on <code>&lt;html&gt;</code> <small>adds a pack.mjs task</small></label>
+    </doc-ask>
+    <div data-if="sha=html"><doc-note tone="warn"><strong>Then</strong> Task 1.C (pack.mjs:311) joins Group 1. Tap the row to read the real lines; the packer fills them from <code>--root</code>.</doc-note></div>
+    <doc-claim at="assets/html-runtime/html-runtime.js:559">
+      <p><b>html-runtime.js:559</b> · responseStamp()</p>
+      <doc-code title="html-runtime.js · sketch" lang="js" start="559">
+<script type="text/plain">
+/* ───────── response stamp: which page, which code ───────── */
+function responseStamp() {
+  const page = decodeURIComponent(location.pathname.split('/').pop() || '');
+  const sha = document.querySelector('[sha]')?.getAttribute('sha') || '';
+  const day = new Date().toISOString().slice(0, 10);
+  const line = `page: ${page || '(unsaved)'} · sha: ${sha || '(unpacked)'} · ${day}`;
+  return { page, sha, line };
+}
+</script>
+        <doc-pin line="562" title="Any block the packer filled carries sha=">Unpacked pages say (unpacked).</doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p><b>Task 2.A</b> · <code>buildResponse()</code> writes the stamp under the title line.</p>
+    <doc-calls title="Placing it" caption="One call in, two fields out.">
+<script type="text/plain">
+~ buildResponse()                            @ assets/html-runtime/html-runtime.js:560
++   responseStamp()                          @ assets/html-runtime/html-runtime.js:562   -- pushed right after `# Re:`
+~   return { md, …, page, sha }              @ assets/html-runtime/html-runtime.js:605
+</script>
+    </doc-calls>
+    <doc-ask id="stamp-place">
+      <p>Where does the stamp sit in the block?</p>
+      <label><input type="radio" name="place" value="lines" checked> Two plain lines under the title <small>visible when pasted</small></label>
+      <label><input type="radio" name="place" value="comment"> An HTML comment <small>hidden when rendered; grep still finds it</small></label>
+    </doc-ask>
+    <doc-claim at="assets/html-runtime/html-runtime.js:562">
+      <p><b>html-runtime.js:562</b> · the title line</p>
+      <doc-code src="assets/html-runtime/html-runtime.js" lines="560-575" hl="562">
+        <doc-pin line="562" title="The stamp lines go right after this push">Nothing above it changes.</doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p><b>Task 1.B</b> · <code>html-smoke.sh</code> fails when a packed exemplar has no <code>sha=</code>.</p>
+    <doc-calls title="The smoke check" caption="Runs only when the exemplar packed; lint-only mode skips it.">
+<script type="text/plain">
+~ exemplar loop, section 4                   @ scripts/html-smoke.sh:66
++   grep -c 'sha="' "$OUT/$role_dir.html"    @ scripts/html-smoke.sh:67   -- 0 → bad: the stamp has no source
+</script>
+    </doc-calls>
+    <doc-claim at="scripts/html-smoke.sh:66">
+      <p><b>html-smoke.sh:66</b> · the pack step</p>
+      <doc-code src="scripts/html-smoke.sh" lines="58-70" hl="66-67">
+        <doc-pin line="67" tone="info" title="The new check goes after this line">It reads the packed file already written here.</doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 2 ═════ -->
+<doc-claim id="counts">
+  <p>The response counts the decisions the reader never opened.</p>
+  <doc-code title="the count line · sketch" lang="md">
+<script type="text/plain">
+decisions: 3 · 1 answered · 1 kept · 1 not opened    ← default
+decisions: 3 · 1 answered · 2 not opened             ← if "kept" does not count (2.1)
+decisions: none                                      ← a page with no doc-ask
+</script>
+  </doc-code>
+
+  <doc-claim>
+    <p><b>Task 2.A</b> · One line sums answered, kept and not-opened decisions.</p>
+    <doc-code src="assets/html-runtime/html-runtime.js" lines="586-605" hl="590,605">
+      <doc-pin line="590" title="The per-decision flag">The count sums these three cases.</doc-pin>
+      <doc-pin line="605" title="The return gains nUnopened, page and sha">See the schema under Shared.</doc-pin>
+    </doc-code>
+    <doc-ask id="kept-counts">
+      <p>Does “kept as proposed” count as answered?</p>
+      <div class="opts-row">
+        <label><input type="radio" name="kept" value="yes" checked> Yes <small>opened and left is a choice</small></label>
+        <label><input type="radio" name="kept" value="no"> No <small>only a changed answer counts</small></label>
+      </div>
+    </doc-ask>
+    <div data-if="kept=no"><doc-note tone="info"><strong>Then</strong> the line reads <code>answered · not opened</code> only, and 2.2 loses one test case.</doc-note></div>
+  </doc-claim>
+
+  <doc-claim>
+    <p><b>Task 2.A</b> · The count reuses <code>askTodo()</code>, so the bar and the block agree.</p>
+    <doc-code src="assets/html-runtime/html-runtime.js" lines="539-557" hl="543">
+      <doc-pin line="543" tone="warn" title="No test covers this today">Characterize it first — Task 2.A, step 1.</doc-pin>
+    </doc-code>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ shared · not changing ═════ -->
+<doc-claim aux="shared">
+  <p>Shared: two groups, one record that grows.</p>
+  <div class="cols groups">
+    <div class="card"><h4>Group 1 · parallel</h4><p><b>Task 1.A</b> responseStamp() · <code>html-runtime.js</code></p><p><b>Task 1.B</b> sha= check · <code>html-smoke.sh</code></p></div>
+    <div class="card"><h4>Group 2 · after Group 1</h4><p><b>Task 2.A</b> stamp + count in buildResponse() · <code>html-runtime.js</code></p></div>
+  </div>
+  <doc-schema id="response" lang="ts" diff title="Response · html-runtime.js:605" caption="Green is new. Edit it if a field is missing or misnamed.">
+<script type="text/plain">
+ // what buildResponse() returns to the Respond sheet
+ type Response = {
+   md: string          // the whole `# Re:` block
+   nAsks: number
+   nChanged: number
++  nUnopened: number   // rows flagged _(not opened; default kept)_
++  page: string        // basename of location.pathname; '' when unsaved
++  sha: string         // first sha= the packer stamped; '' when unpacked
+   nComments: number   // comments + struck rows
+   nDrafts: number
+ }
+</script>
+  </doc-schema>
+</doc-claim>
+
+<doc-claim aux="scope">
+  <p>Not changing: the sheet, the storage key, the title line, pack.mjs.</p>
+  <ul>
+    <li>The Respond sheet and its Copy button stay as they are.</li>
+    <li>The <code>localStorage</code> key and shape are untouched; saved answers survive.</li>
+    <li><code># Re: &lt;h1&gt;</code> stays line 1 — the supervisor routes by it today.</li>
+    <li><code>pack.mjs</code> is not touched unless decision 1.1 picks <code>data-sha</code>.</li>
+  </ul>
+</doc-claim>
+
+</doc-plan>
+</main>
+</body>
+</html>

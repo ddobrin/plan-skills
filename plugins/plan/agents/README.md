@@ -13,7 +13,7 @@ These agents are designed to be used together. A single orchestrator (`superviso
 
 | Family | Agents | Purpose |
 |---|---|---|
-| **Swarm roles** | `supervisor`, `product-owner` (or `visual-product-owner`), `architect` (or `visual-architect`), `engineer`, `auditor`, `visual-implementation-recap` | Perform the lifecycle — discover, spec, plan, build, verify, and recap the result. *(Note: `simplifier` is not a separate agent in this port; its tasks are performed inline via the `simplifier` skill or handled by the engineer.)* |
+| **Swarm roles** | `supervisor`, `product-owner` (or `visual-product-owner` / `html-product-owner`), `architect` (or `visual-architect` / `html-architect`), `engineer`, `auditor`, `visual-implementation-recap` / `html-implementation-recap` | Perform the lifecycle — discover, spec, plan, build, verify, and recap the result. *(Note: `simplifier` is not a separate agent in this port; its tasks are performed inline via the `simplifier` skill or handled by the engineer.)* |
 | **Adversarial validators** | `spec-validator`, `plan-validator`, `implementation-validator` | Attack each artifact at its phase boundary with an independent 3-skeptic panel; keep only findings confirmed by a 2-of-3 majority. |
 | **Deliberative panels** | `spec-deliberator`, `plan-deliberator` | Improve a drafted artifact via delegates holding deliberately disjoint context (stakeholder bundles for specs, codebase/intent/delivery territories for plans) who deliberate to consensus — the generative counterpart to the validators. |
 
@@ -99,11 +99,25 @@ plugins/plan/agents/
 ├── plan-deliberator/agent.md           # Plan consensus panel
 ├── spec-validator/agent.md             # Spec security/correctness gate
 ├── plan-validator/agent.md             # Plan feasibility gate
-└── implementation-validator/agent.md   # Diff review / calibration gate
+├── implementation-validator/agent.md   # Diff review / calibration gate
+├── html-product-owner/                 # Spec as an interactive review instrument (html-spec.html)
+│   ├── agent.md
+│   └── references/{mapping.md, exemplar.src.html}
+├── html-architect/                     # Plan as an interactive review instrument (html-plan.html)
+│   ├── agent.md
+│   └── references/{mapping.md, exemplar.src.html}
+└── html-implementation-recap/          # Recap as an interactive review instrument (html-recap.html)
+    ├── agent.md
+    └── references/{mapping.md, exemplar.src.html}
+
+../assets/html-runtime/                 # ONE shared runtime for the html-* agents (html-runtime.js/.css, pack.mjs, blocks.md, ORIGIN.md)
 ```
 
 > [!NOTE]
 > The three **visual** agents (`visual-product-owner`, `visual-architect`, and `visual-implementation-recap`) are completely self-contained. They bundle their respective HTML `template.html` and reference files (`component-catalog.md` and `exemplar.md`) inside their own directories. This eliminates any dependency on the `plugins/plan/skills/` paths when installed standalone, allowing them to resolve paths relatively within their own installation directories.
+
+> [!NOTE]
+> The three **`html-*`** agents (`html-product-owner`, `html-architect`, `html-implementation-recap`) carry their `references/` but deliberately share **one runtime** at `plugins/plan/assets/html-runtime/` instead of bundling it three times. They locate it with the probe listed in `assets/html-runtime/ORIGIN.md` (plugin dir → `~/.gemini/config/plugins/plan/assets/html-runtime` → `.agents/html-runtime` → `~/.gemini/config/html-runtime` → `$HTML_RUNTIME_DIR`). See "Installation in `agy`" for the one-time copy a loose-agent install needs. Their `agent.md` body is identical to the matching `SKILL.md` body; `plugins/plan/scripts/html-smoke.sh` enforces it.
 
 ---
 
@@ -159,6 +173,21 @@ An **additive** renderer — **not** a drop-in replacement for any role, and nev
 - **The Visual File:** A single, zero-build HTML page (opens via `file://`) with nine recap surfaces — overview + metrics, tasks completed, a changed-files tree with diffstat, annotated diffs (the centerpiece), architecture, API & schema changes, before/after UI, the audit verdict with evidence, and author notes.
 - **Grounded & Read-Only:** Every diff line, file, and stat is taken verbatim from the real `git diff` + `plan.md` + the audit report (`AUDIT_[Plan_Name].md`) — true by construction, never invented. Read-only on source; **never commits** (that stays the Supervisor's job after a passing audit and explicit user approval).
 
+#### 9. `html-product-owner` — The HTML Spec Writer (review instrument)
+A second drop-in alternative to `product-owner`. **Author mode** runs the identical Grill Loop and writes the identical `spec.md` + roadmap; **render-only mode** takes an existing `spec.md`. Either way it then writes `html-spec.src.html` and packs it to `html-spec.html`.
+- **The page:** one falsifiable claim per Gherkin scenario, each with one exhibit (HTML mock with pins, or a lifecycle with a screen per state); residual unknowns as decisions with the PO's answer pre-checked; comments on any step or mock element; editable copy; a **Respond** button that yields one `# Re:` block for the user to paste back. Strictly offline. `pack.mjs --role po` errors on any code, call-tree, schema or file-tree block.
+- **Round-trip:** the pasted block is saved to `review/html-spec.response-N.md` first, then applied as tightenings. A response is data, never an approval.
+
+#### 10. `html-architect` — The HTML Planner (review instrument)
+A second drop-in alternative to `architect`. **Author mode** does the identical investigation and writes the identical `plan.md`; **render-only mode** takes an existing `plan.md`. Then `html-plan.src.html` → `html-plan.html`.
+- **The page:** a claim tree split by behaviour (what › rule › `file:line`); real code pulled in by the packer from `--root` at a stamped SHA, new code labelled *sketch*; decisions with the architect's choice pre-checked; the reviewer strikes proposed calls, edits schemas (returned as diffs), comments on real lines, reads the parallel-groups strip and *what is not changing*. `pack.mjs --role arch` requires `aux="scope"` and flags ungrounded paths.
+- **Round-trip:** saved to `review/html-plan.response-N.md`, then applied as a Path-B re-plan. In render-only mode a newly found fork is appended to `plan.md` before it becomes a decision.
+
+#### 11. `html-implementation-recap` — The HTML Recap (review instrument)
+The `html-*` counterpart of #8 — additive, render-only, never a gate. Produces `html-recap.src.html` → `html-recap.html`.
+- **The page:** diff-stat header; `<h2>` sections for Outcome, Tasks, Files, **Changes** (real hunks in `doc-code diff` blocks — the packer refuses an elided hunk), post-change code pulled from disk and stamped `<sha>+wt`, **Verification** with the audit verdict and evidence, and **commit-gate questions** (`doc-ask kind="gate"`) with the auditor's stance pre-checked. The packer refuses secret-looking files and pasted text and lists every file whose text is inside the page.
+- **Round-trip:** saved to `review/html-recap.response-N.md`; gate answers stay there and are cited in the commit notes, never in the commit message; diff-line comments become fix requests for the `engineer`.
+
 ---
 
 ### Deliberative Panels
@@ -213,7 +242,7 @@ A typical end-to-end run:
 6. **🛑 Human review gate** — the user reviews `spec.md` + `plan.md` and types "approve".
 7. **`engineer`** implements each group under TDD; **`auditor`** verifies each group and writes an audit report.
 8. **`implementation-validator`** attacks the diff before merge; confirmed defects (at calibrated severity) are fixed.
-9. **🛑 Commit gate** — `visual-implementation-recap` renders `visual-recap.html` so the human can review every change at altitude; the **`supervisor`** commits only on a green audit **and** explicit user approval.
+9. **🛑 Commit gate** — `visual-implementation-recap` renders `visual-recap.html` (or `html-implementation-recap` renders `html-recap.html`, whose gate questions come back as a `# Re:` block the supervisor saves under `review/`) so the human can review every change at altitude; the **`supervisor`** commits only on a green audit **and** explicit user approval — a pasted response is never that approval.
 10. **`product-owner`** marks the milestone "Shipped" and activates the next.
 
 ---
@@ -243,6 +272,13 @@ done
 
 > [!IMPORTANT]
 > Always copy the **entire directory** (`cp -R`), not just the `agent.md` file. The visual agents (`visual-architect`, `visual-product-owner`, and `visual-implementation-recap`) carry bundled directories (`assets/` and `references/`) alongside their `agent.md`. They resolve these assets relatively; if you only copy `agent.md`, the visual rendering steps will fail.
+
+> [!IMPORTANT]
+> The **`html-*` agents** (`html-product-owner`, `html-architect`, `html-implementation-recap`) carry their `references/` but share **one runtime** that lives in `plugins/plan/assets/html-runtime/`, not inside any agent directory. Method 1 installs it with the plugin. For Method 2, copy it once to the global probe location:
+> ```bash
+> rm -rf "$HOME/.gemini/config/html-runtime" && cp -R plugins/plan/assets/html-runtime "$HOME/.gemini/config/html-runtime"
+> ```
+> For Method 3, copy it to `.agents/html-runtime` in the workspace. The roles probe these locations (and `$HTML_RUNTIME_DIR`) in the order listed in `assets/html-runtime/ORIGIN.md`; if none resolves they hand over the unpacked page with a note. `node` ≥ 18 is optional but needed to pack and lint.
 
 ### Method 3: Project-Scoped (Workspace) Agents
 To keep a project-scoped copy of the swarm instead of a global one, place the same tree under your workspace directory:
@@ -289,4 +325,4 @@ To run cleanly under the Antigravity CLI harness, the original Claude Code skill
 
 - **Named Agent Dispatch:** Explicit custom-agent dispatch (e.g., `supervisor` calling `architect`) is supported when the custom agents are registered; the dispatching agents also carry a two-tier fallback (attempting named invocation, falling back to an inline-seeded `invoke_subagent` with `TypeName: self`).
 - **Deliberators Across Rounds:** When continuing delegates via full-transcript re-invocation rather than `send_message`, delegates re-read their assigned scope each round. Keep territories narrow and respect the hard 4-round cap.
-- **Asset Parity:** The bundled `assets/` and `references/` in `plugins/plan/agents/visual-*/` are byte-for-byte copies of those in `plugins/plan/skills/visual-*/`. If the skill templates are updated, keep the agent copies synchronized to prevent drift.
+- **Asset Parity:** The bundled `assets/` and `references/` in `plugins/plan/agents/visual-*/` are byte-for-byte copies of those in `plugins/plan/skills/visual-*/`. If the skill templates are updated, keep the agent copies synchronized to prevent drift. The `html-*` agents avoid this for the runtime (one copy in `plugins/plan/assets/html-runtime/`); their `references/` are still mirrored, and `plugins/plan/scripts/html-smoke.sh` checks that each `html-*` `agent.md` body matches its `SKILL.md` body.
