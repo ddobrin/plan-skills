@@ -207,6 +207,7 @@ FORBIDDEN_PARALLEL_DELIBERATION_PHRASES: list[str] = [
 VALID_NODE_STATUSES = {
     "pending",
     "running",
+    "done",
     "complete",
     "passed",
     "findings",
@@ -215,10 +216,11 @@ VALID_NODE_STATUSES = {
     "skipped",
     "pass",
     "fail",
+    "failed",
 }
 
 
-def init_state(moniker: str, graph: dict | None = None, phase: str = "0") -> dict:
+def init_state(moniker: str = "pending-task", graph: dict | None = None, phase: str = "0") -> dict:
     """Construct a canonical initial state.json payload governed by graph.json."""
     if graph is None:
         graph = load()
@@ -228,13 +230,19 @@ def init_state(moniker: str, graph: dict | None = None, phase: str = "0") -> dic
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     short_hash = hashlib.sha256(f"{moniker}:{now}".encode("utf-8")).hexdigest()[:4]
 
-    gates: dict[str, dict] = {}
-    for g in graph.get("gates", []):
-        gid = g["id"]
-        if gid == "commit-gate":
-            gates[gid] = {"status": "pending", "audit": None, "approved_by": None, "approved_at": None}
-        else:
-            gates[gid] = {"status": "pending", "approved_by": None, "approved_at": None}
+    gates = [
+        {"id": "plan-approval", "state": "not-reached"},
+        {"id": "commit", "state": "not-reached"},
+    ]
+
+    default_artifacts = {
+        "research": f"plans/active_milestones/{moniker}/context.md",
+        "product-owner": f"plans/active_milestones/{moniker}/spec.md",
+        "architect": f"plans/active_milestones/{moniker}/plan.md",
+        "engineer": f"plans/active_milestones/{moniker}/plan.md#todos",
+        "auditor": f"plans/audit/AUDIT_{moniker}.md",
+        "visual-implementation-recap": f"plans/active_milestones/{moniker}/visual-recap.html",
+    }
 
     nodes_state: dict[str, dict] = {}
     for node in graph.get("nodes", []):
@@ -244,8 +252,8 @@ def init_state(moniker: str, graph: dict | None = None, phase: str = "0") -> dic
             continue
         if nid == "research" and phase == "0":
             nodes_state[nid] = {
-                "status": "running",
-                "artifact": f"plans/active_milestones/{moniker}/context.md",
+                "status": "pending" if moniker == "pending-task" else "running",
+                "artifact": default_artifacts["research"],
             }
         elif kind == "panel":
             entry: dict = {
@@ -268,6 +276,10 @@ def init_state(moniker: str, graph: dict | None = None, phase: str = "0") -> dic
                 "delegates": [],
                 "unresolved_items": 0,
             }
+        elif nid == "simplifier":
+            nodes_state[nid] = {"status": "pending", "reason": None}
+        elif nid in default_artifacts:
+            nodes_state[nid] = {"status": "pending", "artifact": default_artifacts[nid]}
         else:
             nodes_state[nid] = {"status": "pending"}
 
@@ -478,6 +490,10 @@ def validate_agents(agents_dir: Path, graph: dict | None = None) -> list[str]:
 
         # 6. Supervisor: designated sole committer requiring passing audit + explicit user confirmation, graph.json & state.json management
         if agent_name == "supervisor":
+            if re.search(r"(?m)^subagent:\s*false\b", text):
+                problems.append(
+                    "supervisor: must not set 'subagent: false' — supervisor must be invokable both as mainAgent and subagent"
+                )
             if not re.search(
                 r"(?i)(?:sole\s+committer|only\s+(?:role|agent)\s+(?:permitted|allowed)\s+to\s+(?:run\s+)?`?git commit`?|only\s+role\s+that\s+runs\s+`?git commit`?)",
                 text,
@@ -737,7 +753,11 @@ def _esc(t: str) -> str:
 TARGETS = [
     (PLUGIN_ROOT / "README.md", "ascii"),
     (PLUGIN_ROOT / "agents" / "README.md", "ascii"),
-    (REPO_ROOT / "agents" / "README.md", "ascii"),
+    *(
+        [(REPO_ROOT / "agents" / "README.md", "ascii")]
+        if (REPO_ROOT / "agents" / "README.md").is_file()
+        else []
+    ),
     (REPO_ROOT / "README.md", "ascii"),
 ]
 
@@ -828,8 +848,8 @@ def main(argv: list[str] | None = None) -> int:
         help="path to agents directory (defaults to plugins/plan/agents/ or repo root agents/)",
     )
 
-    ist = sub.add_parser("init-state", help="initialize plans/active_milestones/<moniker>/state.json from graph.json")
-    ist.add_argument("moniker", help="milestone moniker slug (e.g. oauth-login)")
+    ist = sub.add_parser("init-state", help="initialize plans/active_milestones/<moniker>/state.json and plans/state.json from graph.json")
+    ist.add_argument("moniker", nargs="?", default="pending-task", help="milestone moniker slug (default: 'pending-task')")
     ist.add_argument("--phase", default="0", help="initial phase (default: '0')")
     ist.add_argument("--output", type=Path, default=None, help="override output file path")
 
@@ -846,9 +866,20 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "init-state":
         state_payload = init_state(args.moniker, graph, phase=args.phase)
+        serialized = json.dumps(state_payload, indent=2) + "\n"
         out_path = args.output or (Path.cwd() / "plans" / "active_milestones" / args.moniker / "state.json")
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(json.dumps(state_payload, indent=2) + "\n", encoding="utf-8")
+        out_path.write_text(serialized, encoding="utf-8")
+        if args.output is None:
+            root_state = Path.cwd() / "plans" / "state.json"
+            root_state.parent.mkdir(parents=True, exist_ok=True)
+            root_state.write_text(serialized, encoding="utf-8")
+            roadmap = Path.cwd() / "plans" / "00-ROADMAP.md"
+            if not roadmap.exists():
+                roadmap.write_text(
+                    f"# Master Roadmap\n\n- **Active Milestone:** `{args.moniker}`\n- **Phase:** `{args.phase}`\n- **State File:** `plans/active_milestones/{args.moniker}/state.json` (`plans/state.json`)\n",
+                    encoding="utf-8",
+                )
         print(f"initialized {out_path} (graph_version={state_payload['graph_version']}, phase={state_payload['phase']})")
         return 0
 

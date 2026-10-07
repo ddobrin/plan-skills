@@ -5,7 +5,7 @@ set -euo pipefail
 SCOPE="global"
 SOURCE_MODE="auto"
 REPO_URL="https://github.com/ddobrin/plan-skills.git"
-BRANCH="main"
+BRANCH="refine"
 CONFIG_DIR="${GEMINI_CONFIG_DIR:-$HOME/.gemini/config}"
 
 usage() {

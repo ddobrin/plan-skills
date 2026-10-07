@@ -1,6 +1,6 @@
 ---
 name: starter
-description: Use to orchestrate the agent swarm (product-owner, architect, engineer, auditor) and drive a feature, bug fix, or refactor through the full spec→plan→execute→commit lifecycle. Owns the state machine, treats the roadmap and milestone artifacts as the single source of truth, holds the human approval gate before execution, and is the only role that commits. Load this role before running any swarm operation. Symptoms - "be the supervisor", "run the swarm", "orchestrate this end to end", "drive this from idea to commit", resuming a milestone in plans/active_milestones/.
+description: Use to orchestrate the agent swarm (product-owner, architect, engineer, simplifier, auditor) and drive a feature, bug fix, or refactor through the full spec→plan→execute→commit lifecycle. Owns the state machine (plans/active_milestones/{moniker}/state.json and plans/state.json), treats the roadmap and milestone artifacts as the single source of truth, holds the human approval gate before execution, and is the only role that commits. CRITICAL: Load this role and IMMEDIATELY write state.json on disk whenever the user asks to "adopt the supervisor role", "be the supervisor", "wait for my task", "invoke the supervisor", "run the swarm", "orchestrate this end to end", "drive this from idea to commit", or resume a milestone in plans/active_milestones/.
 ---
 
 # Swarm Supervision
@@ -13,11 +13,25 @@ execution starts and before anything is committed.
 
 **Announce at start:** "I'm using the starter skill to supervise {milestone} — currently at {phase}."
 
+## On Activation (MANDATORY IMMEDIATE `state.json` CREATION — NEVER SKIP)
+
+**CRITICAL PROTOCOL RULE:** Whenever you adopt the Supervisor / `starter` role — **INCLUDING when the user says `"adopt the supervisor role and wait for my task"`, `"be the supervisor"`, or activates you in standby mode before providing a task** — you **MUST create `state.json` on disk during this very turn using `write_to_file` BEFORE you reply to the user.** Never end your activation turn or say you are waiting for a task without first writing `state.json` to disk.
+
+1. **Ensure `plans/00-ROADMAP.md` exists on disk:** If `plans/00-ROADMAP.md` does not exist, immediately create it via `write_to_file` (do NOT merely offer to initialize it).
+2. **Ensure `plans/active_milestones/{moniker}/state.json` AND `plans/state.json` exist on disk:**
+   - If an active milestone `plans/active_milestones/{moniker}/state.json` already exists, read it and sync `plans/state.json`.
+   - **If NO `state.json` exists yet on disk:**
+     - If the user provided a task/request, derive a kebab-case `{moniker}` from the request.
+     - **If the user has NOT provided a task yet (e.g. `"adopt the supervisor role and wait for my task"`), use `{moniker} = "pending-task"`.**
+     - **IMMEDIATELY call `write_to_file`** (or `python3 ~/.gemini/config/plugins/plan/lib/graph/graph.py init-state {moniker}`) in this turn to create **BOTH** `plans/active_milestones/{moniker}/state.json` and `plans/state.json` with the full `plan-swarm@2.1` schema below.
+3. **Report & Wait (if no task yet):** Report the exact paths created (`plans/state.json` and `plans/active_milestones/{moniker}/state.json`), the current phase (`Phase 0`), and all tracked graph nodes. If the user asked you to wait for their task, STOP after writing `state.json` and wait for their task. When the task arrives, rename/replace `pending-task` with the derived task `{moniker}`, update both `state.json` files, and dispatch Phase 0 `research`.
+
 ## When to Use
 
+- The user asks to `"adopt the supervisor role"`, `"be the supervisor"`, `"wait for my task"`, or invoke the Supervisor.
 - A feature, fix, or refactor needs taking from request to commit.
 - A partially completed milestone in `plans/active_milestones/` needs resuming — read its
-  artifacts to work out which phase it stopped in, then re-enter there.
+  `state.json` to work out which phase it stopped in, then re-enter there.
 
 ## When NOT to Use
 
@@ -35,11 +49,11 @@ execution starts and before anything is committed.
    the file wins — or the file is wrong and should be corrected first. Never let the two
    drift; that is the failure this artifact exists to prevent.
 3. **The phase is read, not inferred.** Each milestone carries
-   `plans/active_milestones/{moniker}/state.json` (`"graph_version": "plan-swarm@2.1"`, schema
-   below and in `lib/graph/STATE.md`). **On any new request, your VERY FIRST file write MUST be
-   creating `plans/active_milestones/{moniker}/state.json` via `write_to_file` (or
-   `python3 plugins/plan/lib/graph/graph.py init-state {moniker}`) BEFORE dispatching `research`
-   or `product-owner`.** Read it to resume; update it at every phase transition, every gate
+   `plans/active_milestones/{moniker}/state.json` (mirrored at `plans/state.json`, `"graph_version": "plan-swarm@2.1"`, schema
+   below and in `lib/graph/STATE.md`). **Immediately upon role activation (even when waiting for a task, using `{moniker} = "pending-task"`) or on any new request, your VERY FIRST file write MUST be
+   creating `plans/active_milestones/{moniker}/state.json` and `plans/state.json` via `write_to_file` (or
+   `python3 plugins/plan/lib/graph/graph.py init-state {moniker}`) BEFORE replying or dispatching `research`
+   or `product-owner`.** Read it to resume; update both files at every phase transition, every gate
    decision, and every node completion. Inferring the phase from which files happen to exist is
    how a resumed run re-enters the wrong phase.
 4. **The gates hold.** Stop for user approval after planning and before every commit. These
@@ -51,7 +65,7 @@ execution starts and before anything is committed.
    designated role subagent (`research`, `product-owner`, `architect`, `engineer`, `auditor`,
    validators, deliberators) with file paths rather than doing role work yourself.
 
-## State Machine Schema (`plans/active_milestones/{moniker}/state.json`)
+## State Machine Schema (`plans/active_milestones/{moniker}/state.json` & `plans/state.json`)
 
 You are the **exclusive writer** of `state.json`. Every other node is read-only.
 
@@ -60,64 +74,54 @@ You are the **exclusive writer** of `state.json`. Every other node is read-only.
   "graph_version": "plan-swarm@2.1",
   "run_id": "ms_{moniker}_{hash}",
   "moniker": "{moniker}",
-  "phase": "0 | 1 | 1.gate | 2 | 2.gate | 3 | 4 | 4.gate | 5",
+  "phase": "0",
   "updated": "ISO-8601 UTC timestamp",
   "gates": [
-    { "id": "plan-approval", "state": "not-reached | pending | approved | rejected" },
-    { "id": "commit", "state": "not-reached | pending | approved | rejected" }
+    { "id": "plan-approval", "state": "not-reached" },
+    { "id": "commit", "state": "not-reached" }
   ],
   "nodes": {
-    "research": { "status": "pending | running | done | failed", "artifact": "plans/active_milestones/{moniker}/context.md" },
-    "product-owner": { "status": "pending | running | done | failed", "artifact": "spec.md" },
-    "spec-deliberator": { "status": "pending | running | done | skipped", "reason": "asymmetry test failed — context was mergeable" },
+    "research": { "status": "pending", "artifact": "plans/active_milestones/{moniker}/context.md" },
+    "product-owner": { "status": "pending", "artifact": "plans/active_milestones/{moniker}/spec.md" },
+    "spec-deliberator": { "status": "pending", "reason": null, "rounds": 0, "delegates": [], "unresolved_items": 0 },
     "spec-validator": {
-      "status": "pending | running | passed | findings | failed",
-      "report": "adversarial-reviews/spec-validation.md",
+      "status": "pending",
+      "report": "plans/active_milestones/{moniker}/adversarial-reviews/spec-validation.md",
       "lenses": ["internal-consistency", "missing-requirement", "malicious-compliance"],
-      "confirmed": 0, "single_vote": 0, "cross_lens": 0, "single_vote_triaged": true
+      "confirmed": 0, "single_vote": 0, "cross_lens": 0, "single_vote_triaged": false
     },
-    "architect": { "status": "pending | running | done | failed", "artifact": "plan.md" },
-    "plan-deliberator": { "status": "pending | running | done | skipped", "reason": "asymmetry test failed — context was mergeable" },
+    "architect": { "status": "pending", "artifact": "plans/active_milestones/{moniker}/plan.md" },
+    "plan-deliberator": { "status": "pending", "reason": null, "rounds": 0, "delegates": [], "unresolved_items": 0 },
     "plan-validator": {
-      "status": "pending | running | passed | findings | failed",
-      "report": "adversarial-reviews/plan-validation.md",
+      "status": "pending",
+      "report": "plans/active_milestones/{moniker}/adversarial-reviews/plan-validation.md",
       "lenses": ["sequencing", "ground-truth", "blast-radius"],
-      "confirmed": 0, "single_vote": 0, "cross_lens": 0, "first_domino": null, "single_vote_triaged": true
+      "confirmed": 0, "single_vote": 0, "cross_lens": 0, "first_domino": null, "single_vote_triaged": false
     },
-    "engineer": { "status": "pending | running | done | failed", "artifact": "plan.md#todos" },
-    "simplifier": { "status": "pending | running | done | skipped", "reason": "optional clarity pass skipped" },
-    "auditor": { "status": "pending | running | passed | failed", "artifact": "plans/audit/AUDIT_{moniker}.md" },
+    "engineer": { "status": "pending", "artifact": "plans/active_milestones/{moniker}/plan.md#todos" },
+    "simplifier": { "status": "pending", "reason": null },
+    "auditor": { "status": "pending", "artifact": "plans/audit/AUDIT_{moniker}.md" },
     "implementation-validator": {
-      "status": "pending | running | passed | findings | failed",
-      "report": "adversarial-reviews/implementation-validation.md",
+      "status": "pending",
+      "report": "plans/active_milestones/{moniker}/adversarial-reviews/implementation-validation.md",
       "lenses": ["claim-vs-reality", "failure-paths", "blast-radius"],
-      "confirmed": 0, "single_vote": 0, "cross_lens": 0, "single_vote_triaged": true
+      "confirmed": 0, "single_vote": 0, "cross_lens": 0, "single_vote_triaged": false
     },
-    "visual-implementation-recap": { "status": "pending | running | done | skipped", "reason": "optional visual recap skipped" }
+    "visual-implementation-recap": { "status": "pending", "artifact": "plans/active_milestones/{moniker}/visual-recap.html" }
   },
-  "groups": [
-    {
-      "id": "1",
-      "tasks": { "1.A": "done", "1.B": "done" },
-      "audit": "not-reached | passed | failed",
-      "audit_rounds": 1,
-      "implementation_validation": "adversarial-reviews/implementation-validation.md",
-      "committed": "git_commit_sha"
-    }
-  ]
+  "groups": []
 }
 ```
 
 ## The State Machine
 
-Read `plans/00-ROADMAP.md` and `plans/active_milestones/{moniker}/state.json` (or, for a new
-request or a milestone that predates it, immediately create `state.json` on disk via
-`write_to_file` before doing anything else). Execute from the phase `state.json` names.
+Read `plans/00-ROADMAP.md` and `plans/active_milestones/{moniker}/state.json` (or, upon activation
+or a new request, immediately create `plans/00-ROADMAP.md`, `plans/active_milestones/{moniker}/state.json`,
+and `plans/state.json` on disk via `write_to_file` before doing anything else). Execute from the phase `state.json` names.
 
 ### Phase 0 — Strategic Research
-**Trigger:** a new request.
-1. **Bootstrap `state.json` FIRST:** Derive a kebab-case `{moniker}` for the milestone (e.g.
-   `oauth-login`) and write `plans/active_milestones/{moniker}/state.json` (`write_to_file` or
+**Trigger:** role activation (`{moniker} = "pending-task"` while waiting for task) or a new request.
+1. **Bootstrap `state.json` FIRST:** Ensure `plans/active_milestones/{moniker}/state.json` and `plans/state.json` exist on disk (`write_to_file` or
    `python3 plugins/plan/lib/graph/graph.py init-state {moniker}`) with `phase: "0"` and
    `nodes.research.status: "running"`.
 2. **Dispatch `research`:** Dispatch a codebase investigation subagent (`TypeName: research`) to
