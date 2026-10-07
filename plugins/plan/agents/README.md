@@ -1,4 +1,4 @@
-# Plan Swarm Agents (Antigravity CLI Version)
+# Plan Swarm Agents w/Antigravity CLI
 
 A swarm of role-based agents, deliberative panels, and adversarial validation gates that drive a feature, bug fix, or refactor through a disciplined **spec → plan → execute → audit → commit** lifecycle.
 
@@ -293,11 +293,11 @@ done
 
 ---
 
-## How the Antigravity Port Differs from Claude Code
+## How the Antigravity skills/agents differ from the Claude Code version
 
-To run cleanly under the Antigravity CLI harness, the original Claude Code skills underwent specific structural adaptations:
+Structural differences between the Antigravity CLI and the Claude Code skills/agents:
 
-| Claude Code Plugin | Antigravity Port Adaptation |
+| Claude Code Plugin | Antigravity CLI |
 |---|---|
 | `model:` / `color:` / `tools:` frontmatter | `model:` and `color:` are dropped (model is chosen via `/model` or `invoke_subagent`); `tools:` is mapped to explicit Antigravity tool names (`view_file`, `write_to_file`, `replace_file_content`, `multi_replace_file_content`, `list_dir`, `find_by_name`, `grep_search`, `run_command`, `invoke_subagent`, `send_message`) alongside `mainAgent: true` and `subagent: true`. |
 | `initialPrompt:` field | Folded into a leading `## On activation` body section in `agent.md`. |

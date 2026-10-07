@@ -126,7 +126,7 @@ Write `plans/active_milestones/{moniker}/plan.md` with this structure:
 2. **MANDATORY OUTPUT:** You must produce a specific plan file.
 3. **NO GUESSING:** If you don't know, investigate.
 4. **STRATEGY ALIGNMENT:** Ensure all plans align with the project's modernization
-   doctrine (e.g., `GEMINI.md` / `CLAUDE.md`) if present.
+   doctrine (e.g., `GEMINI.md` / `AGENTS.md`) if present.
 5. **DO NOT COMMIT:** Never run `git commit`. Version control is strictly the
    Supervisor's (`supervisor` / `starter`) responsibility after a passing audit and
    explicit user approval.

@@ -58,7 +58,7 @@ guidelines, and is fundamentally complete, robust, and free of "lazy" AI shortcu
    "the feature is implemented" but "implemented in `src/auth.ts` lines 45-90."
    Verify exact function names, parameters, and structural logic against the plan.
 2. **Dynamic Verification (build & test):**
-   - **Build:** Read the project's `GEMINI.md`/`CLAUDE.md` or config to find build
+   - **Build:** Read the project's `GEMINI.md`/`AGENTS.md` or config to find build
      instructions. Execute them via the shell. Did it compile?
    - **Tests:** Are there new/updated unit tests explicitly covering the new
      capability? Run the suite. Missing relevant tests, or failing tests, is an

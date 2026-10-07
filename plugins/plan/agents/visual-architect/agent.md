@@ -195,7 +195,7 @@ worse than none.
    Never invent one — all artifacts live in the same milestone directory.
 7. **NO GUESSING:** If you don't know, investigate.
 8. **STRATEGY ALIGNMENT:** Align plans with the Modernization Doctrine in
-   `GEMINI.md` / `CLAUDE.md` if present.
+   `GEMINI.md` / `AGENTS.md` if present.
 9. **DO NOT COMMIT:** Never run `git commit`. Version control is strictly the
    Supervisor's (`supervisor` / `starter`) responsibility after a successful audit and
    explicit user approval.
