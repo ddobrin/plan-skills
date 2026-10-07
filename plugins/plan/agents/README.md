@@ -102,13 +102,13 @@ plugins/plan/agents/
 ├── implementation-validator/agent.md   # Diff review / calibration gate
 ├── html-product-owner/                 # Spec as an interactive review instrument (html-spec.html)
 │   ├── agent.md
-│   └── references/{mapping.md, exemplar.src.html}
+│   └── references/{mapping.md, exemplar.src.html, behaviours.md, author-mode.md}
 ├── html-architect/                     # Plan as an interactive review instrument (html-plan.html)
 │   ├── agent.md
-│   └── references/{mapping.md, exemplar.src.html}
+│   └── references/{mapping.md, exemplar.src.html, behaviours.md, author-mode.md}
 └── html-implementation-recap/          # Recap as an interactive review instrument (html-recap.html)
     ├── agent.md
-    └── references/{mapping.md, exemplar.src.html}
+    └── references/{mapping.md, exemplar.src.html, behaviours.md}
 
 ../assets/html-runtime/                 # ONE shared runtime for the html-* agents (html-runtime.js/.css, pack.mjs, blocks.md, ORIGIN.md)
 ```
@@ -117,7 +117,7 @@ plugins/plan/agents/
 > The three **visual** agents (`visual-product-owner`, `visual-architect`, and `visual-implementation-recap`) are completely self-contained. They bundle their respective HTML `template.html` and reference files (`component-catalog.md` and `exemplar.md`) inside their own directories. This eliminates any dependency on the `plugins/plan/skills/` paths when installed standalone, allowing them to resolve paths relatively within their own installation directories.
 
 > [!NOTE]
-> The three **`html-*`** agents (`html-product-owner`, `html-architect`, `html-implementation-recap`) carry their `references/` but deliberately share **one runtime** at `plugins/plan/assets/html-runtime/` instead of bundling it three times. They locate it with the probe listed in `assets/html-runtime/ORIGIN.md` (plugin dir → `~/.gemini/config/plugins/plan/assets/html-runtime` → `.agents/html-runtime` → `~/.gemini/config/html-runtime` → `$HTML_RUNTIME_DIR`). See "Installation in `agy`" for the one-time copy a loose-agent install needs. Their `agent.md` body is identical to the matching `SKILL.md` body; `plugins/plan/scripts/html-smoke.sh` enforces it.
+> The three **`html-*`** agents (`html-product-owner`, `html-architect`, `html-implementation-recap`) carry their `references/` but deliberately share **one runtime** at `plugins/plan/assets/html-runtime/` instead of bundling it three times. They locate it with a **single shell command** (the loop in each SKILL / `assets/html-runtime/ORIGIN.md`; order: `$HTML_RUNTIME_DIR` → plugin dir → `~/.gemini/config/plugins/plan/assets/html-runtime` → `.agents/html-runtime` → `~/.gemini/config/html-runtime`) that also reports whether `node` is present and the checkout SHA. See "Installation in `agy`" for the one-time copy a loose-agent install needs. Their `references/` hold `mapping.md` (markdown → page blocks), `exemplar.src.html` (the lint-clean page every run starts from as a template), `behaviours.md` (read at hand-over / response time) and, for the two authoring roles, `author-mode.md` (the verbatim `spec.md` / `plan.md` templates, read only in author mode) — copy the whole directory. Their `agent.md` body is identical to the matching `SKILL.md` body; `plugins/plan/scripts/html-smoke.sh` enforces it.
 
 ---
 

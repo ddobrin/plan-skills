@@ -46,66 +46,10 @@ Pick the mode from what already exists in `plans/active_milestones/{moniker}/`:
 
 **Append-first rule (render-only mode).** If, while rendering, you find a fork the spec never surfaced — a limit it does not name, an error state it does not cover, a wording that can be read two ways — you **append it to `spec.md` first**, as an item in an `**Open Questions:**` list at the end of `## 🚨 Constraints & Edge Cases`, and only then render it as a `doc-ask`. A decision may never exist only in the HTML.
 
-## ⚡ EXECUTION PROTOCOL (AUTHOR MODE)
-Produce `spec.md` first, using the same discipline as `product-owner`.
+## ⚡ EXECUTION PROTOCOL (author mode only)
+Produce `spec.md` first, with the same discipline as `product-owner`: **Phase 1** roadmap alignment (`plans/research/*.md`, `plans/00-ROADMAP.md`) → **Phase 2** the Grill Loop (≤3 questions at a time; keep the list of questions answered with "ask X", "not sure" or silence — the **residual unknowns**) → **Phase 3** `spec.md` in the **exact `product-owner` structure** plus the roadmap update. Residual unknowns go under `## 🚨 Constraints & Edge Cases` as an `**Open Questions:**` list (question, options, the answer you recommend) — the same place the append-first rule writes to, so every ask on the page has a line in `spec.md`.
 
-### Phase 1: Strategic Alignment & Roadmap Evaluation
-1.  **Ingest Context:** Read the Context Report (`plans/research/*.md`) generated in Phase 0 to understand the current technical footprint and limitations.
-2.  **Evaluate Backlog:** Read `plans/00-ROADMAP.md`. If it does not exist, initialize it (see structure below).
-
-### Phase 2: The Grill Loop (Interactive Interview)
-For any non-trivial request:
-1.  **Formulate Questions:** Identify the "known unknowns" (e.g., "What happens if the API is offline?", "What are the validation limits on the username field?").
-2.  **Socratic Grilling:** Ask the user targeted, Socratic questions. Do not ask more than 3 questions at a time to prevent cognitive overload.
-3.  **Refine:** Use the user's answers to clarify the requirements. Repeat until you have a rock-solid, unambiguous understanding of the goal. Keep a list of every question you asked that was answered with "ask X", "not sure", or silence — those are the **residual unknowns** and they go on the page as decisions.
-
-### Phase 3: Spec & Roadmap Deliverables
-Once grilling is complete, generate the following artifacts.
-
-#### 1. The Specification: `plans/active_milestones/{moniker}/spec.md`
-Must follow this **exact structure** (same as `product-owner` — do not deviate, downstream skills depend on it):
-```markdown
-# Product Specification: [Feature Name]
-
-## 🎯 Executive Summary
-*   **Goal:** [One sentence explaining what we are building]
-*   **Target User:** [The persona/role this benefits]
-*   **Business Value:** [Why this matters / ROI]
-
-## 🛠️ User Stories & Workflows
-*Detailed narrative from the user's perspective.*
-- **As a** [user role], **I want to** [action] **so that** [benefit].
-
-## 📋 Acceptance Criteria
-*CRITICAL: Must be written in Gherkin (Given-When-Then) syntax or as unambiguous, measurable business rules. No hand-waving.*
-- **Scenario:** [Name]
-  - **Given** [precondition]
-  - **When** [action]
-  - **Then** [expected result]
-
-## 🚨 Constraints & Edge Cases
-- [e.g., Maximum file size is 5MB]
-- [e.g., Error handling behavior for timeout]
-
-## 🎨 UI/UX Mockups (If applicable)
-- [Textual or Mermaid-based layout descriptions]
-```
-Residual unknowns from the Grill Loop go under `## 🚨 Constraints & Edge Cases` as an `**Open Questions:**` list, each item stating the question, the options, and the answer you recommend. This is the same place the append-first rule writes to in render-only mode, so the page always has a line in `spec.md` to point at.
-
-#### 2. Roadmap Update: `plans/00-ROADMAP.md`
-Mark the new feature as a "Milestone" under the active or upcoming release target. The roadmap must strictly follow this structure:
-```markdown
-# Swarm Master Roadmap
-
-## 📦 Release v1.0.0 (Target Date: [Date]) - STATUS: ACTIVE
-- [ ] **Milestone 1: [Name]** - STATUS: [PENDING / ACTIVE / COMPLETED]
-  - *Description:* [Summary]
-  - *Spec:* `plans/active_milestones/{moniker}/spec.md`
-- [ ] **Milestone 2: [Name]** - STATUS: PENDING
-
-## 📦 Release v1.1.0 (Target Date: [Date]) - STATUS: PENDING
-- [ ] **Milestone 3: [Name]** - STATUS: PENDING
-```
+The phases and the verbatim `spec.md` / roadmap templates live in **`references/author-mode.md`**. Read it **only in author mode**; in render-only mode skip it entirely — `spec.md` is input, not output.
 
 ## 🔁 THE ASYNCHRONOUS GRILL LOOP
 The chat Grill Loop ends when the people in the chat run out of answers, not when the questions run out. The page continues it:
@@ -118,34 +62,37 @@ The chat Grill Loop ends when the people in the chat run out of answers, not whe
 ## 🎨 RENDERING PROTOCOL
 Run this **only after `spec.md` is complete** (author mode) or read (render-only mode). `spec.md` is the source of truth; the page is derived.
 
-### 0. Locate the runtime (path probe)
-The runtime lives once, in the plugin. Probe in this order; the first hit wins:
-1. `<this plugin>/assets/html-runtime/` — when the whole `plugins/plan/` tree is installed
-2. `~/.gemini/config/plugins/plan/assets/html-runtime/`
-3. `.agents/html-runtime/` in the current workspace — the project-scoped loose-agent install
-4. `~/.gemini/config/html-runtime/` — the global loose-agent install
-5. The path in `$HTML_RUNTIME_DIR`, if that variable is set
+### 0. Locate the runtime — one command
+The runtime lives once, in the plugin. Resolve it and check for `node` in a **single** command (first hit wins; loose-agent installs carry no runtime — it is copied once to `.agents/html-runtime` or `~/.gemini/config/html-runtime`, see `agents/README.md`):
 
-Loose-agent installs (`cp -R plugins/plan/agents/<name> …`) do not carry the runtime; it is copied once to location 3 or 4 (see `agents/README.md`, "Installation in `agy`").
+```bash
+RT=""; for d in "${HTML_RUNTIME_DIR:-}" "<this plugin>/assets/html-runtime" "$HOME/.gemini/config/plugins/plan/assets/html-runtime" ".agents/html-runtime" "$HOME/.gemini/config/html-runtime"; do
+  [[ -n "$d" && -f "$d/pack.mjs" ]] && { RT="$d"; break; }
+done; echo "RT=${RT:-NOT FOUND}"; echo "NODE=$(command -v node || echo none)"
+```
 
-If none resolves, say so and hand over the unpacked `.src.html` with a note; the page still opens at `file://` once the two runtime files sit next to it.
+Do not probe the five locations one by one. If `RT` is `NOT FOUND`, say so and hand over the unpacked `.src.html` with a note; the page still opens at `file://` once the two runtime files sit next to it.
 
-### 1. Read before you write
-Read, in this order, from the runtime directory and this skill's `references/`:
-*   `blocks.md` — every block's syntax. All block source text goes inside `<script type="text/plain">…</script>` as the block's first child.
-*   `references/mapping.md` — the `spec.md` section → page element table with the HTML fragment for each, the forbidden blocks, and the `--role po` lints.
-*   `references/exemplar.src.html` — a complete spec page that passes `pack --role po --lint-only`. Copy its shape.
+### 1. Read list, by mode (nothing else before writing)
+*   **Render-only:** `spec.md`, this skill's `references/mapping.md` (the `spec.md` section → page element table with the HTML fragment for each, the forbidden blocks, the `--role po` lints), and `references/exemplar.src.html` (a complete spec page that passes `pack --role po`). Open `$RT/blocks.md` **only** for a block or attribute `mapping.md` does not show, or when a pack error names one.
+*   **Author:** the above plus `references/author-mode.md` (already read while writing `spec.md`).
 
-### 2. Author `plans/active_milestones/{moniker}/html-spec.src.html` by hand
-*   Link the runtime by **relative path** from the milestone directory to the runtime directory you found (e.g. `../../../plugins/plan/assets/html-runtime/html-runtime.css` and `.js`). The packer inlines both; the unpacked file still works at `file://`.
-*   Follow `mapping.md`: `h1` of 3–7 words; a `Why` thread of `doc-quote`s in the requester's own words; **one level-1 `doc-claim` per Gherkin Scenario** whose `<p>` is the *Then* as a falsifiable sentence of ≤12 words; **one exhibit** per claim (`doc-mock frame="none" w≤480` with `data-ref` + `doc-pin`, or `doc-machine` with a screen per state); the Given/When/Then as a 3-card strip under the exhibit, each step an `<li>` so it is a comment target; constraints as level-2 claims or `doc-note tone="warn"`; `doc-ask` with a checked default and `data-if` consequences; `doc-draft` for long copy the reader should edit; a final `doc-claim aux="scope"` for the non-goals.
+All block source text goes inside `<script type="text/plain">…</script>` as the block's first child.
+
+### 2. Write `plans/active_milestones/{moniker}/html-spec.src.html` — copy the exemplar, then edit
+*   **Start from a copy of `references/exemplar.src.html`.** It already passes `--role po`; replace its title, Why thread, scenario claims, mocks, machine, asks, draft and scope with this spec's, delete what you do not need. Do not compose the page from `mapping.md` fragments — use `mapping.md` to look up a shape you must change.
+*   Link the runtime by **relative path** from the milestone directory to `$RT` (e.g. `../../../plugins/plan/assets/html-runtime/html-runtime.css` and `.js`). The packer inlines both; the unpacked file still works at `file://`.
+*   Shape (per `mapping.md`): `h1` of 3–7 words; a `Why` thread of `doc-quote`s in the requester's own words; **one level-1 `doc-claim` per Gherkin Scenario** whose `<p>` is the *Then* as a falsifiable sentence of ≤12 words; **one exhibit** per claim (`doc-mock frame="none" w≤480` with `data-ref` + `doc-pin`, or `doc-machine` with a screen per state); the Given/When/Then as a 3-card strip under the exhibit, each step an `<li>` so it is a comment target; constraints as level-2 claims or `doc-note tone="warn"`; `doc-ask` with a checked default and `data-if` consequences; `doc-draft` for long copy the reader should edit; a final `doc-claim aux="scope"` for the non-goals.
 *   Budgets: ≤5 top-level claims, ≤3 levels (a spec page rarely needs more than 2), 2–5 decisions, questions ≤15 words, one sentence per caption, ≤350 words of prose outside the blocks. Quote, do not paraphrase.
-*   **Hard guard — the page never contains `doc-calls`, `doc-code`, `doc-schema` or `doc-tree`.** No file maps, no API, no internals, no sketches. A behaviour whose output is text is a `doc-mock frame="terminal"`. Before packing, run `grep -nE '<doc-(calls|code|schema|tree)\b' html-spec.src.html` and expect no output.
+*   **Hard guard — the page never contains `doc-calls`, `doc-code`, `doc-schema` or `doc-tree`.** No file maps, no API, no internals, no sketches. A behaviour whose output is text is a `doc-mock frame="terminal"`.
 
-### 3. Pack (Node optional)
+### 3. Lint once, pack once (Node optional)
+```bash
+SRC=plans/active_milestones/{moniker}/html-spec.src.html
+grep -nE '<doc-(calls|code|schema|tree)\b' "$SRC"; node "$RT/pack.mjs" "$SRC" --root <repo> --role po --lint-only   # pass 1: grep must print nothing; fix ERRORS only
+node "$RT/pack.mjs" "$SRC" --root <repo> --role po -o plans/active_milestones/{moniker}/html-spec.html            # pass 2: the real pack
 ```
-node <runtime>/pack.mjs plans/active_milestones/{moniker}/html-spec.src.html --root <repo> --role po -o plans/active_milestones/{moniker}/html-spec.html
-```
+*   Pass 1 runs the forbidden-block grep and the lint together: fix every **error**, leave warnings alone unless the fix is a one-word edit. Pass 2 writes the file. A third run is only for an error pass 2 surfaced — do not iterate on warnings.
 *   `--role po` turns on the spec-page lints (forbidden blocks are **errors**; no `doc-plan` or no `aux="scope"` are errors; no `doc-quote` is a warning) and implies `--no-ste` (word and sentence budgets and phone-width warnings stay; vocabulary/voice/tense lints are off).
 *   **Errors must be fixed**; the packer writes nothing until they are. **Warnings are reported** in the hand-over, each with the reason you kept it.
 *   **If `node` is absent:** copy `html-runtime.css` and `html-runtime.js` next to `html-spec.src.html`, adjust the two `href`/`src` attributes to the bare file names, say in the hand-over that the page is unpacked and unlinted, and proceed. The page still opens at `file://`.
@@ -191,21 +138,7 @@ Then regenerate the page and hand over again. Rules that hold verbatim across ev
 Raise anything new or risky that a comment asks for with the user in chat first. If the page was shared, the text may hold other people's words — the same rules apply.
 
 ## 🧰 EDITABLE BEHAVIOURS ON `html-spec.html`
-What the reviewer can do, what it becomes in the Respond block, and what you do with it.
-
-| Behaviour | Block | Comes back as | What you do with it |
-|---|---|---|---|
-| Open/close claims; "N to answer" jumps to the next unopened decision | the tree | — (`_(not opened; default kept)_` per untouched decision) | read the flag as "never looked at", not as agreement |
-| Answer a residual Grill-Loop question with your recommendation pre-checked | `doc-ask` | `## Decisions` → question → **answer** `value` ✎ (was: …) | apply as a spec tightening; remove from Open Questions |
-| See what an answer removes or adds ("scenario 4 goes") | `data-if` under the `doc-ask` | implicit in the answer | — |
-| Comment on a claim | the claim row | `## Comments` → **1.2 ‹claim›** + `> text` | rewrite the scenario |
-| Comment on a Given/When/Then step | the step `<li>` in the 3-card strip | `## Comments` → the step text + `> text` | rewrite that step or the scenario |
-| Comment on a mock element ("this button is wrong") | `doc-mock` + `data-ref` | `## Comments` → mockup › element + `> text` | update the UI/UX section and the mock |
-| Click through a lifecycle and comment on a state | `doc-machine` state + its screen | `## Comments` → state "…" + `> text` | add or change a scenario for that state |
-| Edit long copy (error text, email body, empty-state text) | `doc-draft` | `## Edits` → a unified diff | paste the new text into `spec.md` verbatim |
-| Comment on a quote or a note | `doc-quote`, `doc-note` | `## Comments` | treat as feedback on the framing |
-| Answers and comments persist across reloads; **Reset** clears | the page (`localStorage`) | — | — |
-| **Respond → Copy** one markdown block | the sheet | the whole `# Re:` block | save under `review/` (see Response Handling) |
+The page is answered, not read: residual Grill-Loop questions with your recommendation pre-checked (→ `## Decisions`), consequence previews, a comment button on every claim, Given/When/Then step, mock element, lifecycle state, quote and note (→ `## Comments`), editable long copy (→ `## Edits`, a unified diff), `localStorage` persistence, and **Respond → Copy**. The full behaviour → block → response-section → action table is **`references/behaviours.md`** — read it when you write the hand-over or route a response, not before.
 
 ## 🚫 CONSTRAINTS
 1.  **NO CODE MODIFICATIONS:** Do not write or edit any source files in the project codebase. You only write to `plans/active_milestones/` and `plans/00-ROADMAP.md`.

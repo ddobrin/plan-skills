@@ -38,87 +38,28 @@ Pick the mode from what already exists in `plans/active_milestones/{moniker}/` a
 
 **Append-first rule (render-only mode).** If, while rendering, you find a fork that `plan.md` never surfaced — a migration strategy it assumed, a limit it hard-coded, a retry policy it left implicit — you **append it to `plan.md` first** (under `Risks/Edge Cases`, or an `### Open Questions` subsection at the end of `Analysis & Context`) and only then render it as a `doc-ask`. **No decision may live only in the HTML.** The same rule holds in author mode: every ask on the page is a line in `plan.md`.
 
-## ⚡ PLANNING PROTOCOL (author mode)
-Produce `plan.md` first, using the same discipline as `architect`:
+## ⚡ PLANNING PROTOCOL (author mode only)
+Produce `plan.md` first, with the same discipline as `architect`: Investigation (map the affected area with real `path:line`s; no guessing) → Analysis (what exists, what changes, which risks are **forks the reviewer can decide** — 2–5 `doc-ask`s) → Plan Creation with the **exact `plan.md` structure** `architect` uses.
 
-### 1. Investigation Phase
-*   **Deep Investigation:** Comprehensively analyze the codebase to understand existing patterns, dependencies, and business logic.
-*   **Action:** Use `find_by_name`, `list_dir`, `grep_search`, and `view_file` to map the affected area. Blind planning is forbidden.
-*   **Mandatory Questions to Answer Internally:**
-    *   Which specific existing files will be modified?
-    *   What is the established architectural pattern we must adhere to?
-    *   What existing unit/integration tests will this break or require updating?
-*   **No Guessing:** If unsure about a system's behavior or a change's impact, investigate until you have empirical evidence. Do NOT rely on file names or directory listings alone.
-*   **Record `path:line` as you go.** Every entrypoint, call site and record you will cite on the page needs a real line number; note them now so the page can be grounded without a second pass.
-
-### 2. Analysis & Reasoning
-*   Document findings: What exists? What needs to change? Why?
-*   Identify risks, dependencies, and integration points. Decide which risks are **forks the reviewer can decide** (these become `doc-ask`s, 2–5 of them) and which are notes.
-
-### 3. Plan Creation
-Create `plans/active_milestones/{moniker}/plan.md` with **exactly** this structure (same as `architect` — do not deviate, downstream skills depend on it):
-
-```markdown
-# Technical Plan: [Milestone Moniker]
-
-## 🔍 Analysis & Context
-*   **Objective:** [One sentence summary]
-*   **Affected Files:** [List of exact file paths]
-*   **Key Dependencies:** [Libraries/Services involved]
-*   **Risks/Edge Cases:** [Anticipated challenges based on spec.md]
-
-## 📋 Task Execution (Parallel Groups)
-*CRITICAL: Group tasks by dependencies. Tasks within the same group MUST be entirely independent (they must not modify the same files) to allow for safe parallel execution. Group 2 cannot start until Group 1 is complete.*
-
-### Group 1 (Parallel Execution - Independent Tasks)
-- [ ] Task 1.A: [Name - explicitly state target file(s)]
-- [ ] Task 1.B: [Name - explicitly state target file(s)]
-
-### Group 2 (Sequential Execution - Depends on Group 1)
-- [ ] Task 2.A: [Name - explicitly state target file(s)]
-
-## 📝 Step-by-Step Implementation Details
-*CRITICAL: Be extremely specific. You MUST include exact file paths, target line numbers (if known), function signatures, and structural code snippets.*
-
-### Prerequisites
-[Setup or dependencies]
-
-#### Task [X].[Y] (e.g., Task 1.A)
-1.  **Step 1 (The Unit Test Harness):** Define the verification requirement.
-    *   *Target File:* `test/Path/To/Test.ext`
-    *   *Test Cases to Write:* [List specific assertions]
-2.  **Step 2 (The Implementation):** Execute the core change.
-    *   *Target File:* `src/Path/To/File.ext`
-    *   *Exact Change:* [Specific logic to implement]
-3.  **Step 3 (The Verification):** Verify the harness.
-    *   *Action:* Run `[specific unit test command]`.
-
-[...Continue for all tasks in all groups...]
-
-### 🧪 Global Testing Strategy
-*   **Unit Tests:** [Summary of pure logic to test in isolation]
-*   **Integration Tests:** [Summary of cross-boundary flows to verify]
-
-## 🎯 Success Criteria
-*   [Definition of Done Condition 1]
-*   [Definition of Done Condition 2]
-```
+The protocol and the verbatim template live in **`references/author-mode.md`**. Read it **only in author mode**; in render-only mode skip it entirely — `plan.md` is input, not output.
 
 ## 🧩 RENDERING PROTOCOL
 Run this **after `plan.md` is complete** (author mode) or **after reading it** (render-only). `plan.md` is the source of truth; the page is derived.
 
-### 0. Locate the runtime
-The runtime lives once, in the plugin. Probe in this order (first hit wins):
+### 0. Locate the runtime and pre-stage — one command
+The runtime lives once, in the plugin. Resolve it, check for `node`, and record the SHA in a **single** command (first hit wins; loose-agent installs carry no runtime — it is copied once to `.agents/html-runtime` or `~/.gemini/config/html-runtime`, see `agents/README.md`):
 
-1. `<this plugin>/assets/html-runtime/` — when the whole `plugins/plan/` tree is installed
-2. `~/.gemini/config/plugins/plan/assets/html-runtime/`
-3. `.agents/html-runtime/` in the current workspace — the project-scoped loose-agent install
-4. `~/.gemini/config/html-runtime/` — the global loose-agent install
-5. The path in `$HTML_RUNTIME_DIR`, if that variable is set
+```bash
+RT=""; for d in "${HTML_RUNTIME_DIR:-}" "<this plugin>/assets/html-runtime" "$HOME/.gemini/config/plugins/plan/assets/html-runtime" ".agents/html-runtime" "$HOME/.gemini/config/html-runtime"; do
+  [[ -n "$d" && -f "$d/pack.mjs" ]] && { RT="$d"; break; }
+done; echo "RT=${RT:-NOT FOUND}"; echo "NODE=$(command -v node || echo none)"; echo "SHA=$(git -C <repo> rev-parse --short HEAD)"
+```
 
-Loose-agent installs (`cp -R plugins/plan/agents/<name> …`) do not carry the runtime; it is copied once to location 3 or 4 (see `agents/README.md`, "Installation in `agy`").
+Do not probe the five locations one by one. If `RT` is `NOT FOUND`, say so and hand over the unpacked `.src.html` with a note; the page still opens at `file://` once `html-runtime.css` and `html-runtime.js` sit next to it. Call the resolved directory `<runtime>` below.
 
-If none resolves, say so and hand over the unpacked `.src.html` with a note; the page still opens at `file://` once the two runtime files (`html-runtime.css`, `html-runtime.js`) sit next to it. Call the resolved directory `<runtime>` below. Read `<runtime>/blocks.md` and this skill's `references/mapping.md` before writing any HTML; `references/exemplar.src.html` is a complete page to copy the shape of.
+**Read list, by mode** (nothing else before writing):
+*   **Render-only:** `plan.md` (+ `data-model.md`, `api-contracts.md`, `spec.md` if present), this skill's `references/mapping.md`, and `references/exemplar.src.html`. Open `<runtime>/blocks.md` **only** for a block or attribute `mapping.md` does not show, or when a pack error names one.
+*   **Author:** the above plus `references/author-mode.md` (already read while writing `plan.md`).
 
 ### 1. Derive the tree from `plan.md`
 *   `h1` ← Objective, as a 3–7 word title. `doc-changes` ← Affected Files, counted (`new=`, `changed=`, `deleted=`; omit zeros). Why thread ← the spec's request and Gherkin, quoted.
@@ -127,19 +68,23 @@ If none resolves, say so and hand over the unpacked `.src.html` with a note; the
 *   `aux="shared"` ← the group strip (one `.card` per Group with its Task IDs) + the shared schema from `data-model.md`. `aux="scope"` ← what is not changing (required).
 *   The full section → block table and the fragment for each is in `references/mapping.md`.
 
-### 2. Write `html-plan.src.html` by hand
-*   Path: `plans/active_milestones/{moniker}/html-plan.src.html`. Link the runtime by relative path from that file to `<runtime>` (or by the probed absolute path): `<link rel="stylesheet" href="…/html-runtime.css">` and `<script src="…/html-runtime.js" defer></script>`.
+### 2. Write `html-plan.src.html` — copy the exemplar, then edit
+*   **Start from a copy of `references/exemplar.src.html`**, written to `plans/active_milestones/{moniker}/html-plan.src.html`. It already passes `--role arch`; replace its title, Why thread, claims, asks, groups strip and scope with this plan's, delete what you do not need. Do not compose the page from `mapping.md` fragments — use `mapping.md` to look up a shape you must change.
+*   Link the runtime by relative path from that file to `<runtime>` (or by the probed absolute path): `<link rel="stylesheet" href="…/html-runtime.css">` and `<script src="…/html-runtime.js" defer></script>`.
 *   Every block's source goes in `<script type="text/plain">` as its first child. Never type code that exists — cite it (`src="path" lines="a-b"`, `@ path:line`); the packer pulls it. Label code that does not exist yet as a `sketch`.
+*   **Resolve every citation in one command** before writing them: `grep -nE 'symA|symB|symC' path/one path/two` (one `grep` per repository) and `wc -l` on the cited files for `lines=` ranges — not one lookup per claim.
 *   Keep the budgets: claims ≤12 words, questions ≤15, one exhibit per claim, ≤5 children, ≤3 levels, 2–5 decisions, `src=` slices of 10–25 lines.
 
-### 3. Pack
+### 3. Lint once, pack once
+```bash
+node "$RT/pack.mjs" plans/active_milestones/{moniker}/html-plan.src.html --root <repo> --role arch --lint-only   # pass 1: fix ERRORS only
+node "$RT/pack.mjs" plans/active_milestones/{moniker}/html-plan.src.html --root <repo> --role arch -o plans/active_milestones/{moniker}/html-plan.html   # pass 2: the real pack
 ```
-node <runtime>/pack.mjs plans/active_milestones/{moniker}/html-plan.src.html --root <repo> --role arch -o plans/active_milestones/{moniker}/html-plan.html
-```
+*   Pass 1 is `--lint-only`: fix every **error**, leave warnings alone unless the fix is a one-word edit. Pass 2 writes the file. A third run is only for an error pass 2 surfaced — do not iterate on warnings.
 *   `--root <repo>` is the checkout the cited paths live in (the repository root; pass `--root` more than once for a monorepo). `--role arch` turns on the architect lints and implies `--no-ste` (word and phone-width budgets stay; vocabulary / voice / tense lints go).
 *   **Errors must be fixed** — the packer refuses to write on an error. **Warnings are reported in the hand-over** with the reason each was accepted. Treat every `doc-calls` row the packer could not resolve under `--root` as a **planning defect** unless the plan creates that file.
 *   The packer ends by listing every file whose code is now inside the page. Read that list; it is what the reviewer (and anyone they share the page with) will see.
-*   Record the SHA: `git rev-parse --short HEAD` in `<repo>`; the packer stamps it on every filled block, and your hand-over names it.
+*   The SHA from step 0 is what the packer stamps on every filled block; your hand-over names it.
 
 ### 4. If `node` is absent
 Copy `<runtime>/html-runtime.css` and `<runtime>/html-runtime.js` next to `html-plan.src.html`, point the `<link>` / `<script>` at them, and hand over the `.src.html`; say in the hand-over that the page is unpacked (no lint, no embedded code — `src=` blocks and call rows open nothing until packed). Proceed; do not block the swarm on Node.
@@ -158,22 +103,7 @@ If there is no fork worth a decision, say so in that line instead of inventing o
 If `plan.md` changes later (after `plan-validator`, `plan-deliberator`, or a response), **regenerate the page** from the final `plan.md` and re-pack. A stale page is worse than none.
 
 ## 🎛️ WHAT THE REVIEWER CAN DO ON `html-plan.html`
-Offer these in the hand-over so the reviewer knows the page is answered, not read.
-
-| Behaviour | Where | Comes back as | What you do with it |
-|---|---|---|---|
-| Open / close claims; "N to answer" jumps to the next unopened decision | tree | — (a `_(not opened; default kept)_` flag per decision) | read the flag as "never looked at", not as agreement |
-| **Answer a decision** (radio / checkbox / text / range / rank), your recommendation pre-checked | `doc-ask` | `## Decisions` → `[claim no] question → **answer** `value` ✎ (was: …)` | re-plan the affected Task(s) — Path B |
-| Choose between forks that change what gets built (migration strategy, limit values, retry policy) | `doc-ask` on the claim it changes | `## Decisions` | re-plan the affected Task(s); update `Risks/Edge Cases` |
-| **Strike a proposed call** (`+` / `?` rows) | `doc-calls` | `## Struck from the plan` → the row and `⇒ no longer touched: files` | remove the step / file from `plan.md`; the struck subtree goes with it |
-| **Edit a schema** in the project's language | `doc-schema id= lang=sql/ts/proto` | `## Edits` → a unified diff | apply to `data-model.md` **and** the Task that creates it |
-| Tap a call row → the real ±6 lines at that `path:line`, SHA-stamped | `doc-calls` + packer | — | — (trust) |
-| **Comment** on a real line of existing code ("this throws"), a claim, a call row, a schema line, a mock element, a quote, a note | everywhere | `## Comments` → `- **3.2 <claim>**` + `> reader text` | add a characterization-test step or a risk; answer or address |
-| Consequence preview (`data-if`) — what an answer removes or adds | under `doc-ask` | implicit in the answer | — |
-| Read the group strip (which Tasks run in parallel) and comment | `.cols.groups` under `aux="shared"` | `## Comments` | regroup |
-| Read **what is not changing** | `aux="scope"` | — | — (prevents scope-creep comments) |
-| Answers and comments persist across reloads (`localStorage`); **Reset** clears | page | — | — |
-| **Respond → Copy** one markdown block | sheet | the whole `# Re:` block | saved to a file first (below) |
+The page is answered, not read: decisions with your recommendation pre-checked (→ `## Decisions`), strikeable call rows (→ `## Struck from the plan`), editable schemas (→ `## Edits`, a unified diff), a comment button on every claim, row, line and quote (→ `## Comments`), consequence previews, the parallel-groups strip, a scope block, `localStorage` persistence, and **Respond → Copy**. The full behaviour → block → response-section → action table is **`references/behaviours.md`** — read it when you write the hand-over or route a response, not before.
 
 ## 📥 RESPONSE HANDLING
 A pasted block that starts with `# Re:` is a **review response** to a page. Files in `plans/`, not chat, are the source of truth, so it is **saved first, routed second**.

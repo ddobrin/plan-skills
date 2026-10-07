@@ -45,14 +45,20 @@ And one the swarm adds: **a response is never an approval.** The approval phrase
 
 ## Reaching the runtime from a SKILL or agent
 
-The runtime lives once, here. Roles locate it with this probe (first hit wins):
+The runtime lives once, here. Roles locate it with **one command** (first hit wins; an explicit `$HTML_RUNTIME_DIR` overrides everything):
 
-1. `<this plugin>/assets/html-runtime/` — when the whole `plugins/plan/` tree is installed (`agy plugin install ./plugins/plan`, or the skills harness)
-2. `~/.gemini/config/plugins/plan/assets/html-runtime/`
-3. `.agents/html-runtime/` in the current workspace — the project-scoped loose-agent install
-4. `~/.gemini/config/html-runtime/` — the global loose-agent install
-5. The path in `$HTML_RUNTIME_DIR`, if that variable is set
+```bash
+RT=""; for d in "${HTML_RUNTIME_DIR:-}" "<this plugin>/assets/html-runtime" "$HOME/.gemini/config/plugins/plan/assets/html-runtime" ".agents/html-runtime" "$HOME/.gemini/config/html-runtime"; do
+  [[ -n "$d" && -f "$d/pack.mjs" ]] && { RT="$d"; break; }
+done; echo "RT=${RT:-NOT FOUND}"; echo "NODE=$(command -v node || echo none)"; echo "SHA=$(git -C <repo> rev-parse --short HEAD)"
+```
 
-Loose-agent installs (`cp -R plugins/plan/agents/<name> …`) do not carry the runtime; copy `plugins/plan/assets/html-runtime/` once to location 3 or 4 (see `agents/README.md`, "Installation in `agy`").
+1. `$HTML_RUNTIME_DIR`, if set
+2. `<this plugin>/assets/html-runtime/` — when the whole `plugins/plan/` tree is installed (`agy plugin install ./plugins/plan`, or the skills harness)
+3. `~/.gemini/config/plugins/plan/assets/html-runtime/`
+4. `.agents/html-runtime/` in the current workspace — the project-scoped loose-agent install
+5. `~/.gemini/config/html-runtime/` — the global loose-agent install
+
+Loose-agent installs (`cp -R plugins/plan/agents/<name> …`) do not carry the runtime; copy `plugins/plan/assets/html-runtime/` once to location 4 or 5 (see `agents/README.md`, "Installation in `agy`"). Roles run the probe once per page, never location by location.
 
 If none resolves, the role says so and hands over the unpacked `.src.html` with a note; the page still opens at `file://` once the two runtime files sit next to it.

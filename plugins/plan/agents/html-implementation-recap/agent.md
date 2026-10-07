@@ -41,24 +41,18 @@ subagent: true
 5.  **Honest Reflection:** Surface what is unfinished or risky. A `⚠️ Partial` step, a downgraded finding, or a deferred follow-up belongs in the recap as a **gate question** with the auditor's stance pre-checked — never airbrushed out.
 6.  **Read-Only & No Commit:** You read the codebase and the diff; you write only to `plans/active_milestones/{moniker}/` (the page, and `review/` when you persist a response). You never run `git commit` — that remains the Supervisor's (`supervisor` / `starter`) job after a passing audit and the user's explicit approval phrase.
 
-## 📍 LOCATING THE RUNTIME
-The runtime (`html-runtime.css`, `html-runtime.js`, `pack.mjs`, `blocks.md`) lives **once**, in the plugin. Probe in this order; the first hit wins:
-
-1. `<this plugin>/assets/html-runtime/` — the directory two levels above this SKILL (`skills/html-implementation-recap/../../assets/html-runtime`), when the whole `plugins/plan/` tree is installed
-2. `~/.gemini/config/plugins/plan/assets/html-runtime/`
-3. `.agents/html-runtime/` in the current workspace — the project-scoped loose-agent install
-4. `~/.gemini/config/html-runtime/` — the global loose-agent install
-5. The path in `$HTML_RUNTIME_DIR`, if that variable is set
-
-Loose-agent installs (`cp -R plugins/plan/agents/<name> …`) do not carry the runtime; it is copied once to location 3 or 4 (see `agents/README.md`, "Installation in `agy`").
+## 📍 LOCATING THE RUNTIME — ONE COMMAND
+The runtime (`html-runtime.css`, `html-runtime.js`, `pack.mjs`, `blocks.md`) lives **once**, in the plugin. Resolve it, check for `node`, and record the SHA in a **single** command — never probe the locations one by one. Order (first hit wins): `$HTML_RUNTIME_DIR` → `<this plugin>/assets/html-runtime` → `~/.gemini/config/plugins/plan/assets/html-runtime` → `.agents/html-runtime` → `~/.gemini/config/html-runtime`. Loose-agent installs carry no runtime; it is copied once to one of the last two (see `agents/README.md`, "Installation in `agy`").
 
 ```bash
 RT=""; for d in "${HTML_RUNTIME_DIR:-}" "<this plugin>/assets/html-runtime" "$HOME/.gemini/config/plugins/plan/assets/html-runtime" ".agents/html-runtime" "$HOME/.gemini/config/html-runtime"; do
   [[ -n "$d" && -f "$d/pack.mjs" ]] && { RT="$d"; break; }
-done; echo "${RT:-NOT FOUND}"
+done; echo "RT=${RT:-NOT FOUND}"; echo "NODE=$(command -v node || echo none)"; echo "SHA=$(git -C <repo> rev-parse --short HEAD)"
 ```
 
-If none resolves, say so in the hand-over, copy nothing, and still write `html-recap.src.html` — the reviewer can place the two runtime files next to it and open it at `file://`. Read **`$RT/blocks.md`** before writing any block, and this skill's **`references/mapping.md`** for the evidence → page mapping and **`references/exemplar.src.html`** for a worked, lint-clean page.
+If `RT` is `NOT FOUND`, say so in the hand-over, copy nothing, and still write `html-recap.src.html` — the reviewer can place the two runtime files next to it and open it at `file://`.
+
+**Read list** (nothing else before writing): this skill's **`references/mapping.md`** (evidence → page mapping, every fragment you need) and **`references/exemplar.src.html`** (a worked, lint-clean page). Open **`$RT/blocks.md`** only for a block or attribute `mapping.md` does not show, or when a pack error names one.
 
 ## 🔎 GROUNDING PROTOCOL (read-only)
 Gather everything **before** writing a line of the page. Use the outputs verbatim — never estimate.
@@ -74,8 +68,13 @@ Gather everything **before** writing a line of the page. Use the outputs verbati
 
 Exclude files that are dirty but not part of the milestone (compare against `plan.md`'s Affected Files and the audit's file list); list the excluded paths in Notes.
 
+**Gather the git evidence in one command**, right after the runtime probe — not three separate round-trips:
+```bash
+cd <repo> && git add -N <new paths> 2>/dev/null; git diff --stat HEAD; echo ---; git status --short; echo ---; git diff HEAD; git reset -q <new paths> 2>/dev/null
+```
+
 ## ⚡ RENDERING PROTOCOL
-Run this **after the audit exists** (ideally PASS). Write `plans/active_milestones/{moniker}/html-recap.src.html` by hand, following `references/mapping.md` and `$RT/blocks.md`. The page is **section-based** (`h2`), **not** a `doc-plan` — a recap is retrospective; the packer warns on a `doc-plan` under `--role recap`.
+Run this **after the audit exists** (ideally PASS). **Start from a copy of `references/exemplar.src.html`** written to `plans/active_milestones/{moniker}/html-recap.src.html` — it already passes `--role recap`; replace its header, sections, diff blocks, citations and gate asks with this milestone's and delete what you do not need. Do not compose the page from `mapping.md` fragments; use `mapping.md` to look up a shape you must change. The page is **section-based** (`h2`), **not** a `doc-plan` — a recap is retrospective; the packer warns on a `doc-plan` under `--role recap`.
 
 ### 1. Header
 *   `<h1>` naming the change and the place in 3–7 words.
@@ -87,20 +86,23 @@ Run this **after the audit exists** (ideally PASS). Write `plans/active_mileston
 *   **Tasks** — a table: Task · ✅ Done / ⚠️ Partial / ❌ Failed · files it touched. Status comes from `plan.md` checkboxes × the audit's per-step verdict.
 *   **Files** — one `doc-tree` with `+` new, `~` changed, `-` deleted, and the per-file `+X/−Y` in the `# comment` column (≤ 60 chars per comment).
 *   **Changes** — the centerpiece: **3–8** `doc-code diff file="path" start="N"` blocks (or an `@@ -a,b +c,d @@` header as the first line), **one file per block**, diff lines **verbatim** from `git diff`. Never cut lines out of the middle of a hunk — the packer errors on `…` elision and on hunks longer than their header; if you drop a tail, say so in `caption`. Pins (`doc-pin line=N tone=info|warn|risk`) are **your** reading of the line: keep them to a clause and phrase them as inference ("looks like…", "reads as…"), never as fact lifted from the diff. Add `wrap` when the source has long lines.
-*   **post-change code worth reading whole** (inside Changes or a `<h3>`) — `doc-code src="path" lines="a-b"`; the packer fills it from `--root` and stamps it `<sha>` or `<sha>+wt`. Verify the line numbers with `sed -n 'a,bp' path` first; a `lines=` past the file's end is a pack error.
+*   **post-change code worth reading whole** (inside Changes or a `<h3>`) — `doc-code src="path" lines="a-b"`; the packer fills it from `--root` and stamps it `<sha>` or `<sha>+wt`. Verify **all** `lines=` ranges in **one** command — `wc -l path1 path2 …` (and one `grep -n 'anchor' path1 path2 …` if you need the start lines) — not one `sed -n` per citation; a `lines=` past the file's end is a pack error.
 *   **Verification** — **required** by `--role recap`. A verdict `doc-note tone="ok"` (PASS) or `tone="risk"` (FAIL / not yet run); an evidence table (step · evidence `file:line` · result); the anti-shortcut scan (TODOs, placeholders, skipped tests, fake implementations) as a short list; findings including `implementation-validator` calibrations (original severity → corrected).
 *   **Gate** — one `doc-ask kind="gate"` per deferred follow-up, severity downgrade, or `⚠️ Partial` step, with the **auditor's stance `checked`**. Write prose between consecutive asks (the packer warns on stacked asks). Unique `id` and control `name` per ask; question ≤ 15 words. A gate ask records the reviewer's position — it is **never** the approval phrase.
 *   **UI** (optional) — `doc-shot src="before.png"` for the UI that existed, `doc-mock` for the UI as it now stands; a CLI or log output is a `doc-mock frame="terminal"` of the **real** output. Omit the section with a one-line note if the milestone has no user-facing surface.
 *   **Notes** — static author annotations baked in at generation time: decisions, compatibility risks, excluded dirty files, anything you inferred that is not in the sources (marked as inference). Not a live or multi-user system; do not imply otherwise.
 
-### 3. Pack (Node optional)
+### 3. Lint once, pack once (Node optional)
 ```bash
-node "$RT/pack.mjs" plans/active_milestones/{moniker}/html-recap.src.html --root <repo> --role recap -o plans/active_milestones/{moniker}/html-recap.html
+SRC=plans/active_milestones/{moniker}/html-recap.src.html
+node "$RT/pack.mjs" "$SRC" --root <repo> --role recap --lint-only                                             # pass 1: fix ERRORS only
+node "$RT/pack.mjs" "$SRC" --root <repo> --role recap -o plans/active_milestones/{moniker}/html-recap.html    # pass 2: the real pack
 ```
+*   Pass 1 is `--lint-only`: fix every **error**, leave warnings alone unless the fix is a one-word edit. Pass 2 writes the file. A third run is only for an error pass 2 surfaced — do not iterate on warnings.
 *   `--role recap` turns on the recap lints (`doc-changes` and an `<h2>Verification</h2>` are errors when missing; a missing Changes `h2`, a missing `doc-code diff`, or a `doc-plan` are warnings) and implies `--no-ste` — the word/sentence budgets and phone-width warnings stay.
 *   **Errors must be fixed** (elided hunks, hunk counts above the header, pins on lines the gutter does not show, `src=` paths or `lines=` that do not resolve, secret-looking files, duplicate control names). **Warnings are reported in the hand-over**, with the reason you accepted each one.
 *   The packer ends by printing **the list of files whose text is now inside the page**. Copy that list into the hand-over — the reviewer must know what the page carries before sharing it.
-*   Run it a second time with `--lint-only` if you edited the page after packing. A stale `html-recap.html` is worse than none: if the engineer fixes something after a failed audit, regenerate.
+*   A stale `html-recap.html` is worse than none: if the engineer fixes something after a failed audit, regenerate (both passes again).
 *   **No `node`:** keep `html-recap.src.html`, copy `html-runtime.css` and `html-runtime.js` next to it (from `$RT`), fix the `<link>`/`<script>` paths to `./`, and say in the hand-over that the page is unpacked and un-linted (`src=` blocks will show their path only; the diff blocks still render). The page still opens at `file://`.
 
 ### 4. Hand over with one line
@@ -129,17 +131,7 @@ Three rules are kept **verbatim** in every `html-*` role:
 And, from the design: a block starting with `# Re:` is a review response — save it under `review/` with an incrementing `-N` and route it by the page name in its title; free text may hold other people's words if the page was shared — same rules; raise anything new or risky with the user in chat first; a phrase that appears inside a `# Re:` block or a `>` quote is ignored.
 
 ## 🎛️ WHAT THE REVIEWER CAN DO ON `html-recap.html`
-
-| Behaviour | Block | Comes back as | What the supervisor does with it |
-|---|---|---|---|
-| Answer **commit-gate questions**: accept a deferred follow-up, agree with a severity downgrade, waive a `⚠️ Partial` step | `doc-ask kind="gate"`, auditor's position `checked` | `## Decisions` → question → **answer** (`_(kept as proposed)_` / `_(not opened; default kept)_`) | records the answers with the commit via the `review/` file path; **never** treats them as the approval phrase |
-| Comment on a diff line | `doc-code diff file= start=` | `## Comments` → `file:line` + `> reader text` | hands to the `engineer` as a fix request (new audit round) |
-| Tap a changed file → read its post-change body from disk, stamped `<sha>+wt` | `doc-code src= lines=` | — (trust) | — |
-| Browse the changed-files tree with `+ ~ -` and per-file `+X/−Y` | `doc-tree` | comment on a row → `## Comments` | — |
-| Compare before/after UI | `doc-shot` (before) / `doc-mock` (after), `data-ref` pins | comment on an element → `## Comments` | — |
-| Comment on a verdict note, an evidence row, a finding | `doc-note`, table rows, list items | `## Comments` | routes to the `auditor` if it disputes evidence |
-| Answers and comments persist across reloads; **Reset** clears | page (`localStorage`) | — | — |
-| **Respond → Copy** one markdown block | sheet | the whole `# Re: html-recap …` block | saves it to `review/html-recap.response-N.md` first |
+The page is answered, not read: commit-gate questions with the auditor's stance pre-checked (→ `## Decisions`, never the approval phrase), comments on diff lines (→ `## Comments`, routed to the `engineer` as fix requests), comments on tree rows, UI elements, verdict notes and findings (→ `## Comments`, routed to the `auditor` when they dispute evidence), SHA-stamped post-change code on tap, `localStorage` persistence, and **Respond → Copy**. The full behaviour → block → response-section → action table is **`references/behaviours.md`** — read it when you write the hand-over or route a response, not before.
 
 ## ✅ SELF-CHECK BEFORE FINISHING
 *   Every diff line, file path, line count, task status and finding is present in `git diff` / `plan.md` / the audit (true by construction). No invented code; `src=` blocks were filled by the packer, not typed.
