@@ -1,0 +1,12 @@
+#!/bin/sh
+# plan-swarm git hook: pre-push (installed by the swarm-init skill).
+# Second enforcement layer for pushes, whatever command started them: only
+# swarm/<milestone> fast-forwards whose every new commit matches an approval in
+# approvals.md, and release tags after `approve release`. No deletes, no other branches.
+store="$(git rev-parse --git-common-dir)/plan-swarm"
+[ "$PLAN_SWARM_TEST" = "1" ] && [ -n "$PLAN_SWARM_STORE" ] && store="$PLAN_SWARM_STORE"
+if [ -f "$store/bin/gate.py" ]; then
+  exec python3 "$store/bin/gate.py" --pre-push "$@"
+fi
+echo "plan-swarm: gate not installed yet; open this repository in Antigravity once (the plan plugin refreshes it)." >&2
+exit 1

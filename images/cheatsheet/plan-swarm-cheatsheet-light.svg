@@ -1,0 +1,203 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="light" width="1600" height="1040" viewBox="0 0 1600 1040"><style>
+.light{--bg:#f7f5f0;--panel:#ffffff;--ink:#1d1d1f;--muted:#666a72;--line:#e0dcd3;--soft:#f1eee7;
+--amber:#b06f00;--amber-soft:#fff1d6;--blue:#2f5bd3;--blue-soft:#e3eafc;--green:#1f7a4d;--red:#c0392b;
+--purple:#7b3fd1;--purple-soft:#efe7fc;--term:#1e1f24;--termink:#f3c56b;--gray:#9aa0a8}
+.dark{--bg:#121316;--panel:#1b1c20;--ink:#ececec;--muted:#a0a3aa;--line:#30323a;--soft:#22242a;
+--amber:#f0b44c;--amber-soft:#3a2d12;--blue:#7c9cff;--blue-soft:#24304f;--green:#5cc98f;--red:#ff7b72;
+--purple:#b38cff;--purple-soft:#2c2142;--term:#0b0c0e;--termink:#f3c56b;--gray:#6f747c}
+text{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Inter,Helvetica,Arial,sans-serif;fill:var(--ink)}
+.m{font-family:'SF Mono',ui-monospace,Menlo,Consolas,'DejaVu Sans Mono',monospace}
+.mu{fill:var(--muted)}
+.h{font-size:12px;font-weight:700;letter-spacing:.09em;fill:var(--muted)}
+</style>
+<rect width="1600" height="1040" fill="var(--bg)"/>
+<text x="48" y="86" font-size="38" font-weight="800" text-anchor="start">plan‑swarm@3.0 · cheat sheet · Antigravity</text>
+<text x="48" y="118" font-size="17" font-weight="400" text-anchor="start" class="mu">From intent to release with role subagents and six approval phrases. Antigravity hooks enforce the phrases; git keeps the record.</text>
+<rect x="1400" y="58" width="152" height="34" rx="17" fill="var(--blue-soft)"/>
+<text x="1476" y="81" font-size="15" font-weight="700" text-anchor="middle" style="fill:var(--blue)">plugin 3.0.0</text>
+<rect x="48" y="150" width="485" height="196" rx="16" fill="var(--panel)" stroke="var(--line)"/>
+<circle cx="78" cy="182" r="13" fill="var(--blue)"/>
+<text x="78" y="187" font-size="13" font-weight="800" text-anchor="middle" style="fill:#fff">1</text>
+<text x="100" y="188" font-size="19" font-weight="750" text-anchor="start">Set up once</text>
+<rect x="68" y="211" width="445" height="28" rx="7" fill="var(--term)"/>
+<text x="80" y="230" font-size="12.5" font-weight="500" text-anchor="start" class="m" style="fill:var(--termink)">ln -s &quot;$PWD/plugins/plan&quot; ~/.gemini/config/plugins/plan</text>
+<text x="68" y="261" font-size="14.5" font-weight="400" text-anchor="start">Then open a new conversation: hooks load at its start.</text>
+<rect x="68" y="279" width="445" height="28" rx="7" fill="var(--term)"/>
+<text x="80" y="298" font-size="13.5" font-weight="500" text-anchor="start" class="m" style="fill:var(--termink)">swarm init</text>
+<text x="501" y="298" font-size="12.5" font-weight="400" text-anchor="end" style="fill:var(--gray)">say it · settings + 3 git hooks</text>
+<text x="68" y="330" font-size="13.5" font-weight="400" text-anchor="start" class="mu">Then fill AGENTS.md, review plans/swarm.md, commit both yourself.</text>
+<rect x="557" y="150" width="485" height="196" rx="16" fill="var(--panel)" stroke="var(--line)"/>
+<circle cx="587" cy="182" r="13" fill="var(--blue)"/>
+<text x="587" y="187" font-size="13" font-weight="800" text-anchor="middle" style="fill:#fff">2</text>
+<text x="609" y="188" font-size="19" font-weight="750" text-anchor="start">Run the supervisor</text>
+<rect x="577" y="211" width="445" height="28" rx="7" fill="var(--term)"/>
+<text x="589" y="230" font-size="15" font-weight="500" text-anchor="start" class="m" style="fill:var(--termink)">be the supervisor</text>
+<text x="1010" y="230" font-size="14" font-weight="400" text-anchor="end" style="fill:var(--gray)">say it</text>
+<text x="577" y="264" font-size="14.5" font-weight="400" text-anchor="start">in a top-level conversation opened on the repository.</text>
+<text x="577" y="290" font-size="14.5" font-weight="400" text-anchor="start" class="mu">Every role runs as a subagent with its own context.</text>
+<text x="577" y="312" font-size="14.5" font-weight="400" text-anchor="start" class="mu">Type the approval phrases in this same conversation.</text>
+<text x="577" y="334" font-size="14.5" font-weight="400" text-anchor="start" class="mu">Resume any time with the same words: state lives in plans/.</text>
+<rect x="1066" y="150" width="485" height="196" rx="16" fill="var(--panel)" stroke="var(--line)"/>
+<circle cx="1096" cy="182" r="13" fill="var(--blue)"/>
+<text x="1096" y="187" font-size="13" font-weight="800" text-anchor="middle" style="fill:#fff">3</text>
+<text x="1118" y="188" font-size="19" font-weight="750" text-anchor="start">Call one role yourself</text>
+<rect x="1086" y="211" width="445" height="28" rx="7" fill="var(--term)"/>
+<text x="1098" y="230" font-size="14" font-weight="500" text-anchor="start" class="m" style="fill:var(--termink)">invoke_subagent TypeName: &quot;architect&quot;</text>
+<text x="1519" y="230" font-size="13" font-weight="400" text-anchor="end" style="fill:var(--gray)">a subagent</text>
+<text x="1086" y="263" font-size="14.5" font-weight="400" text-anchor="start">or load its skill: use the architect skill to plan &lt;spec&gt;</text>
+<rect x="1086" y="279" width="445" height="28" rx="7" fill="var(--term)"/>
+<text x="1098" y="298" font-size="14" font-weight="500" text-anchor="start" class="m" style="fill:var(--termink)">validate this spec · simplify this file</text>
+<text x="1519" y="298" font-size="13" font-weight="400" text-anchor="end" style="fill:var(--gray)">a skill</text>
+<text x="1086" y="330" font-size="13.5" font-weight="400" text-anchor="start" class="mu">Skills load into your conversation; subagents get their own.</text>
+<rect x="48" y="372" width="1504" height="300" rx="16" fill="var(--panel)" stroke="var(--line)"/>
+<text x="72" y="406" font-size="12" font-weight="700" text-anchor="start" class="h">THE LOOP</text>
+<text x="160" y="406" font-size="13" font-weight="400" text-anchor="start" class="mu">amber = you type the phrase · blue = a subagent works · stages 6–8 repeat per group · offered checks: deliberators, validators, simplifier, recap</text>
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--gray)"/></marker><marker id="r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--red)"/></marker></defs>
+<line x1="161" y1="490" x2="241" y2="490" stroke="var(--gray)" stroke-width="2.5" marker-end="url(#a)"/>
+<circle cx="128" cy="490" r="30" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="3"/>
+<text x="128" y="496" font-size="18" font-weight="800" text-anchor="middle" style="fill:var(--amber)">1</text>
+<g transform="translate(140,458)"><circle cx="10" cy="10" r="11" fill="var(--amber)" stroke="var(--panel)" stroke-width="2.5"/><rect x="5.6" y="9" width="8.8" height="6.6" rx="1.3" fill="var(--panel)"/><path d="M7.4 9.2 V7.4 a2.6 2.6 0 0 1 5.2 0 V9.2" fill="none" stroke="var(--panel)" stroke-width="1.6"/></g>
+<rect x="69.6" y="423" width="116.8" height="22" rx="11" fill="var(--amber-soft)"/>
+<text x="128.0" y="438" font-size="12" font-weight="650" text-anchor="middle" class="m" style="fill:var(--amber)">approve intent</text>
+<text x="128" y="548" font-size="16" font-weight="750" text-anchor="middle">Intent</text>
+<text x="128" y="569" font-size="12" font-weight="500" text-anchor="middle" class="m" style="fill:var(--blue)">product-owner</text>
+<text x="128" y="588" font-size="12" font-weight="400" text-anchor="middle" class="mu m">intent.md</text>
+<line x1="310" y1="490" x2="390" y2="490" stroke="var(--gray)" stroke-width="2.5" marker-end="url(#a)"/>
+<circle cx="277" cy="490" r="30" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="3"/>
+<text x="277" y="496" font-size="18" font-weight="800" text-anchor="middle" style="fill:var(--blue)">2</text>
+<text x="277" y="548" font-size="16" font-weight="750" text-anchor="middle">Research</text>
+<text x="277" y="569" font-size="12" font-weight="500" text-anchor="middle" class="m" style="fill:var(--blue)">research subagent</text>
+<text x="277" y="588" font-size="12" font-weight="400" text-anchor="middle" class="mu m">§ Codebase context</text>
+<line x1="459" y1="490" x2="539" y2="490" stroke="var(--gray)" stroke-width="2.5" marker-end="url(#a)"/>
+<circle cx="426" cy="490" r="30" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="3"/>
+<text x="426" y="496" font-size="18" font-weight="800" text-anchor="middle" style="fill:var(--amber)">3</text>
+<g transform="translate(438,458)"><circle cx="10" cy="10" r="11" fill="var(--amber)" stroke="var(--panel)" stroke-width="2.5"/><rect x="5.6" y="9" width="8.8" height="6.6" rx="1.3" fill="var(--panel)"/><path d="M7.4 9.2 V7.4 a2.6 2.6 0 0 1 5.2 0 V9.2" fill="none" stroke="var(--panel)" stroke-width="1.6"/></g>
+<rect x="374.8" y="423" width="102.4" height="22" rx="11" fill="var(--amber-soft)"/>
+<text x="426.0" y="438" font-size="12" font-weight="650" text-anchor="middle" class="m" style="fill:var(--amber)">approve spec</text>
+<text x="426" y="548" font-size="16" font-weight="750" text-anchor="middle">Spec</text>
+<text x="426" y="569" font-size="12" font-weight="500" text-anchor="middle" class="m" style="fill:var(--blue)">product-owner</text>
+<text x="426" y="588" font-size="12" font-weight="400" text-anchor="middle" class="mu m">spec.md</text>
+<line x1="608" y1="490" x2="688" y2="490" stroke="var(--gray)" stroke-width="2.5" marker-end="url(#a)"/>
+<circle cx="575" cy="490" r="30" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="3"/>
+<text x="575" y="496" font-size="18" font-weight="800" text-anchor="middle" style="fill:var(--blue)">4</text>
+<text x="575" y="548" font-size="16" font-weight="750" text-anchor="middle">Plan</text>
+<text x="575" y="569" font-size="12" font-weight="500" text-anchor="middle" class="m" style="fill:var(--blue)">architect</text>
+<text x="575" y="588" font-size="12" font-weight="400" text-anchor="middle" class="mu m">plan.md + tier</text>
+<line x1="757" y1="490" x2="837" y2="490" stroke="var(--gray)" stroke-width="2.5" marker-end="url(#a)"/>
+<circle cx="724" cy="490" r="30" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="3"/>
+<text x="724" y="496" font-size="18" font-weight="800" text-anchor="middle" style="fill:var(--amber)">5</text>
+<g transform="translate(736,458)"><circle cx="10" cy="10" r="11" fill="var(--amber)" stroke="var(--panel)" stroke-width="2.5"/><rect x="5.6" y="9" width="8.8" height="6.6" rx="1.3" fill="var(--panel)"/><path d="M7.4 9.2 V7.4 a2.6 2.6 0 0 1 5.2 0 V9.2" fill="none" stroke="var(--panel)" stroke-width="1.6"/></g>
+<rect x="672.8" y="423" width="102.4" height="22" rx="11" fill="var(--amber-soft)"/>
+<text x="724.0" y="438" font-size="12" font-weight="650" text-anchor="middle" class="m" style="fill:var(--amber)">approve plan</text>
+<text x="724" y="548" font-size="16" font-weight="750" text-anchor="middle">Approve</text>
+<text x="724" y="569" font-size="12" font-weight="500" text-anchor="middle" class="mu">you</text>
+<text x="724" y="588" font-size="12" font-weight="400" text-anchor="middle" class="mu m">plan committed</text>
+<line x1="906" y1="490" x2="986" y2="490" stroke="var(--gray)" stroke-width="2.5" marker-end="url(#a)"/>
+<circle cx="873" cy="490" r="30" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="3"/>
+<text x="873" y="496" font-size="18" font-weight="800" text-anchor="middle" style="fill:var(--blue)">6</text>
+<text x="873" y="548" font-size="16" font-weight="750" text-anchor="middle">Build</text>
+<text x="873" y="569" font-size="12" font-weight="500" text-anchor="middle" class="m" style="fill:var(--blue)">engineer ×≤5</text>
+<text x="873" y="588" font-size="12" font-weight="400" text-anchor="middle" class="mu m">worktrees → squash</text>
+<line x1="1055" y1="490" x2="1135" y2="490" stroke="var(--gray)" stroke-width="2.5" marker-end="url(#a)"/>
+<circle cx="1022" cy="490" r="30" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="3"/>
+<text x="1022" y="496" font-size="18" font-weight="800" text-anchor="middle" style="fill:var(--blue)">7</text>
+<text x="1022" y="548" font-size="16" font-weight="750" text-anchor="middle">Audit</text>
+<text x="1022" y="569" font-size="12" font-weight="500" text-anchor="middle" class="m" style="fill:var(--blue)">auditor</text>
+<text x="1022" y="588" font-size="12" font-weight="400" text-anchor="middle" class="mu m">audit.md</text>
+<line x1="1204" y1="490" x2="1284" y2="490" stroke="var(--gray)" stroke-width="2.5" marker-end="url(#a)"/>
+<circle cx="1171" cy="490" r="30" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="3"/>
+<text x="1171" y="496" font-size="18" font-weight="800" text-anchor="middle" style="fill:var(--amber)">8</text>
+<g transform="translate(1183,458)"><circle cx="10" cy="10" r="11" fill="var(--amber)" stroke="var(--panel)" stroke-width="2.5"/><rect x="5.6" y="9" width="8.8" height="6.6" rx="1.3" fill="var(--panel)"/><path d="M7.4 9.2 V7.4 a2.6 2.6 0 0 1 5.2 0 V9.2" fill="none" stroke="var(--panel)" stroke-width="1.6"/></g>
+<rect x="1112.6" y="423" width="116.8" height="22" rx="11" fill="var(--amber-soft)"/>
+<text x="1171.0" y="438" font-size="12" font-weight="650" text-anchor="middle" class="m" style="fill:var(--amber)">approve commit</text>
+<text x="1171" y="548" font-size="16" font-weight="750" text-anchor="middle">Commit</text>
+<text x="1171" y="569" font-size="12" font-weight="500" text-anchor="middle" class="m" style="fill:var(--blue)">auditor</text>
+<text x="1171" y="588" font-size="12" font-weight="400" text-anchor="middle" class="mu m">group commit</text>
+<line x1="1353" y1="490" x2="1433" y2="490" stroke="var(--gray)" stroke-width="2.5" marker-end="url(#a)"/>
+<circle cx="1320" cy="490" r="30" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="3"/>
+<text x="1320" y="496" font-size="18" font-weight="800" text-anchor="middle" style="fill:var(--amber)">9</text>
+<g transform="translate(1332,458)"><circle cx="10" cy="10" r="11" fill="var(--amber)" stroke="var(--panel)" stroke-width="2.5"/><rect x="5.6" y="9" width="8.8" height="6.6" rx="1.3" fill="var(--panel)"/><path d="M7.4 9.2 V7.4 a2.6 2.6 0 0 1 5.2 0 V9.2" fill="none" stroke="var(--panel)" stroke-width="1.6"/></g>
+<rect x="1276.0" y="423" width="88.0" height="22" rx="11" fill="var(--amber-soft)"/>
+<text x="1320.0" y="438" font-size="12" font-weight="650" text-anchor="middle" class="m" style="fill:var(--amber)">approve pr</text>
+<text x="1320" y="548" font-size="16" font-weight="750" text-anchor="middle">PR</text>
+<text x="1320" y="569" font-size="12" font-weight="500" text-anchor="middle" class="m" style="fill:var(--blue)">supervisor</text>
+<text x="1320" y="588" font-size="12" font-weight="400" text-anchor="middle" class="mu m">push + PR</text>
+<circle cx="1469" cy="490" r="30" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="3"/>
+<text x="1469" y="496" font-size="18" font-weight="800" text-anchor="middle" style="fill:var(--amber)">10</text>
+<g transform="translate(1481,458)"><circle cx="10" cy="10" r="11" fill="var(--amber)" stroke="var(--panel)" stroke-width="2.5"/><rect x="5.6" y="9" width="8.8" height="6.6" rx="1.3" fill="var(--panel)"/><path d="M7.4 9.2 V7.4 a2.6 2.6 0 0 1 5.2 0 V9.2" fill="none" stroke="var(--panel)" stroke-width="1.6"/></g>
+<rect x="1407.0" y="423" width="124.0" height="22" rx="11" fill="var(--amber-soft)"/>
+<text x="1469.0" y="438" font-size="12" font-weight="650" text-anchor="middle" class="m" style="fill:var(--amber)">approve release</text>
+<text x="1469" y="548" font-size="16" font-weight="750" text-anchor="middle">Release</text>
+<text x="1469" y="569" font-size="12" font-weight="500" text-anchor="middle" class="m" style="fill:var(--blue)">supervisor</text>
+<text x="1469" y="588" font-size="12" font-weight="400" text-anchor="middle" class="mu m">tag</text>
+<path d="M1008,463 C992,416 903,416 887,461" fill="none" stroke="var(--red)" stroke-width="2.4" stroke-dasharray="6 4" marker-end="url(#r)"/>
+<text x="947.5" y="420" font-size="12" font-weight="700" text-anchor="middle" style="fill:var(--red)">Path A · FAIL → fix, ≤3 rounds</text>
+<path d="M1022,600 C1022,658 575,658 575,604" fill="none" stroke="var(--red)" stroke-width="2.4" stroke-dasharray="3 4" marker-end="url(#r)"/>
+<text x="798.5" y="664" font-size="12" font-weight="700" text-anchor="middle" style="fill:var(--red)">Path B · plan impossible → architect re-plans · approve plan again</text>
+<rect x="1207.6" y="603" width="224.7" height="22" rx="11" fill="var(--purple-soft)"/>
+<text x="1320.0" y="618" font-size="11.5" font-weight="650" text-anchor="middle" style="fill:var(--purple)">review findings → fix group (6–8)</text>
+<rect x="194.6" y="603" width="224.7" height="22" rx="11" fill="var(--blue-soft)"/>
+<text x="307.0" y="618" font-size="11.5" font-weight="650" text-anchor="middle" style="fill:var(--blue)">next intent starts the loop again</text>
+<rect x="48" y="694" width="485" height="292" rx="16" fill="var(--panel)" stroke="var(--line)"/>
+<circle cx="78" cy="726" r="13" fill="var(--blue)"/>
+<text x="78" y="731" font-size="13" font-weight="800" text-anchor="middle" style="fill:#fff">4</text>
+<text x="100" y="732" font-size="19" font-weight="750" text-anchor="start">The six approval phrases</text>
+<rect x="68" y="757" width="262" height="26" rx="6" fill="var(--term)"/>
+<text x="78" y="775" font-size="12.5" font-weight="500" text-anchor="start" class="m" style="fill:var(--termink)">approve intent &lt;slug&gt; as &lt;m&gt;</text>
+<text x="344" y="775" font-size="13.5" font-weight="400" text-anchor="start">milestone + branch</text>
+<rect x="68" y="789" width="262" height="26" rx="6" fill="var(--term)"/>
+<text x="78" y="807" font-size="12.5" font-weight="500" text-anchor="start" class="m" style="fill:var(--termink)">approve spec &lt;m&gt;</text>
+<text x="344" y="807" font-size="13.5" font-weight="400" text-anchor="start">spec committed</text>
+<rect x="68" y="821" width="262" height="26" rx="6" fill="var(--term)"/>
+<text x="78" y="839" font-size="12.5" font-weight="500" text-anchor="start" class="m" style="fill:var(--termink)">approve plan &lt;m&gt; [tier=…]</text>
+<text x="344" y="839" font-size="13.5" font-weight="400" text-anchor="start">engineers unblocked</text>
+<rect x="68" y="853" width="262" height="26" rx="6" fill="var(--term)"/>
+<text x="78" y="871" font-size="12.5" font-weight="500" text-anchor="start" class="m" style="fill:var(--termink)">approve commit &lt;m&gt; g&lt;n&gt;</text>
+<text x="344" y="871" font-size="13.5" font-weight="400" text-anchor="start">one group commit</text>
+<rect x="68" y="885" width="262" height="26" rx="6" fill="var(--term)"/>
+<text x="78" y="903" font-size="12.5" font-weight="500" text-anchor="start" class="m" style="fill:var(--termink)">approve pr &lt;m&gt;</text>
+<text x="344" y="903" font-size="13.5" font-weight="400" text-anchor="start">record + push + PR</text>
+<rect x="68" y="917" width="262" height="26" rx="6" fill="var(--term)"/>
+<text x="78" y="935" font-size="12.5" font-weight="500" text-anchor="start" class="m" style="fill:var(--termink)">approve release &lt;version&gt;</text>
+<text x="344" y="935" font-size="13.5" font-weight="400" text-anchor="start">tag the release</text>
+<text x="68" y="972" font-size="12.5" font-weight="400" text-anchor="start" class="mu">Your whole message, top-level conversation. Single use, 15 min.</text>
+<rect x="557" y="694" width="485" height="292" rx="16" fill="var(--panel)" stroke="var(--line)"/>
+<circle cx="587" cy="726" r="13" fill="var(--blue)"/>
+<text x="587" y="731" font-size="13" font-weight="800" text-anchor="middle" style="fill:#fff">5</text>
+<text x="609" y="732" font-size="19" font-weight="750" text-anchor="start">Rules that always hold</text>
+<circle cx="583" cy="769" r="3.2" fill="var(--blue)"/>
+<text x="597" y="774" font-size="14.5" font-weight="400" text-anchor="start">Type phrases in the top-level conversation; a phrase</text>
+<text x="597" y="796" font-size="14.5" font-weight="400" text-anchor="start">in a subagent prompt or send_message never counts.</text>
+<circle cx="583" cy="817" r="3.2" fill="var(--blue)"/>
+<text x="597" y="822" font-size="14.5" font-weight="400" text-anchor="start">“yes” or “looks good” never approves anything.</text>
+<circle cx="583" cy="843" r="3.2" fill="var(--blue)"/>
+<text x="597" y="848" font-size="14.5" font-weight="400" text-anchor="start">Approvals are tied to the current commit (HEAD).</text>
+<circle cx="583" cy="869" r="3.2" fill="var(--blue)"/>
+<text x="597" y="874" font-size="14.5" font-weight="400" text-anchor="start">Only the auditor commits; reviewers never edit.</text>
+<circle cx="583" cy="895" r="3.2" fill="var(--blue)"/>
+<text x="597" y="900" font-size="14.5" font-weight="400" text-anchor="start">Checks are offered; the tier only recommends.</text>
+<circle cx="583" cy="921" r="3.2" fill="var(--blue)"/>
+<text x="597" y="926" font-size="14.5" font-weight="400" text-anchor="start">A code owner merges; the swarm never pushes main.</text>
+<text x="577" y="972" font-size="12.5" font-weight="400" text-anchor="start" class="mu">Local hooks stop shortcuts; branch protection is the authority.</text>
+<rect x="1066" y="694" width="485" height="292" rx="16" fill="var(--panel)" stroke="var(--line)"/>
+<circle cx="1096" cy="726" r="13" fill="var(--blue)"/>
+<text x="1096" y="731" font-size="13" font-weight="800" text-anchor="middle" style="fill:#fff">6</text>
+<text x="1118" y="732" font-size="19" font-weight="750" text-anchor="start">If you see …</text>
+<text x="1086" y="774" font-size="12" font-weight="600" text-anchor="start" class="m" style="fill:var(--red)">enforcement OFF</text>
+<text x="1270" y="774" font-size="13" font-weight="400" text-anchor="start">new conversation; check the install</text>
+<text x="1086" y="802" font-size="12" font-weight="600" text-anchor="start" class="m" style="fill:var(--red)">$PLAN_LIB unexpanded</text>
+<text x="1270" y="802" font-size="13" font-weight="400" text-anchor="start">hooks not running: treat as enforcement off</text>
+<text x="1086" y="830" font-size="12" font-weight="600" text-anchor="start" class="m" style="fill:var(--red)">no valid approval</text>
+<text x="1270" y="830" font-size="13" font-weight="400" text-anchor="start">type the exact phrase the message names</text>
+<text x="1086" y="858" font-size="12" font-weight="600" text-anchor="start" class="m" style="fill:var(--red)">stale (HEAD moved)</text>
+<text x="1270" y="858" font-size="13" font-weight="400" text-anchor="start">approve the new diff again</text>
+<text x="1086" y="886" font-size="12" font-weight="600" text-anchor="start" class="m" style="fill:var(--red)">engineers cannot start</text>
+<text x="1270" y="886" font-size="13" font-weight="400" text-anchor="start">type approve plan &lt;m&gt; first</text>
+<text x="1086" y="914" font-size="12" font-weight="600" text-anchor="start" class="m" style="fill:var(--red)">Approval NOT recorded</text>
+<text x="1270" y="914" font-size="13" font-weight="400" text-anchor="start">read the reason; retype as whole message</text>
+<text x="1086" y="942" font-size="12" font-weight="600" text-anchor="start" class="m" style="fill:var(--red)">3 failed audit rounds</text>
+<text x="1270" y="942" font-size="13" font-weight="400" text-anchor="start">re-plan, drop the task, or take over</text>
+<text x="1086" y="972" font-size="12.5" font-weight="400" text-anchor="start" class="mu">Open the swarm repo as the workspace, or dispatch rules don’t apply.</text>
+<text x="48" y="1018" font-size="13" font-weight="400" text-anchor="start" class="mu">Docs: docs/playbook.html · docs/usage-e2e.html · docs/ai-dlc.html · plugins/plan/README.md · SUBAGENTS.md</text>
+<text x="1552" y="1018" font-size="13" font-weight="400" text-anchor="end" class="mu">plugin folder plugins/plan → ~/.gemini/config/plugins/plan</text>
+</svg>

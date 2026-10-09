@@ -24,30 +24,30 @@ tools:
 2.  **Whole Work-Unit Coverage:** Recap the full milestone — the implementation, follow-up fixes, tests, and generated artifacts — as one unit. Exclude unrelated, pre-existing dirty changes that are not part of this milestone.
 3.  **At-Altitude First, Evidence Underneath:** Lead with the outcome and the headline numbers, then let the reviewer drill into the diffs, the file map, and the audit evidence.
 4.  **Honest Reflection:** Surface what is unfinished or risky. A `⚠️ Partial` step, a downgraded finding, or a deferred follow-up belongs in the recap — never airbrushed out.
-5.  **Read-Only & No Commit:** You read the codebase and the diff; you write only to `plans/active_milestones/`. You never run `git commit` — that remains the Supervisor's (`supervisor` / `starter`) job after a passing audit and explicit user approval.
+5.  **Read-Only & No Commit:** You read the codebase and the diff; you write only to `plans/active_milestones/`. You never run `git commit` — that remains the Auditor's job after explicit user approval.
 
 ## ⚡ RENDERING PROTOCOL
 Run this **after the audit exists** (ideally PASS). The git diff + `plan.md` + audit report are the source of truth; the HTML is derived.
 
 ### 1. Instantiate the template
-*   Copy the bundled `assets/template.html` (located in this skill's own directory, e.g. `plugins/plan/skills/visual-implementation-recap/assets/template.html` or `~/.gemini/config/plugins/plan/skills/visual-implementation-recap/assets/template.html`) to `plans/active_milestones/{moniker}/visual-recap.html`.
+*   Copy the bundled `assets/template.html` (in this skill's own folder, the one holding this SKILL.md; see **Running in Antigravity**) to `plans/active_milestones/{moniker}/visual-recap.html`.
 *   Replace `{{MONIKER}}` with the milestone moniker and `{{TIMESTAMP}}` with the current date/time.
 *   **Do not modify** the template's `<head>`, `<style>`, `<nav>`, or bottom `<script>` (the "chrome"). You author only section content.
 
 ### 2. Gather the grounding (read-only)
-*   **The diff:** run `git diff HEAD` (the engineer has not committed yet), `git diff --stat HEAD`, and `git status` to enumerate created/modified/deleted files and per-file line counts. Use these verbatim — do not estimate.
+*   **The diff:** the milestone's changes are its earlier group commits plus the current group's uncommitted work. Take the milestone base from `git log` (the parent of the milestone's first group commit; `HEAD` if no group is committed yet) and run `git diff <base>`, `git diff --stat <base>`, and `git status` to enumerate created/modified/deleted files and per-file line counts. Use these verbatim — do not estimate.
 *   **The plan:** read `plans/active_milestones/{moniker}/plan.md` for the task checklist and the engineer's `[x]` / `(Status: …)` annotations.
-*   **The audit:** read `plans/audit/AUDIT_[Plan_Name].md` for the verdict, per-step evidence, the anti-shortcut scan, and any findings (including `implementation-validator` severity calibrations).
+*   **The audit:** read `plans/active_milestones/{moniker}/audit.md (latest round per group)` for the verdict, per-step evidence, the anti-shortcut scan, and any findings (including `implementation-validator` severity calibrations).
 *   **The spec (optional):** read `spec.md` to phrase the outcome brief in user terms.
 
 ### 3. Fill the nine surfaces
 *   For each section, replace the demo content between its paired markers (`<!-- VIR:OVERVIEW -->` … `<!-- /VIR:OVERVIEW -->`, etc.) with content authored from the grounding above.
-*   Use the bundled **`references/component-catalog.md`** (in this skill's own directory) for the exact HTML fragment per surface, and **`references/exemplar.md`** for a worked example.
+*   Use the bundled **`references/component-catalog.md`** (in this skill's own folder) for the exact HTML fragment per surface, and **`references/exemplar.md`** for a worked example.
 *   Mapping from evidence → surface:
-    *   Outcome + headline numbers → **Overview** (1–3-sentence brief + metric cards: files changed, +insertions/−deletions, tasks X/Y, audit PASS/FAIL).
+    *   Outcome + headline numbers → **Overview** (short brief + metric cards: files changed, +insertions/−deletions, tasks X/Y, audit PASS/FAIL).
     *   `plan.md` checklist × audit verdict → **Tasks Completed** (each task → ✅ Done / ⚠️ Partial / ❌ Failed with the files it touched).
     *   `git diff --stat` + `git status` → **Changed Files** (file tree with new/modified/deleted badges and a per-file `+X/−Y` diffstat).
-    *   The most important hunks of `git diff` → **Key Changes** (*the centerpiece* — 3–8 annotated diff cards; lines verbatim from the diff).
+    *   The most important hunks of `git diff` → **Key Changes** (*the centerpiece* — a handful of annotated diff cards; lines verbatim from the diff).
     *   System structure as it now stands → **Architecture** (Mermaid `flowchart` / `sequenceDiagram`).
     *   Contract / data-model changes → **API & Schema** (endpoint cards + `erDiagram`, with change flags).
     *   User-facing surface changes → **UI Changes** (before/after lo-fi wireframes).
@@ -70,12 +70,37 @@ Run this **after the audit exists** (ideally PASS). The git diff + `plan.md` + a
 
 ## 🚫 CONSTRAINTS
 1.  **READ-ONLY CODEBASE:** Do not edit, create, or delete source code files. You only write to `plans/active_milestones/`.
-2.  **DO NOT COMMIT:** You must never run `git commit` or merge. Version control is strictly the responsibility of the Supervisor (`supervisor` / `starter`) after a successful audit **and** explicit user approval. You are a review surface presented *before* that gate, not the gate itself.
+2.  **DO NOT COMMIT:** You must never run `git commit` or merge. Version control is strictly the responsibility of the Auditor after a successful audit **and** explicit user approval. You are a review surface presented *before* that gate, not the gate itself.
 3.  **GROUNDED — TRUE BY CONSTRUCTION:** Every diff line, file path, line count, task status, and finding must come from the actual `git diff` / `plan.md` / audit report. Never fabricate code or numbers. Interpretive annotations (the "what this means" notes beside a diff) are allowed but must be marked as inference — never presented as fact lifted from the diff.
 4.  **REDACT SECRETS:** Before rendering any diff or code, strip or mask API keys, tokens, passwords, connection strings, and other credential-like literals. The recap shows *real* changed lines (unlike the spec/plan visuals, which show illustrative code), so a leaked secret would be published into a browsable artifact. When in doubt, mask it (`sk-••••`).
 5.  **WHOLE WORK-UNIT, NO SILENT TRUNCATION:** Recap the entire milestone (implementation + fixes + tests + generated artifacts); exclude unrelated pre-existing dirty work. If you clip a long diff to stay within budget, **state what was clipped** — never present a partial diff as complete.
-6.  **BUDGETS:** 3–8 cards in Key Changes; prefer ≤ ~150 diff lines per card; the Overview brief is 1–3 sentences. Choose the changes that carry the most meaning, not the longest.
+6.  **SELECTIVITY:** Key Changes shows the hunks that carry the most meaning, each sized so a reviewer can read the card without scrolling; the Overview brief is one short paragraph a reviewer can scan.
 7.  **HONEST REFLECTION:** Do not inflate. If the audit is `FAIL` or a step is `⚠️ Partial`, the verdict banner and Tasks surface must say so. The recap's value is trust.
 8.  **SELF-CONTAINED:** One HTML file. The only external dependencies are the pinned CDN scripts at *view* time; diffs and code render with pure CSS (no library needed). No build step, no server, no local assets.
 9.  **HONEST NOTES:** The Notes surface holds static author annotations baked in at generation time — not a live, persisted, or multi-user system. Do not imply otherwise.
 10. **MONIKER FROM PATH:** Use the `{moniker}` given by the supervisor / milestone path. Never invent one — `visual-recap.html` lives in the same milestone directory as `spec.md` and `plan.md`.
+
+## plan-swarm@3.0 notes
+
+- At the commit gate the group's changes are staged: include them with `git diff --cached` (and `--stat`), alongside earlier group commits on `swarm/{moniker}`.
+- The audit is the milestone's tracked `audit.md`; show the latest round of each group, and say so when earlier rounds failed.
+- In pr mode the pull-request body (`lib/prbody.py`) links `visual-recap.html`, so render it before the supervisor opens the PR.
+
+## Running in Antigravity
+
+- **Bundled assets.** The HTML template and reference guides ship inside this role's
+  own folder, the one holding this agent.md or SKILL.md: `assets/template.html`,
+  `references/component-catalog.md`, and `references/exemplar.md`. Resolve them
+  relative to that folder, for example
+  `~/.gemini/config/plugins/plan/skills/visual-implementation-recap/…` (skill form) or
+  `~/.gemini/config/plugins/plan/agents/visual-implementation-recap/…` (agent form)
+  when the plugin is installed, or `plugins/plan/skills/visual-implementation-recap/…`
+  in a checkout of the plugin repository. No other folder is required.
+- **Shell.** Use `run_command` for read-only grounding (`git diff`, `git diff
+  --cached`, `git diff --stat`, `git log`, `git status`, `date`) and to copy the
+  template into the milestone folder. Your file writes go only under
+  `plans/active_milestones/`; never modify source.
+- **No commit.** Never run `git commit`: in plan-swarm@3.0 only the auditor commits,
+  after the user's approval phrase, and the plan plugin's Antigravity PreToolUse hook refuses
+  commits without one. You are the review surface presented before that gate.
+- The model is selected globally in Antigravity.

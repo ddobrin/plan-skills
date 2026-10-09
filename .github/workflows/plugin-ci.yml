@@ -1,0 +1,30 @@
+name: plugin-ci
+
+# Unit tests for the plan plugin's control plane and the generated-file check.
+# Behavioral evals run manually in an Antigravity conversation (see plugins/plan/evals/README.md).
+on:
+  pull_request:
+    paths: ["plugins/plan/**", "examples/**", ".github/workflows/plugin-ci.yml"]
+  push:
+    branches: [main]
+    paths: ["plugins/plan/**", "examples/**", ".github/workflows/plugin-ci.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Unit tests + generated-file check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest
+      - name: Generated agents/ and skills/ match roles/
+        run: python3 plugins/plan/lib/render_roles.py --check
+      - name: lib tests
+        run: python3 -m pytest -q plugins/plan/lib/tests
+      - name: End-to-end demo against the real hooks
+        run: python3 examples/e2e_demo.py "$RUNNER_TEMP/swarm-e2e"

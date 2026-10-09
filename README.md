@@ -1,64 +1,65 @@
-# Plan Swarm: Spec-Driven Planning Skills & Agents
+# Plan Swarm: an AI-native SDLC for Antigravity
 
-A disciplined swarm of role-based agents, deliberative panels, and adversarial validation gates that drive features, bug fixes, or refactors through a robust **spec → plan → execute → audit → commit** lifecycle. 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/lifecycle/plan-swarm-loop-dark.gif">
+  <img alt="The plan-swarm loop: intent, spec, plan, build, audit, commit, PR, release, with the typed approval phrase at each human gate" src="images/lifecycle/plan-swarm-loop-light.gif" width="800">
+</picture>
 
-This repository is optimized for **Google Antigravity CLI (AGY CLI)**, providing native roles, workflows, tool specifications, and output files.
+A disciplined swarm of role agents, deliberative panels, and adversarial validators that takes a feature, bug fix, or refactor through **intent → spec → plan → parallel build → audit → commit → pull request → release**, with a hook-enforced control plane: nothing is committed, pushed, or tagged without the user's exact approval phrase, and every approval is recorded in git.
 
----
-
-## 🚀 Quick Start & Installation
-
-### 1. How to Install Custom Agents in AGY CLI
-> 📖 See [plugins/plan/agents/README.md](./plugins/plan/agents/README.md) for the complete reference.
-
-Antigravity CLI discovers custom agents as directories, each named after the agent and containing a single `agent.md` file (whose body acts as the system prompt and frontmatter specifies available tools). You can install the swarm agents globally or workspace-locally.
-
-#### Method A: Loose Global Agents (Recommended)
-This method installs the roles globally in AGY CLI, making them available across all of your projects:
-```bash
-mkdir -p "$HOME/.gemini/config/agents"
-for d in plugins/plan/agents/*/; do
-  name=$(basename "$d")
-  rm -rf "$HOME/.gemini/config/agents/$name"
-  cp -R "plugins/plan/agents/$name" "$HOME/.gemini/config/agents/$name"
-done
-```
-> [!IMPORTANT]
-> Always copy the **entire directory** (`cp -R`), not just individual files. Visual agents (`visual-architect`, `visual-product-owner`, `visual-implementation-recap`) carry bundled assets (such as `assets/template.html` and `references/`) that must remain relatively aligned inside their installation directories to prevent rendering errors.
-
-#### Method B: Project-Scoped (Workspace) Agents
-To make the swarm agents available only within a specific project, place them in a `.agents/agents` subfolder:
-```bash
-mkdir -p ".agents/agents"
-for d in plugins/plan/agents/*/; do
-  name=$(basename "$d")
-  rm -rf ".agents/agents/$name"
-  cp -R "plugins/plan/agents/$name" ".agents/agents/$name"
-done
-```
+The swarm ships as one plugin, [`plan`](plugins/plan/README.md) (plan-swarm@3.0), for **Antigravity**. It comes in two packagings generated from a single source file per role: skills (loaded into the current conversation) and agents (dispatched as subagents with `invoke_subagent`).
 
 ---
 
-### 2. How to Install Skills & Agents as an AGY Plugin
-> 📖 See [plugins/plan/README.md](./plugins/plan/README.md) for details on the skill set.
+## How it works
 
-Skills and agents in AGY CLI are registered via Antigravity plugins. You can install the `plan` plugin directly into AGY using `agy plugin install`:
-
-```bash
-# Install the core planning swarm plugin (skills + agents)
-agy plugin install plugins/plan
-```
-
-Or install the repository plugin bundle directly from GitHub:
-```bash
-agy plugin install https://github.com/ddobrin/plan-skills
-```
+- **Intent first.** Every change starts as a short intent in `plans/intents/`. Nothing is specified or built until the user accepts it.
+- **Artifacts, not chat.** Each stage commits one Markdown file that the next stage reads: `intent.md` → `spec.md` (Gherkin) → `plan.md` (test-first micro-steps in parallel groups) → code + `audit.md` → PR.
+- **Six human gates.** The user types `approve intent`, `approve spec`, `approve plan`, `approve commit`, `approve pr`, and `approve release` in the top-level Antigravity conversation. An Antigravity hook turns each phrase into a single-use approval bound to the current commit; another refuses every commit, push, or tag without one.
+- **A ledger in git.** Each approval is a row in the milestone's `approvals.md`, committed with the change it authorizes. Git hooks and a CI job check every commit against it.
+- **Risk tiers.** Each milestone gets a tier (routine, elevated, critical) from rules in `plans/swarm.md`. The tier decides how strongly the supervisor recommends the optional validators, deliberators, and recap; the user decides whether they run.
+- **Parallel build.** Up to five engineers work at once, each in its own git worktree, under strict TDD. The group is squashed, audited with `file:line` evidence in a tracked `audit.md`, and committed by the auditor, the only role that commits.
+- **Pull request and metrics.** In the default pr mode each milestone lives on `swarm/{m}` and ends in a PR whose body is built from the artifacts. Lead times, first-pass audit rate, rework, cost, and intent survival are computed from the committed files.
 
 ---
 
-## 📚 Documentation Directory
+## Quick start
 
-Explore the underlying documentation for details on individual roles, lifecycle stages, and deliverables:
+1. **Install the plugin.** Place or symlink `plugins/plan` at `~/.gemini/config/plugins/plan`:
 
-* **Swarm Agents (AGY CLI):** Detailed system prompts, guidelines, and AGY tool specifications are documented in [plugins/plan/agents/README.md](./plugins/plan/agents/README.md).
-* **Planning Skills (AGY CLI):** Complete guide to skills, artifacts, and lifecycle is documented in [plugins/plan/README.md](./plugins/plan/README.md).
+   ```bash
+   mkdir -p ~/.gemini/config/plugins
+   ln -s "$PWD/plugins/plan" ~/.gemini/config/plugins/plan
+   ```
+
+   The plugin's hooks load for new conversations.
+
+2. **Prepare your repository.** In an Antigravity conversation on the repository you want the swarm to work on, say **"swarm init"**. The `swarm-init` skill installs `plans/swarm.md` (settings), three git hooks (`pre-commit`, `pre-merge-commit`, `pre-push`), and optionally `REVIEW.md`, a CI ledger-check workflow, and an `AGENTS.md` skeleton (skipped if the repository already has `AGENTS.md` or `GEMINI.md`). It never overwrites files. Fill in your build and test commands, review `plans/swarm.md`, and commit both.
+
+3. **Start the supervisor.** In a top-level Antigravity conversation, say **"be the supervisor"** and describe what you want. The supervisor dispatches every role as a subagent with its own context; type the approval phrases in this conversation.
+
+The hooks enforce approvals only in repositories that have `plans/swarm.md`.
+
+---
+
+## Documentation
+
+| Document | For |
+|---|---|
+| [`docs/`](docs/README.md) | Long-form guides (self-contained HTML): [AI-DLC concepts](docs/ai-dlc.html), [architecture](docs/architecture.html), [end-to-end usage](docs/usage-e2e.html), [developer playbook](docs/playbook.html), [walkthrough of the Antigravity port](docs/walkthrough.html). |
+| [`images/`](images/README.md) | Visual introductions: the animated loop, an interactive explainer, a one-page cheatsheet. |
+| [`examples/`](examples/README.md) | `e2e_demo.py`: one milestone through every stage against the real hooks. |
+| [`plugins/plan/README.md`](plugins/plan/README.md) | Lifecycle, skills, control plane, approval phrases, artifact map, configuration, development. |
+| [`plugins/plan/SUBAGENTS.md`](plugins/plan/SUBAGENTS.md) | The agents form: tool contracts and dispatch with `invoke_subagent`. |
+| [`plugins/plan/agents/README.md`](plugins/plan/agents/README.md) | The generated `agents/` directory. |
+| [`plugins/plan/topology.md`](plugins/plan/topology.md) | The plan-swarm@3.0 graph (machine-readable). |
+| [`plugins/plan/evals/README.md`](plugins/plan/evals/README.md) | Behavioral evals and how to run them in Antigravity. |
+| [`plugins/plan/templates/global-hooks.example.md`](plugins/plan/templates/global-hooks.example.md) | Platform teams: registering the gate outside the plugin. |
+
+---
+
+## Development
+
+- Roles are edited only in `plugins/plan/roles/<role>.md`; regenerate the agents and skills with `python3 plugins/plan/lib/render_roles.py` (`--check` reports drift).
+- Tests: `python3 -m pytest -q plugins/plan/lib/tests`. The plugin code uses only the Python standard library.
+- The model is selected globally in Antigravity; every role runs on it.

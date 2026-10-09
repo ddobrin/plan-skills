@@ -1,0 +1,15 @@
+#!/bin/sh
+# plan-swarm git hook: pre-commit (installed by the swarm-init skill).
+# Second enforcement layer: a commit made during a swarm session needs the one-time
+# ticket the plan plugin's Antigravity gate issues after an approval phrase. WIP commits in the
+# swarm's own worktrees and human commits outside a swarm session are unaffected.
+store="$(git rev-parse --git-common-dir)/plan-swarm"
+[ "$PLAN_SWARM_TEST" = "1" ] && [ -n "$PLAN_SWARM_STORE" ] && store="$PLAN_SWARM_STORE"
+if [ -f "$store/bin/gate.py" ]; then
+  exec python3 "$store/bin/gate.py" --git-hook
+fi
+branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null)"
+case "$branch" in
+  swarm/*|swarm-wip/*) echo "plan-swarm: gate not installed yet; open this repository in Antigravity once (the plan plugin refreshes it)." >&2; exit 1 ;;
+esac
+exit 0

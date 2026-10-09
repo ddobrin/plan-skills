@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>plan‑swarm@3.0 · how one change flows in Antigravity</title>
+<style>
+:root{--bg:#f7f5f0;--panel:#fff;--ink:#1d1d1f;--muted:#666a72;--line:#e2ded5;--soft:#f0ede6;
+--amber:#b06f00;--amber-soft:#fff1d6;--blue:#2f5bd3;--blue-soft:#e3eafc;--green:#1f7a4d;--green-soft:#e3f3ea;
+--red:#c0392b;--red-soft:#fde8e6;--purple:#7b3fd1;--purple-soft:#efe7fc;--term:#1e1f24;--termink:#f3c56b;--gray:#9aa0a8}
+.dark{--bg:#121316;--panel:#1b1c20;--ink:#ececec;--muted:#a0a3aa;--line:#2f3137;--soft:#22242a;
+--amber:#f0b44c;--amber-soft:#3a2d12;--blue:#7c9cff;--blue-soft:#24304f;--green:#5cc98f;--green-soft:#173424;
+--red:#ff7b72;--red-soft:#3a1a18;--purple:#b38cff;--purple-soft:#2c2142;--term:#0b0c0e;--gray:#6f747c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,Helvetica,Arial,sans-serif}
+.mono,code{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+.wrap{max-width:1240px;margin:0 auto;padding:26px 24px 40px}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+h1{font-size:27px;letter-spacing:-.015em;margin:0}
+.sub{color:var(--muted);margin:2px 0 0}
+.controls{display:flex;gap:8px;align-items:center}
+button{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:9px;padding:7px 12px;cursor:pointer}
+button:hover{border-color:var(--blue)}
+button.primary{background:var(--blue);color:#fff;border-color:var(--blue);min-width:92px}
+.dark button.primary{color:#0b0c0e}
+select{font:inherit;font-size:13.5px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:9px;padding:7px 8px}
+.counter{font-size:13px;color:var(--muted);min-width:96px;text-align:right}
+/* scrubber */
+.scrub{display:flex;gap:4px;margin:20px 0 6px;align-items:stretch}
+.stagegrp{flex:1;display:flex;flex-direction:column;gap:5px;min-width:0}
+.stagegrp .nm{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dots{display:flex;gap:4px}
+.dot{flex:1;height:9px;border-radius:5px;background:var(--line);cursor:pointer;border:0;padding:0;min-width:10px}
+.dot.gate{background:color-mix(in srgb,var(--amber) 35%,var(--line))}
+.dot.done{background:color-mix(in srgb,var(--blue) 55%,var(--panel))}
+.dot.done.gate{background:color-mix(in srgb,var(--amber) 70%,var(--panel))}
+.dot.cur{background:var(--blue);outline:3px solid color-mix(in srgb,var(--blue) 30%,transparent)}
+.dot.cur.gate{background:var(--amber);outline-color:color-mix(in srgb,var(--amber) 35%,transparent)}
+.hint{font-size:12px;color:var(--muted)}
+/* step head */
+.stephead{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin:16px 0 12px}
+.stephead h2{font-size:22px;margin:0;letter-spacing:-.01em}
+.stephead p{margin:4px 0 0;color:var(--muted);max-width:760px}
+.badge{display:inline-block;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;vertical-align:3px;margin-left:8px}
+.badge.gate{background:var(--amber-soft);color:var(--amber)} .badge.auto{background:var(--blue-soft);color:var(--blue)} .badge.opt{background:var(--purple-soft);color:var(--purple)}
+/* grid */
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px}
+@media (max-width:1000px){.grid{grid-template-columns:1fr}}
+.lanes{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.lane{display:grid;grid-template-columns:150px minmax(0,1fr);border-bottom:1px solid var(--line);min-height:92px}
+.lane:last-child{border-bottom:0}
+.lane .who{padding:14px 14px;border-right:1px solid var(--line);background:var(--soft)}
+.lane .who b{display:block;font-size:14px}
+.lane .who span{font-size:12px;color:var(--muted)}
+.lane .cards{padding:12px;display:flex;flex-wrap:wrap;gap:10px;align-content:flex-start}
+.card{position:relative;border-radius:10px;padding:9px 12px 9px 34px;font-size:13.5px;border:1px solid var(--line);background:var(--panel);max-width:100%;
+opacity:0;transform:translateY(6px);animation:in .35s ease forwards}
+.card .n{position:absolute;left:9px;top:9px;width:18px;height:18px;border-radius:50%;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;background:var(--soft);color:var(--muted)}
+.card.you{background:var(--amber-soft);border-color:color-mix(in srgb,var(--amber) 40%,var(--line))}
+.card.you .n{background:var(--amber);color:#fff}
+.card.sub{background:var(--blue-soft);border-color:color-mix(in srgb,var(--blue) 35%,var(--line))}
+.card.sub .n{background:var(--blue);color:#fff}
+.card.ok{background:var(--green-soft);border-color:color-mix(in srgb,var(--green) 35%,var(--line))}
+.card.ok .n{background:var(--green);color:#fff}
+.card.deny{background:var(--red-soft);border-color:color-mix(in srgb,var(--red) 40%,var(--line))}
+.card.deny .n{background:var(--red);color:#fff}
+.card.opt{background:var(--purple-soft);border-color:color-mix(in srgb,var(--purple) 35%,var(--line))}
+.card.opt .n{background:var(--purple);color:#fff}
+.card code{font-size:12.3px;background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 5px;border-radius:5px}
+.card .phrase{display:inline-block;font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:12.5px;background:var(--term);color:var(--termink);border-radius:6px;padding:2px 8px}
+.empty{font-size:12.5px;color:var(--muted);font-style:italic;padding:4px 2px}
+@keyframes in{to{opacity:1;transform:none}}
+.side{display:flex;flex-direction:column;gap:18px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.box h3{margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.files{font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:12.3px;line-height:1.7}
+.files .f{color:var(--muted)} .files .f.on{color:var(--ink)} .files .f.new{color:var(--green);font-weight:700}
+.files .rows{color:var(--amber)}
+.why{font-size:13.5px;color:var(--ink)}
+.why b{color:var(--blue)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:14px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+footer{margin-top:26px;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div><h1>plan‑swarm@3.0 · how one change flows in Antigravity</h1>
+  <p class="sub">The supervisor runs in your top-level Antigravity conversation and dispatches every role as a subagent. You approve with exact phrases; Antigravity hooks and git hooks enforce them; git keeps the record.</p></div>
+  <div class="controls">
+    <button id="first" title="First step">⏮</button><button id="prev" title="Previous (←)">◀</button>
+    <button id="play" class="primary" title="Play / pause (space)">▶ Play</button>
+    <button id="next" title="Next (→)">▶︎</button><button id="last" title="Last step">⏭</button>
+    <select id="speed" title="Speed"><option value="1">1×</option><option value="1.6" selected>1.6×</option><option value="2.5">2.5×</option></select>
+    <button id="theme" title="Light / dark">◐</button>
+    <span class="counter" id="counter"></span>
+  </div>
+</header>
+<div class="scrub" id="scrub"></div>
+<div class="hint">Click any segment to jump · amber = you type an approval phrase · ← → to step · space to play</div>
+
+<div class="stephead"><div><h2 id="title"></h2><p id="desc"></p></div></div>
+
+<div class="grid">
+  <div>
+    <div class="lanes">
+      <div class="lane"><div class="who"><b>You</b><span>top-level conversation</span></div><div class="cards" id="l-you"></div></div>
+      <div class="lane"><div class="who"><b>Supervisor</b><span>“be the supervisor” · same conversation</span></div><div class="cards" id="l-sup"></div></div>
+      <div class="lane"><div class="who"><b>Roles</b><span>subagents via <code>invoke_subagent</code></span></div><div class="cards" id="l-sub"></div></div>
+      <div class="lane"><div class="who"><b>Control plane &amp; git</b><span>Antigravity hooks · git hooks · commits</span></div><div class="cards" id="l-ctl"></div></div>
+    </div>
+    <div class="legend"><span><i style="background:var(--amber)"></i>you</span><span><i style="background:var(--blue)"></i>role subagent</span><span><i style="background:var(--purple)"></i>offered check</span><span><i style="background:var(--green)"></i>allowed / committed</span><span><i style="background:var(--red)"></i>refused by a hook</span><span>numbers = order of events</span></div>
+  </div>
+  <div class="side">
+    <div class="box"><h3>swarm/login-rate-limit</h3><svg id="graph" width="298" height="190" role="img" aria-label="branch graph"></svg></div>
+    <div class="box"><h3>plans/active_milestones/login-rate-limit/</h3><div class="files" id="files"></div></div>
+    <div class="box"><h3>Why it works this way</h3><div class="why" id="why"></div></div>
+  </div>
+</div>
+<footer>plan‑swarm@3.0 interactive explainer for Antigravity · self‑contained (no external assets) · phrases, branch names, and hook messages follow <code>plugins/plan/README.md</code> and the hook scripts in <code>plugins/plan/lib/</code>; the request, answers, dates, and test counts are illustrative.</footer>
+</div>
+
+<script>
+const M = "login-rate-limit";
+// lane items: [order, kind, html]; kinds: you sub ok deny opt (default = plain)
+const STEPS = [
+ {stage:"Start", title:"Start the supervisor", badge:"auto",
+  desc:"Open a new top-level Antigravity conversation on the repository and say “be the supervisor”. Every role you meet below runs as a subagent.",
+  you:[[1,"you",`“be the supervisor”`]],
+  ctl:[[2,"ok",`PreInvocation <code>approve.py</code>: <b>enforcement active</b>, pr mode, ≤5 engineers, <code>PLAN_LIB=…</code>`]],
+  sup:[[3,"",`Loads the <code>supervisor</code> skill · <code>health.py --status</code> → <code>enforcement: active</code>`],[4,"",`Reads <code>plans/</code>, reports where each milestone stands, and waits`]],
+  why:"The supervisor runs in your <b>top-level conversation</b>, so the phrases you type there reach the PreInvocation hook that records them. Subagents keep each role's context separate.",
+  commits:0, files:[]},
+ {stage:"Intent", title:"Describe the problem", badge:"auto",
+  desc:"Say what hurts and what done looks like. The product owner turns it into a short intent in the inbox.",
+  you:[[1,"you",`“Login gets brute‑forced. Limit failed attempts per account and per IP.”`]],
+  sup:[[2,"",`<code>invoke_subagent</code> · <code>TypeName: "product-owner"</code> in intent mode`]],
+  sub:[[3,"sub",`<code>product-owner</code> writes <code>plans/intents/2026-10-05-${M}.md</code>`]],
+  ctl:[[4,"",`<code>tier.py</code>: proposed tier <b>routine</b> (wording only)`]],
+  why:"Intent is the audit root: it records <b>who asked for what</b> before anything is designed.", commits:0, files:[]},
+ {stage:"Intent", title:"Accept the intent", badge:"gate",
+  desc:"Your phrase, typed as your whole message, turns the intent into a milestone with its own branch.",
+  sup:[[1,"",`Prints the exact phrase to type`]],
+  you:[[2,"you",`<span class="phrase">approve intent ${M} as ${M}</span>`]],
+  ctl:[[3,"ok",`PreInvocation <code>approve.py</code>: single‑use nonce bound to HEAD, 15 min · ledger row staged`],[7,"ok",`commit <code>docs(${M}): accept intent</code>`]],
+  sup2:[[4,"",`<code>git switch -c swarm/${M}</code> · moves the intent into the milestone`]],
+  sub:[[5,"sub",`<code>product-owner</code> adds the milestone to <code>00-ROADMAP.md</code>`],[6,"sub",`<code>auditor</code> commits <code>plans/</code>`]],
+  why:"Only your <b>whole message</b> in the top-level conversation mints an approval. A phrase inside an <code>invoke_subagent</code> prompt or a <code>send_message</code> records nothing, and the gate refuses such a dispatch.",
+  commits:1, files:["intent.md","approvals.md","00-ROADMAP.md"]},
+ {stage:"Spec", title:"Research the code", badge:"auto",
+  desc:"A read-only research subagent reads the relevant code; the supervisor appends what it found to the intent.",
+  sup:[[1,"",`Dispatches a research subagent (<code>TypeName: "self"</code>, told to stay read‑only)`],[3,"",`Appends the section to <code>intent.md</code>`]],
+  sub:[[2,"sub",`research subagent returns a <code>## Codebase context</code> section`]],
+  why:"Research lives in the intent file, so the product owner and architect start from the same facts.", commits:1, files:["intent.md","approvals.md","00-ROADMAP.md"]},
+ {stage:"Spec", title:"Write the spec (Grill Loop)", badge:"auto",
+  desc:"The product owner asks at most three questions at a time, then writes testable Given/When/Then criteria.",
+  sup:[[1,"",`Dispatches <code>product-owner</code>`],[3,"",`Asks you with <code>ask_question</code>`],[5,"",`Passes your answers back with <code>send_message</code>`]],
+  sub:[[2,"sub",`<code>product-owner</code> returns its questions: “After how many failures should an account lock?”`],[6,"sub",`writes <code>spec.md</code> with a Policy Concerns section`]],
+  you:[[4,"you",`“5 in 15 minutes, lock 15 minutes, never reveal accounts.”`]],
+  why:"A subagent cannot reach you, so the product owner <b>returns</b> its questions and the supervisor asks them. Load the <code>product-owner</code> skill in your own conversation if you prefer to be grilled live.",
+  commits:1, files:["intent.md","spec.md","approvals.md","00-ROADMAP.md"]},
+ {stage:"Spec", title:"Offered: check the spec", badge:"opt",
+  desc:"The supervisor offers a deliberator and a validator. Here you accept the validator.",
+  sup:[[1,"opt",`<code>ask_question</code>: <code>spec-deliberator</code>, <code>spec-validator</code> (recommended at elevated/critical)`]],
+  you:[[2,"you",`“Run the validator.”`]],
+  sub:[[3,"opt",`<code>spec-validator</code> starts <b>3 independent skeptics</b> in one <code>invoke_subagent</code> call (read‑only <code>self</code>)`],[4,"opt",`<code>tally.py</code>: 2‑of‑3 quorum → report in <code>adversarial-reviews/</code>`],[5,"sub",`<code>product-owner</code> applies the tightenings`]],
+  why:"Reviewers <b>never edit</b> what they review: the validator reports, the author fixes. Declined checks are logged with the tier in <code>usage.md</code>.",
+  commits:1, files:["intent.md","spec.md","spec-validation.md","approvals.md","00-ROADMAP.md"]},
+ {stage:"Spec", title:"Approve the spec", badge:"gate", desc:"Your phrase lets the auditor commit the spec and its review.",
+  you:[[1,"you",`<span class="phrase">approve spec ${M}</span>`]],
+  ctl:[[2,"ok",`<code>approve.py</code>: approval + ledger row`],[4,"ok",`commit <code>docs(${M}): spec</code>`]],
+  sub:[[3,"sub",`<code>auditor</code> commits <code>plans/</code>`]],
+  why:"Each artifact gets its own commit, so the history shows <b>when</b> each decision was made.", commits:2,
+  files:["intent.md","spec.md","spec-validation.md","approvals.md","usage.md","00-ROADMAP.md"]},
+ {stage:"Plan", title:"Write the plan", badge:"auto",
+  desc:"The architect reads the code (it cannot change it) and plans test‑first tasks in parallel groups with disjoint files.",
+  sup:[[1,"",`Dispatches <code>architect</code>`]],
+  sub:[[2,"sub",`<code>architect</code> writes <code>plan.md</code>: Group 1 (1.A, 1.B) → Group 2 (2.A), plus Irreversible Steps`]],
+  ctl:[[3,"",`<code>tier.py</code>: <b>critical</b> (path <code>src/shop/auth/…</code> matches <code>**/auth/**</code>)`]],
+  why:"The tier only <b>rises</b> automatically. At critical, the supervisor recommends deliberators and validators, but never forces them.", commits:2,
+  files:["intent.md","spec.md","plan.md","spec-validation.md","approvals.md","usage.md","00-ROADMAP.md"]},
+ {stage:"Plan", title:"Offered: check the plan", badge:"opt",
+  desc:"Skeptics open the files the plan relies on and look for the first domino.",
+  sup:[[1,"opt",`<code>ask_question</code>: <code>plan-deliberator</code>, <code>plan-validator</code>`]],
+  you:[[2,"you",`“Run the validator.”`]],
+  sub:[[3,"opt",`<code>plan-validator</code>: 3 skeptics read the code`],[4,"opt",`first_domino: none · 0 confirmed`]],
+  why:"Plan defects are cheapest to fix <b>before</b> any code exists.", commits:2,
+  files:["intent.md","spec.md","plan.md","spec-validation.md","plan-validation.md","approvals.md","usage.md","00-ROADMAP.md"]},
+ {stage:"Plan", title:"Approve the plan", badge:"gate", desc:"The go / no‑go. Until now, the gate refuses to start any engineer for this milestone.",
+  sup:[[1,"",`Shows spec, plan, check verdicts, tier critical`]],
+  you:[[2,"you",`<span class="phrase">approve plan ${M}</span>`]],
+  ctl:[[3,"ok",`approval + ledger row (tier critical)`],[5,"ok",`commit <code>docs(${M}): plan</code> · engineer dispatch unblocked`]],
+  sub:[[4,"sub",`<code>auditor</code> commits the plan`]],
+  why:"Before this phrase, an <code>invoke_subagent</code> entry with <code>TypeName: \"engineer\"</code> is <b>refused by the gate</b>: “engineers cannot start on login-rate-limit before the plan is approved.” The rule applies when the swarm repository is the open workspace.", commits:3,
+  files:["intent.md","spec.md","plan.md","spec-validation.md","plan-validation.md","approvals.md","usage.md","00-ROADMAP.md"]},
+ {stage:"Build", title:"Build group 1 in parallel", badge:"auto",
+  desc:"One engineer per task, each in its own git worktree, test‑first.",
+  sup:[[1,"",`<code>worktree.py create</code> ×2 · one <code>invoke_subagent</code> call with two <code>engineer</code> entries`],[5,"",`<code>worktree.py squash</code>: stages the group, no commit`]],
+  sub:[[2,"sub",`<code>engineer</code> Task 1.A · <code>swarm-wip/${M}/1.A</code>`],[3,"sub",`<code>engineer</code> Task 1.B · <code>swarm-wip/${M}/1.B</code>`]],
+  ctl:[[4,"ok",`WIP commits allowed only inside the swarm's worktrees (<code>.swarm/worktrees/</code>)`]],
+  why:"Tasks in a group touch <b>different files</b>; overlapping files make <code>squash</code> exit 3 and send the plan back to the architect (Path B).", commits:3,
+  files:["intent.md","spec.md","plan.md","approvals.md","usage.md","00-ROADMAP.md"]},
+ {stage:"Build", title:"Audit group 1", badge:"auto",
+  desc:"The auditor proves the group works, with evidence, and records the round.",
+  sup:[[1,"",`Dispatches <code>auditor</code>`]],
+  sub:[[2,"sub",`<code>auditor</code> runs the test command from <code>AGENTS.md</code> → 5 passed`],[3,"sub",`appends <code>### Group 1 · Round 1 · PASS</code> to <code>audit.md</code>`]],
+  ctl:[[4,"",`FAIL would send the task back (Path A, ≤3 rounds, then you decide)`]],
+  why:"No untested code passes. The audit runs exactly the build and test commands in <code>AGENTS.md</code> (or <code>GEMINI.md</code>).", commits:3,
+  files:["intent.md","spec.md","plan.md","audit.md","approvals.md","usage.md","00-ROADMAP.md"]},
+ {stage:"Build", title:"A shortcut gets refused", badge:"auto",
+  desc:"The auditor tries to commit before you approved. The gate says no, and says what to ask for.",
+  sub:[[1,"sub",`<code>auditor</code> · <code>run_command</code>: <code>git commit -m 'feat(${M}): …'</code>`]],
+  ctl:[[2,"deny",`PreToolUse <code>gate.py</code>: <i>plan-swarm: no valid approval for this commit. Ask the user to type exactly: approve commit ${M} g&lt;n&gt;</i>`]],
+  sup:[[3,"",`Shows you the diffstat and the drafted message`]],
+  why:"The rules are <b>mechanism</b>, not promises: <code>--no-verify</code>, git aliases, config tricks, and force pushes are refused too, and the git <code>pre-commit</code> hook re-checks commits made from any terminal.", commits:3,
+  files:["intent.md","spec.md","plan.md","audit.md","approvals.md","usage.md","00-ROADMAP.md"]},
+ {stage:"Build", title:"Commit group 1", badge:"gate", desc:"One audited group, one commit.",
+  you:[[1,"you",`<span class="phrase">approve commit ${M} g1</span>`]],
+  ctl:[[2,"ok",`approval + ledger row`],[4,"ok",`gate and git <code>pre-commit</code> hook pass · commit group 1`]],
+  sub:[[3,"sub",`<code>auditor</code>: <code>git add plans/ &amp;&amp; git commit</code>`]],
+  why:"The ledger row ships <b>inside</b> the commit it authorizes: its HEAD is that commit's parent.", commits:4,
+  files:["intent.md","spec.md","plan.md","audit.md","approvals.md","usage.md","00-ROADMAP.md"]},
+ {stage:"Build", title:"Group 2, same loop", badge:"gate",
+  desc:"Build → audit → commit repeats per group. Before the last commit the roadmap marks the milestone complete.",
+  sub:[[1,"sub",`<code>engineer</code> Task 2.A → <code>auditor</code> PASS`],[2,"sub",`<code>product-owner</code>: roadmap → COMPLETED`]],
+  you:[[3,"you",`<span class="phrase">approve commit ${M} g2</span>`]],
+  ctl:[[4,"ok",`commit group 2`]],
+  why:"The roadmap change ships in the PR, so merging the PR <b>is</b> completing the milestone.", commits:5,
+  files:["intent.md","spec.md","plan.md","audit.md","approvals.md","usage.md","00-ROADMAP.md"]},
+ {stage:"PR", title:"Open the pull request", badge:"gate",
+  desc:"Your phrase opens the PR. Without it, both the gate and the git pre‑push hook refuse the push.",
+  you:[[1,"you",`<span class="phrase">approve pr ${M}</span>`]],
+  sub:[[2,"sub",`<code>auditor</code> commits the PR approval (ledger only)`]],
+  sup:[[4,"",`<code>gh pr create</code> with a title and body from <code>prbody.py</code> (without <code>gh</code>: prints them for you)`]],
+  ctl:[[3,"ok",`<code>git push -u origin swarm/${M}</code> · pre‑push checks <b>every</b> commit against the ledger`]],
+  why:"A commit made outside the swarm has no matching ledger row, so the push is refused and the CI ledger job would fail it.", commits:6,
+  files:["intent.md","spec.md","plan.md","audit.md","approvals.md","usage.md","00-ROADMAP.md"]},
+ {stage:"PR", title:"CI and the code owner", badge:"auto", desc:"Your normal review process takes over. Agents cannot merge.",
+  ctl:[[1,"ok",`CI ledger job: 6 commits, 6 approvals, tier critical`],[2,"ok",`branch protection + required review (an AI review job is an optional add-on, off by default)`]],
+  sub:[[3,"deny",`an agent tries <code>gh pr merge</code> → refused by the gate`]],
+  you:[[4,"you",`A code owner merges on GitHub`]],
+  why:"Local hooks guard against shortcuts by well-meaning agents; <b>branch protection, code‑owner review, and the CI ledger check</b> are the authority.", commits:6, merged:true,
+  files:["intent.md","spec.md","plan.md","audit.md","approvals.md","usage.md","00-ROADMAP.md"]},
+ {stage:"Release", title:"Release", badge:"gate", desc:"Tag the version once its milestones are merged.",
+  sup:[[1,"",`<code>git switch main</code>, then <code>git pull --ff-only</code>`]],
+  you:[[2,"you",`<span class="phrase">approve release v1.0.0</span>`]],
+  ctl:[[3,"ok",`release row in <code>plans/approvals.md</code> · <code>git tag -a v1.0.0</code> · <code>git push origin v1.0.0</code> once you say so`]],
+  sub:[[4,"sub",`<code>product-owner</code>: release → Shipped`]],
+  why:"Six phrases took one change from intent to release. Every step is in git; the <code>swarm-metrics</code> skill reports lead time and rework.", commits:6, merged:true, tagged:true,
+  files:["intent.md","spec.md","plan.md","audit.md","approvals.md","usage.md","00-ROADMAP.md"]},
+];
+const COMMITS = ["intent","spec","plan","g1","g2","PR ✓"];
+const ALLFILES = ["intent.md","spec.md","plan.md","audit.md","approvals.md","usage.md","adversarial-reviews/spec-validation.md","adversarial-reviews/plan-validation.md","../../00-ROADMAP.md"];
+const fileKey = f => ({"spec-validation.md":"adversarial-reviews/spec-validation.md","plan-validation.md":"adversarial-reviews/plan-validation.md","00-ROADMAP.md":"../../00-ROADMAP.md"})[f] || f;
+const GATE_ROWS = [0,0,1,1,1,1,2,2,2,3,3,3,3,4,5,6,6,6];
+
+let cur = 0, timer = null;
+const $ = id => document.getElementById(id);
+function buildScrub() {
+  const groups = [];
+  STEPS.forEach((s, i) => { const g = groups[groups.length - 1]; if (g && g.stage === s.stage) g.idx.push(i); else groups.push({stage: s.stage, idx: [i]}); });
+  $("scrub").innerHTML = groups.map(g => `<div class="stagegrp" style="flex:${g.idx.length}"><div class="nm">${g.stage}</div><div class="dots">${
+    g.idx.map(i => `<button class="dot ${STEPS[i].badge === "gate" ? "gate" : ""}" data-i="${i}" title="${i + 1}. ${STEPS[i].title}"></button>`).join("")}</div></div>`).join("");
+  document.querySelectorAll(".dot").forEach(d => d.onclick = () => { stop(); show(+d.dataset.i); });
+}
+function cards(items) {
+  if (!items || !items.length) return `<div class="empty">—</div>`;
+  return items.sort((a, b) => a[0] - b[0]).map(([n, k, html]) =>
+    `<div class="card ${k}" style="animation-delay:${(n - 1) * 0.42}s"><span class="n">${n}</span>${html}</div>`).join("");
+}
+function graph(s) {
+  const n = s.commits, W = 298, SP = 30;
+  let g = `<defs><marker id="mk" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--gray)"/></marker></defs>`;
+  g += `<text x="6" y="26" font-size="11" fill="var(--muted)" font-family="SF Mono,Menlo,monospace">main</text>`;
+  g += `<line x1="44" y1="22" x2="${W - 8}" y2="22" stroke="var(--gray)" stroke-width="3"/>`;
+  g += `<circle cx="56" cy="22" r="5" fill="var(--gray)"/>`;
+  if (n > 0 || s.stage !== "Start") {
+    g += `<path d="M56,22 C70,22 70,78 84,78" fill="none" stroke="var(--blue)" stroke-width="3"/>`;
+    const lastX = 84 + Math.max(n - 1, 0) * SP;
+    g += `<line x1="84" y1="78" x2="${Math.max(lastX, 90)}" y2="78" stroke="var(--blue)" stroke-width="3"/>`;
+  }
+  for (let i = 0; i < n; i++) {
+    const x = 84 + i * SP, below = i % 2 === 0;
+    g += `<circle cx="${x}" cy="78" r="7" fill="var(--amber)" stroke="var(--panel)" stroke-width="2"/>`;
+    g += `<text x="${x}" y="${below ? 108 : 60}" text-anchor="middle" font-size="10.5" fill="var(--muted)">${COMMITS[i]}</text>`;
+  }
+  if (s.merged) {
+    const x = 84 + (n - 1) * SP;
+    g += `<path d="M${x},78 C${x + 16},78 ${x + 16},22 ${x + 30},22" fill="none" stroke="var(--blue)" stroke-width="3"/>`;
+    g += `<circle cx="${x + 30}" cy="22" r="6" fill="var(--blue)"/>`;
+  }
+  if (s.tagged) {
+    const x = 84 + (n - 1) * SP + 30;
+    g += `<rect x="${x - 22}" y="0" width="44" height="14" rx="7" fill="var(--green-soft)" stroke="var(--green)"/><text x="${x}" y="11" text-anchor="middle" font-size="10" font-weight="700" fill="var(--green)">v1.0.0</text>`;
+  }
+  const rows = GATE_ROWS[cur];
+  g += `<text x="6" y="146" font-size="11.5" fill="var(--muted)">commits on the branch: <tspan fill="var(--ink)" font-weight="700">${n}</tspan></text>`;
+  g += `<text x="6" y="166" font-size="11.5" fill="var(--muted)">approvals in the ledger: <tspan fill="var(--amber)" font-weight="700">${rows}</tspan></text>`;
+  g += `<text x="6" y="186" font-size="11.5" fill="var(--muted)">row HEAD = parent of the commit it authorizes</text>`;
+  $("graph").innerHTML = g;
+}
+function files(s, prev) {
+  const upTo = k => new Set(STEPS.slice(0, k + 1).flatMap(x => x.files).map(fileKey));  // files persist once created
+  const on = upTo(cur), was = cur > 0 ? upTo(cur - 1) : new Set();
+  $("files").innerHTML = ALLFILES.map(f => {
+    const cls = on.has(f) ? (was.has(f) ? "on" : "new") : "";
+    const extra = f === "approvals.md" && on.has(f) ? ` <span class="rows">· ${GATE_ROWS[cur]} row${GATE_ROWS[cur] === 1 ? "" : "s"}</span>` : "";
+    return `<div class="f ${cls}">${on.has(f) ? "▸" : "·"} ${f}${extra}</div>`;
+  }).join("");
+}
+function show(i) {
+  cur = Math.max(0, Math.min(STEPS.length - 1, i));
+  const s = STEPS[cur];
+  const badge = {gate: "you approve", auto: "the swarm works", opt: "offered check"}[s.badge];
+  $("title").innerHTML = `${cur + 1}. ${s.title}<span class="badge ${s.badge}">${badge}</span>`;
+  $("desc").textContent = s.desc;
+  $("l-you").innerHTML = cards(s.you); $("l-sub").innerHTML = cards(s.sub);
+  $("l-sup").innerHTML = cards([...(s.sup || []), ...(s.sup2 || [])]); $("l-ctl").innerHTML = cards(s.ctl);
+  $("why").innerHTML = s.why;
+  $("counter").textContent = `Step ${cur + 1} / ${STEPS.length}`;
+  document.querySelectorAll(".dot").forEach(d => { const k = +d.dataset.i; d.classList.toggle("cur", k === cur); d.classList.toggle("done", k < cur); });
+  graph(s); files(s, STEPS[cur - 1]);
+}
+function stepMs() {
+  const s = STEPS[cur], n = Math.max(...[s.you, s.sup, s.sup2, s.sub, s.ctl].flat().filter(Boolean).map(x => x[0]));
+  return (n * 420 + 3200) / (+$("speed").value);
+}
+function tick() { if (cur >= STEPS.length - 1) { stop(); return; } show(cur + 1); timer = setTimeout(tick, stepMs()); }
+function play() { if (cur >= STEPS.length - 1) show(0); $("play").textContent = "⏸ Pause"; timer = setTimeout(tick, stepMs()); }
+function stop() { clearTimeout(timer); timer = null; $("play").textContent = "▶ Play"; }
+$("play").onclick = () => timer ? stop() : play();
+$("next").onclick = () => { stop(); show(cur + 1); };
+$("prev").onclick = () => { stop(); show(cur - 1); };
+$("first").onclick = () => { stop(); show(0); };
+$("last").onclick = () => { stop(); show(STEPS.length - 1); };
+$("theme").onclick = () => document.documentElement.classList.toggle("dark");
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") { stop(); show(cur + 1); }
+  else if (e.key === "ArrowLeft") { stop(); show(cur - 1); }
+  else if (e.key === " ") { e.preventDefault(); timer ? stop() : play(); }
+});
+if (matchMedia("(prefers-color-scheme: dark)").matches) document.documentElement.classList.add("dark");
+const hp = new URLSearchParams(location.hash.slice(1));
+if (hp.get("t") === "dark") document.documentElement.classList.add("dark");
+if (hp.get("t") === "light") document.documentElement.classList.remove("dark");
+buildScrub(); show(+(hp.get("step") || 1) - 1);
+if (hp.get("static")) document.querySelectorAll(".card").forEach(c => { c.style.animation = "none"; c.style.opacity = 1; c.style.transform = "none"; });
+</script>
+</body>
+</html>

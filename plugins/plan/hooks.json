@@ -1,0 +1,23 @@
+{
+  "plan-swarm": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "python3 lib/approve.py",
+        "timeout": 20
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(run_command|write_to_file|replace_file_content|multi_replace_file_content|notebook_edit|invoke_subagent|run_workflow|send_message)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 lib/gate.py",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}

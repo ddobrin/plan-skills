@@ -1,0 +1,78 @@
+# plan-swarm CI (installed by the swarm-init skill).
+#
+#   ledger   PRs from swarm/*: every commit must have an intent/spec/plan/commit row in
+#            approvals.md whose HEAD is the commit's parent (each approval is bound to the
+#            HEAD it was typed at, and the approval hook stages the row into that commit).
+#            Also reports the milestone's confirmed risk tier as the job output `tier`.
+#
+# This job needs no secrets and no model access: it is the server-side check that the
+# swarm's commits match the human approvals recorded in Antigravity.
+#
+# Optional add-on: AI review. Teams that want an automated review on every PR (against
+# REVIEW.md) or the implementation-validator panel at tier elevated/critical can add a
+# job that `needs: ledger`, runs only when
+#   needs.ledger.outputs.tier == 'elevated' || needs.ledger.outputs.tier == 'critical'
+# (or on every PR for a plain review), and calls the review agent their organization
+# has approved for CI (for example a Gemini-based review action, authenticated with
+# Workload Identity Federation instead of stored keys). Give it `pull-requests: write`
+# only, tell it to follow REVIEW.md, post one comment, and never approve, merge, or
+# push. Keep the ledger job required in branch protection either way.
+name: plan-swarm
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  ledger:
+    runs-on: ubuntu-latest
+    if: startsWith(github.head_ref, 'swarm/')
+    outputs:
+      tier: ${{ steps.check.outputs.tier }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: check
+        name: Every commit has an approval
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          MILESTONE: ${{ github.head_ref }}
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess, sys
+          m = os.environ["MILESTONE"].removeprefix("swarm/")
+          ledger = f"plans/active_milestones/{m}/approvals.md"
+          rows = []
+          if os.path.exists(ledger):
+              for line in open(ledger, encoding="utf-8"):
+                  cells = [c.strip() for c in line.strip().strip("|").split("|")]
+                  if len(cells) == 9 and re.match(r"\d{4}-\d\d-\d\dT", cells[0]):
+                      rows.append(cells)
+          # intent/spec/plan/commit rows authorize a commit; a pr row authorizes only the
+          # ledger-only commit that records it (release rows authorize no commit)
+          heads = [r[7] for r in rows if r[7] and r[2] in ("intent", "spec", "plan", "commit")]
+          pr_heads = [r[7] for r in rows if r[7] and r[2] == "pr"]
+          commits = subprocess.run(["git", "rev-list", "--reverse", f"{os.environ['BASE']}..HEAD"],
+                                   capture_output=True, text=True, check=True).stdout.split()
+          missing = []
+          for c in commits:
+              parent = subprocess.run(["git", "rev-parse", f"{c}^"], capture_output=True, text=True).stdout.strip()
+              changed = subprocess.run(["git", "diff-tree", "--no-commit-id", "--name-only", "-r", c],
+                                       capture_output=True, text=True).stdout.split()
+              ledger_only = changed == [ledger]
+              if not (any(parent.startswith(h) for h in heads) or
+                      (ledger_only and any(parent.startswith(h) for h in pr_heads))):
+                  subject = subprocess.run(["git", "log", "-1", "--format=%h %s", c], capture_output=True, text=True).stdout.strip()
+                  missing.append(subject)
+          tier = next((r[5] for r in reversed(rows) if r[2] == "plan" and r[5]), "routine")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"tier={tier}\n")
+          print(f"milestone {m}: {len(commits)} commits, {len(rows)} approvals, tier {tier}")
+          if missing:
+              print("commits without a matching approval:\n  " + "\n  ".join(missing))
+              sys.exit(1)
+          PY

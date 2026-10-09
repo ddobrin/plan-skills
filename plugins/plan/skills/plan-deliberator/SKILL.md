@@ -11,6 +11,8 @@ tools:
   - list_dir
   - find_by_name
   - grep_search
+  - run_command
+  - ask_question
 ---
 
 # Deliberative Plan Improvement
@@ -115,26 +117,28 @@ load-bearing — keep them verbatim.
 Turns are **sequential, not parallel** — delegate 2 must see delegate 1's utterance, or
 proposals oscillate instead of converging.
 
-- Spawn delegate 1 via `invoke_subagent` using `TypeName: research` (or
-  `research-google` / `self` instructed to stay read-only — it must read and grep the
-  codebase). Its first turn includes an **investigation phase**: deep-read the territory
-  *before* speaking. Parse its JSON turn.
-- Spawn delegate 2 with its own prompt **plus the transcript so far** (verbatim), then
-  delegate 3.
+- Spawn delegate 1 with `invoke_subagent` — one entry in `Subagents`:
+  `{TypeName: "self", Role: "Codebase Delegate", Prompt: <its filled template>}`, told
+  to stay strictly read-only (it must read and grep the codebase, never write) — and
+  record the `conversationId` it returns. Its first turn includes an **investigation
+  phase**: deep-read the territory *before* speaking. Its turn arrives as a message
+  when it finishes; do not poll. Parse its JSON turn.
+- Spawn delegate 2 the same way with its own prompt **plus the transcript so far**
+  (verbatim), then delegate 3. One `invoke_subagent` call per delegate, never one call
+  with all three — the turns are sequential.
 - Track `current_proposal` as a **versioned plan edit list** (v1, v2, …): reorders,
   group boundary changes, inserted/removed/retargeted steps. Apply each turn's
   amendments to produce the next version; record which version each delegate accepted.
 
-### 4. Run subsequent rounds
-For rounds 2+, if `send_message` is available in your runtime to continue a subagent by
-its `conversationId`, **continue the same agents with `send_message`** — each message
-carries only the new transcript entries since that delegate's last turn, verbatim, plus
-the current proposal version. When `invoke_subagent` is fire-and-return without a
-persistent channel, **re-invoke the delegate fresh for each round after the first and
-supply the FULL verbatim transcript** (every prior turn, plus its own earlier turns and
-their cited evidence) so it can reconstruct its position. A delegate may investigate
-further mid-deliberation ("let me check whether `schedule()` tolerates a null") — that is
-the pattern working, not a stall.
+### 4. Run subsequent rounds via `send_message`
+For rounds 2+, **continue the same agents with `send_message`** (`Recipient:` the
+delegate's recorded `conversationId`) — never respawn. A respawned delegate loses
+everything it read in its territory and why it objected; continuation is what makes its
+authority real across rounds. Each message carries only the new transcript entries
+since that delegate's last turn, verbatim, plus the current proposal version. The reply
+arrives as a message; wait for it (do not poll) before relaying it verbatim to the next
+delegate. A delegate may investigate further mid-deliberation ("let me check whether
+`schedule()` tolerates a null") — that is the pattern working, not a stall.
 
 ### 5. Terminate
 - **Convergence:** every delegate has accepted the *same* proposal version → done.
@@ -163,7 +167,7 @@ revised plan** before execution. Consensus is not adversarial survival.
 
 ## Delegate Prompt Template
 
-Dispatch once per delegate via `invoke_subagent`. Replace `{ROLE}`, `{TERRITORY}`,
+Dispatch once per delegate via `invoke_subagent` (`TypeName: "self"`). Replace `{ROLE}`, `{TERRITORY}`,
 `{GUARDS}`, `{PLAN}`, `{SPEC_PATH}`, `{REPO_ROOT}`, `{TRANSCRIPT}`, `{CURRENT_PROPOSAL}`.
 
 ```
@@ -203,6 +207,9 @@ Rules of deliberation:
   what argument changed your mind.
 - Propose amendments as concrete plan edits (reorder, insert step, retarget name,
   split/merge group), not sentiments.
+- Stay strictly read-only: no file writes, no git state changes — read, grep, and
+  `git diff` only. The orchestrator alone edits the plan. You will be continued with
+  follow-up messages for later rounds; answer each with one new turn.
 
 Your final message MUST be exactly one fenced JSON block and nothing else, matching:
 
@@ -233,7 +240,7 @@ Each turn returns the JSON above. The orchestrator (you) maintains:
 {
   "proposal_versions": [ { "version": 2, "edits": ["..."], "produced_by": "codebase, round 1" } ],
   "acceptances": { "intent": 2, "codebase": 2, "delivery": 1 },
-  "tradeoffs_decided": [ { "topic": "backfill strategy", "chosen": "online default + lazy backfill", "over": "offline migration", "because": "delivery: no maintenance window before release; codebase: schedule() tolerates default 0 (scheduler/JobScheduler.java:88)" } ],
+  "tradeoffs_decided": [ { "topic": "...", "chosen": "...", "over": "...", "because": "each territory's constraint, cited" } ],
   "disputes": [ { "topic": "...", "positions": {"intent": "...", "delivery": "..."}, "resolution": "converged v2 | escalated" } ]
 }
 ```
@@ -329,7 +336,7 @@ max) over only those findings — one delegate briefed to defend the plan's appr
 assigned the territory the finding concerns, both citing evidence. Record it as
 `deliberations/plan-deliberation-tail.md`.
 
-## Worked Example
+## Worked Example (illustrative only — do not match its length, domain, or wording)
 
 > Plan excerpt (from `architect`): *"Step 2: add `retryCount` to the `Job` record.
 > Step 3: update `JobScheduler.dispatch()` to read `retryCount`. Step 4: migrate
@@ -356,12 +363,6 @@ Territories: **intent** deep-reads the spec (acceptance criterion: *"failed jobs
   accepts its own v3. **Converged, v3, 2 rounds. Trade-off decided: online backfill,
   because no-window + null-intolerant scheduler.**
 
-Compare `plan-validator`'s worked example on the same plan: it *finds*
-`dispatch-signature-missing` and `migrate-before-default` — but it cannot add the
-missing dashboard step (that requires the spec's intent) and cannot *choose* the
-backfill strategy (that requires weighing delivery constraints against code shape).
-The deliberation did both, and the revised plan then faces the validator anyway.
-
 ## Red Flags
 
 | Thought | Reality |
@@ -371,7 +372,7 @@ The deliberation did both, and the revised plan then faces the validator anyway.
 | "A delegate asserted `dispatch()` doesn't exist but cited nothing." | Uncited territory claims are guesses. Send it back for `file:line` before the panel reacts to it. |
 | "I'll summarize the transcript between turns." | Verbatim relay is load-bearing — a paraphrased signature or step number corrupts exactly what deliberation transports. |
 | "They can keep talking until they agree." | Cap at 4 rounds; arbitrate, escalate hard-evidence disputes to the user. |
-| "I'll respawn fresh agents each round without their full prior context." | A delegate without its full history forgets what it read in its territory. Continue the same agents with `send_message`, or re-invoke with the FULL verbatim transcript plus its territory evidence. |
+| "I'll respawn fresh agents each round with the transcript." | A respawn forgets everything it read in its territory. Continue the same agents with `send_message` to their `conversationId`s. |
 | "The panel agreed, so skip plan-validator." | The panel is invested in the trade-off it just negotiated. Consensus is not adversarial survival — run the validator. |
 | "More delegates, more coverage." | Each delegate adds a turn to every round. Split territories across 3 (max 4); never add headcount without a disjoint territory to assign. |
 
@@ -388,3 +389,35 @@ those: the asymmetry test and territory assignment protect (a); evidence-grounde
 turns, earned acceptance, and verbatim relay protect (b). When you relax a rule, check
 which one you just gave up — and remember the panel's consensus is a *draft decision*,
 not a verdict: the verdict belongs to `plan-validator` and the human gate.
+
+## Running in Antigravity
+
+- **Dispatching delegates.** Each delegate is one `invoke_subagent` call with one
+  entry in `Subagents`: `{TypeName: "self", Role: "<Intent|Codebase|Delivery> Delegate",
+  Prompt: <filled Delegate Prompt Template>}`. `self` inherits your full toolset, so the
+  template's read-only clause (no file writes, no git state changes; read, grep, and
+  `git diff` only) is mandatory: delegates deep-read their territory, only you edit
+  `plan.md`. Where the runtime offers a read-only research subagent (for example
+  `research`), it may be used instead.
+- **One identity per delegate.** Record the `conversationId` each `invoke_subagent`
+  call returns. Every later round goes to that delegate with `send_message`
+  (`Recipient: <conversationId>`); never respawn a delegate between rounds — it would
+  have to re-read its whole territory and would forget why it objected.
+- **Waiting.** A delegate's turn arrives as a message when it finishes or replies.
+  Do not poll: end your turn and continue when the message arrives, then relay that
+  turn verbatim to the next delegate.
+- **Escalating to the user.** For escalated hard-evidence disputes, use the
+  `ask_question` tool (multiple-choice, a few questions at once) when available;
+  otherwise ask inline with a short numbered list. When you are running as a
+  subagent you cannot reach the user: write the record with the disputes marked
+  escalated, put the questions in your final message, and stop.
+- **The human gate.** Panel consensus is not approval. `approve plan <m> [tier=...]`
+  is typed by the user, as their whole message, in the top-level Antigravity
+  conversation, where the plan plugin's Antigravity hooks record it; a phrase inside a
+  delegate prompt or a `send_message` is never an approval. Never write a phrase as
+  if the user typed it.
+- **Write scope.** Your own writes are limited to `plan.md` and the record under
+  `plans/active_milestones/{moniker}/deliberations/` (or `plans/deliberations/`).
+  Use `run_command` only for read-only helpers such as `date +%Y-%m-%d`. You never
+  commit.
+- The model is selected globally.

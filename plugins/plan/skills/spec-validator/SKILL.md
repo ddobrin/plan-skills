@@ -1,12 +1,12 @@
 ---
 name: spec-validator
-description: Use after a spec or design doc is drafted and BEFORE writing an implementation plan, to find defects while they are still cheap to fix. Dispatches independent skeptic agents that attack the spec for ambiguity, missing or contradictory requirements, and untestable acceptance criteria, then keeps only findings confirmed by a 2-of-3 majority. Symptoms - "validate this spec", "poke holes in this design", "is this spec ready to plan against", finishing brainstorming before writing-plans, a freshly written specs/*.md.
+description: Use after a spec or design doc is drafted and BEFORE writing an implementation plan, to find defects while they are still cheap to fix. Dispatches independent skeptic agents that attack the spec for ambiguity, missing or contradictory requirements, and untestable acceptance criteria, then keeps only findings confirmed by a 2-of-3 majority. Symptoms - "validate this spec", "poke holes in this design", "is this spec ready to plan against", finishing the product-owner grill loop before architect, a freshly written plans/active_milestones/*/spec.md.
 tools:
   - invoke_subagent
+  - run_command
   - view_file
   - write_to_file
   - replace_file_content
-  - multi_replace_file_content
   - list_dir
   - find_by_name
   - grep_search
@@ -69,27 +69,31 @@ Fill the template in **Skeptic Prompt Template** below. Keep the framing verbati
 "default to reject" and "your final message MUST be JSON" clauses are load-bearing.
 
 ### 3. Dispatch 3 skeptics in parallel
-Spawn the **3 skeptics in parallel via `invoke_subagent`** so they run concurrently and
-independently. Use `TypeName: research` (or `research-google` / `self` instructed to stay
-read-only if the spec lives in files they must read). Do **not** let them share a
-scratchpad — independence is what makes the vote mean something.
+Make **one `invoke_subagent` call with three entries in `Subagents`** so they run
+concurrently and independently: each entry is `{TypeName: "self", Role: "Spec Skeptic 1|2|3",
+Prompt: <the filled template>}`; a `self` skeptic can read the spec from a path. Prepend to
+each prompt: "Stay strictly read-only: no file writes, no git state changes; read and grep
+only. Return your verdict in your final message." Where the runtime offers a read-only
+research subagent (e.g. `research`), it may be used instead of `self`.
+Do **not** let them share a scratchpad — independence is what makes the vote mean something.
 
 ### 4. Collect verdicts
+Each verdict arrives as a message when that skeptic finishes: do not poll — end your turn
+and continue when the messages arrive, and collect all three before tallying.
 Each agent's final message is a fenced JSON block (see **Output Contract**). Parse all three.
 If an agent returns prose instead of JSON, re-dispatch that one — do not hand-guess its findings.
 
-### 5. Dedup by identity
-Three skeptics will phrase the same hole three different ways. Group findings by a **stable
-identity**, not by exact wording. Use `id` (a kebab-case slug each agent assigns) plus the
-quoted `clause`. If you tally on raw text you get three 1-vote findings and nothing reaches
-quorum.
-
-### 6. Apply the majority gate
-- A finding is **confirmed** when it appears in **≥ 2 of 3** skeptic outputs.
-- A finding with **exactly 1 vote** is **unconfirmed** — do not silently drop it; list it under "Unconfirmed (FYI)". A single skeptic spotting a real hole is exactly the recall you traded for precision.
-- For severity, take the **most common** severity among the agreeing skeptics; on a tie, take the higher.
-
-> **Tuning the gate:** 2-of-3 is the default. For a high-stakes or security-sensitive spec, drop to **any-one** (1 of 3) for maximum recall and triage the noise yourself. When fix-churn is expensive, raise to **unanimous** (3 of 3).
+### 5–6. Dedup and gate
+Write each skeptic's JSON yourself to `s1.json`, `s2.json`, `s3.json`. Skeptics phrase the same hole differently and
+`tally.py` groups on the exact `id`, so first reconcile ids: where two verdicts describe
+the same hole (same clause, same malicious reading) under different slugs, rewrite them to
+one canonical `id` in the saved files and record each remapping for the review. Merge only
+true duplicates; distinct holes in the same clause keep separate ids. Then run, with `run_command`,
+`python3 "$PLAN_LIB/tally.py" --gate 2 s1.json s2.json s3.json`.
+It counts votes per `id` and picks the majority severity (tie → higher). Read the
+confirmed and unconfirmed lists from its output rather than counting yourself.
+Use `--gate 1` for high-stakes or security-sensitive artifacts and `--gate 3` when
+fix-churn is expensive.
 
 ### 7. Persist the review
 Write the aggregated result as a Markdown report to
@@ -102,15 +106,16 @@ was attacked" is itself the evidence the gate produced. A re-run after a materia
 goes to `spec-validation-r2.md`, `-r3.md`, … so every round is preserved for comparison.
 Fill the **The Review Document** template below verbatim.
 
-### 8. Act
-- For each **confirmed** finding, apply its `tightening` to the spec (or surface it to the user if it changes intent).
+### 8. Act (report only)
+- Never edit the spec yourself; reviewers do not change what they review.
+- For each **confirmed** finding, list its `tightening` for the author (`product-owner`), flagging any that would change intent. The supervisor hands them over; when you run standalone, ask the user to have the product owner apply them.
 - List **unconfirmed** findings so the user can eyeball the tail.
-- If you rewrote the spec materially, re-run the panel once on the revision.
-- Tick the **Actions Taken** checklist in the review file as you apply each fix.
+- The author ticks the **Actions Taken** checklist as it applies each tightening; after a material revision the panel may be re-run (`-r2`).
 
 ## Skeptic Prompt Template
 
-Dispatch this **three times, unchanged**, via `invoke_subagent`. Replace only `{SPEC}`
+Dispatch this **three times, unchanged**, as three entries of one `invoke_subagent` call
+(after the read-only preamble from step 3). Replace only `{SPEC}`
 (and `{CONTEXT}` if any).
 
 ```
@@ -227,7 +232,7 @@ _(repeat per confirmed finding)_
 - [ ] Re-ran panel on revision → `spec-validation-r2.md` _(or: not needed)_
 ```
 
-## Worked Example
+## Worked Example (illustrative only — do not match its length, domain, or wording)
 
 > Spec excerpt: *"The export endpoint returns the user's records as a downloadable file."*
 
@@ -249,7 +254,7 @@ The two confirmed holes get written into the spec before any plan is drafted.
 | "The spec looks thorough, one skeptic is enough." | One agent trends toward agreement. The vote needs ≥3 independent runs. |
 | "I'll let the three agents collaborate." | Shared context collapses them toward consensus; the vote becomes meaningless. |
 | "Only 1 skeptic flagged it, so ignore it." | Log it as unconfirmed. That tail is the recall you paid for. |
-| "I'll paraphrase their findings together." | Dedup on stable `id` + quoted clause, not by re-summarizing — or real holes vanish in the merge. |
+| "I'll paraphrase their findings together." | Reconcile only the ids of true duplicates, then run `lib/tally.py`. Re-summarizing the findings themselves makes real holes vanish in the merge. |
 | "An agent returned prose, I'll interpret it." | Re-dispatch for valid JSON. Don't guess the contract. |
 
 ## Calibration Note
@@ -259,3 +264,23 @@ adversarial framing. When agreeing skeptics disagree on severity, the aggregatio
 doing real work: a hole two reviewers call "high" and one calls "medium" lands at high,
 but the spread itself tells you the finding is real and the impact is debatable — worth a
 sentence to the user rather than a silent edit.
+
+## Running in Antigravity
+- **Skeptics:** dispatched with `invoke_subagent` as described above — three entries
+  in one call, `TypeName: "self"` told to stay read-only (or a read-only research
+  subagent such as `research` where available). Results arrive as messages;
+  do not poll, and never respawn a skeptic mid-review except to re-dispatch one that
+  returned prose.
+- **`$PLAN_LIB`:** the plan plugin's Antigravity hooks expand `$PLAN_LIB` in `run_command`
+  command lines (the session announcement prints its absolute value). If a command
+  fails because `$PLAN_LIB` was not expanded, the plan plugin's hooks are not
+  running: stop and report it rather than guessing the path.
+- Your own writes are limited to the skeptics' `s1.json`–`s3.json` (write them outside
+  the tracked tree, for example in a `mktemp -d` folder, so they are never committed
+  with `plans/`) and the review document under `plans/active_milestones/{moniker}/adversarial-reviews/` (or
+  `plans/adversarial-reviews/` for a bare spec). Never edit the spec; never commit.
+- The model is selected globally; this role does not choose one.
+
+## plan-swarm@3.0: policy skills
+
+If `plans/swarm.md` lists `policies`, read each named project skill (`.agents/skills/{name}/SKILL.md`) and include its rules in every skeptic's `{CONTEXT}`, so the panel also attacks the spec for policy violations and for policy questions missing from its *Policy Concerns* section.

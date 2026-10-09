@@ -1,0 +1,434 @@
+#!/usr/bin/env python3
+"""Build the plan-swarm@3.0 lifecycle animation (Antigravity) in three forms from one stage list and one renderer.
+
+    python3 images/lifecycle/build.py
+
+Standard library only; needs headless Chrome (CHROME, default /usr/bin/google-chrome) and ffmpeg on PATH.
+
+Writes into images/lifecycle/:
+  loop.html                          frame renderer (open loop.html#f=<n>&t=dark to inspect a frame)
+  plan-swarm-loop-{light,dark}.gif   fast loop, about 37 s, for READMEs and chat
+  plan-swarm-loop-{light,dark}.png   still of the Commit stage
+  plan-swarm-loop-{light,dark}.mp4   explainer pace, about 10 s per stage, 1920x1200
+  plan-swarm-loop-stepper.html       click-through version for presenting (offline, self-contained)
+
+Pass --no-mp4 to skip the videos, --theme light|dark to build one theme.
+"""
+import json
+import os
+import sys
+
+sys.dont_write_bytecode = True
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "_build"))
+import gifkit  # noqa: E402
+
+W, H = 960, 600
+M = "login-rate-limit"
+
+# who: list of [kind, text]; kind = you | agent (a role subagent, by its invoke_subagent TypeName) | builtin | script
+STAGES = [
+    dict(name="Intent", say='You describe the problem and what done looks like, in the top-level Antigravity conversation where the supervisor runs. It dispatches the product-owner subagent, which writes an intent file under plans/intents/, and tier.py proposes a risk tier. Typing the phrase as your whole message accepts it: the supervisor creates the branch swarm/login-rate-limit, moves the intent into active_milestones, and the auditor commits it.', title="Raise an intent", goal="Say what hurts and what done looks like.",
+         who=[["you", "You"], ["agent", "product-owner"], ["script", "tier.py"]], offered=[],
+         commits=["plans/intents/<date>-<slug>.md", "→ active_milestones/<m>/intent.md"],
+         phrase=f"approve intent {M} as {M}", note="Creates branch swarm/" + M + " (pr mode)."),
+    dict(name="Research", say="A read-only research subagent reads the codebase and returns how it handles this today. The supervisor appends that Codebase context section to intent.md. There is no approval here; the notes are committed with the spec.", title="Research the code", goal="Learn how the codebase handles this today.",
+         who=[["builtin", "research subagent (read-only)"], ["agent", "supervisor appends"]], offered=[], commits=["intent.md § Codebase context"],
+         phrase=None, note="Automatic. Committed with the spec."),
+    dict(name="Spec", say='The product owner runs the Grill Loop, at most three questions at a time, and writes a Gherkin spec: what and why, never how. As a subagent it returns its questions; the supervisor asks you with ask_question and passes your answers back. Depending on the risk tier, the swarm offers a deliberator panel and a validator panel. Validators only report; the product owner applies the fixes.', title="Write the spec", goal="Testable requirements: what and why, never how.",
+         who=[["agent", "product-owner"], ["you", "You answer the Grill Loop"]],
+         offered=["spec-deliberator", "spec-validator"], commits=["spec.md (Gherkin + Policy Concerns)"],
+         phrase=f"approve spec {M}", note="Validators report; the product owner applies fixes."),
+    dict(name="Plan", say='The architect reads the spec and the code and writes plan.md: test-first micro-steps, grouped so that tasks in one group touch different files, plus its Irreversible Steps. tier.py re-checks the risk tier, which can only go up. The architect has no shell and cannot edit code.', title="Write the plan", goal="Small test-first steps in parallel groups.",
+         who=[["agent", "architect"], ["script", "tier.py"]],
+         offered=["plan-deliberator", "plan-validator"], commits=["plan.md (groups, risk tier)"],
+         phrase=None, note="Read-only on code. Tier re-checked: routine → critical."),
+    dict(name="Approve", say='The go / no-go before any code is written. Until you type approve plan, the gate refuses any invoke_subagent call that dispatches an engineer for this milestone. The auditor then commits the plan and the confirmed tier.', title="Approve the plan", goal="The go / no-go before any code.",
+         who=[["you", "You"]], offered=[], commits=["plan.md + confirmed tier"],
+         phrase=f"approve plan {M}", note="Engineer dispatch is refused until this phrase."),
+    dict(name="Build", say='worktree.py creates one git worktree per task on a swarm-wip branch, and the supervisor dispatches up to five engineers in one invoke_subagent call, one task each, test-first. worktree.py squash stages the group on the milestone branch without committing. A simplifier pass may be offered.', title="Build in parallel", goal="One engineer per task, one worktree each.",
+         who=[["agent", "engineer ×≤5"], ["script", "worktree.py"]], offered=["simplifier"],
+         commits=["WIP on swarm-wip/<m>/<task>", "→ squashed, staged, not committed"],
+         phrase=None, note="Tasks in a group touch different files."),
+    dict(name="Audit", say='The auditor checks every step against the plan and spec with file:line evidence, runs the build and tests from AGENTS.md, and hunts for shortcuts. A failure sends the task back to an engineer (Path A), at most three failed rounds. An implementation validator and a visual recap may be offered.', title="Audit the group", goal="Prove it works, with file:line evidence.",
+         who=[["agent", "auditor"]], offered=["implementation-validator", "visual recap"],
+         commits=["audit.md · Group g · Round r · PASS"], phrase=None,
+         note="FAIL sends the task back (Path A, ≤3 rounds)."),
+    dict(name="Commit", say='With a green audit you type approve commit, and the auditor makes one commit for the group, including its row in approvals.md. A commit without that phrase is denied by the gate and by the git pre-commit hook. Build, audit and commit repeat for each group in the plan.', title="Commit the group", goal="One audited group, one commit.",
+         who=[["you", "You"], ["agent", "auditor commits"]], offered=[],
+         commits=["group commit + approvals.md row"], phrase=f"approve commit {M} g1",
+         note="Build → audit → commit repeats per group."),
+    dict(name="PR", say='approve pr records your approval in a small ledger-only commit; then the supervisor pushes swarm/login-rate-limit and opens the pull request with gh pr create (without gh it prints the title and body for you). The CI ledger job checks that every commit has an approval, your normal review applies, and a person merges. The swarm never merges.', title="Open the pull request", goal="Your normal review process takes over.",
+         who=[["you", "You"], ["agent", "supervisor"], ["builtin", "CI · code owner"]], offered=[],
+         commits=["PR-approval record → push → PR"], phrase=f"approve pr {M}",
+         note="pre-push checks every commit; a person merges."),
+    dict(name="Release", say='When the milestones for a version have merged, approve release lets the supervisor create the annotated tag on the default branch, and the product owner marks the release Shipped in the roadmap.', title="Release", goal="Tag the version once its milestones merge.",
+         who=[["you", "You"], ["agent", "supervisor"]], offered=[], commits=["annotated tag v1.0.0"],
+         phrase="approve release v1.0.0", note="Roadmap marks the release Shipped."),
+]
+
+INTRO_SAY = ("plan-swarm takes one milestone through ten stages in Antigravity. Role subagents do the work; you make six decisions, "
+             "each by typing an exact phrase as your whole message in the top-level conversation, and every step is committed "
+             "to git. Amber rings with a lock mark your gates.")
+OUTRO_SAY = ("Six phrases, and every decision is recorded in git next to the code. Say \"swarm init\" once per repository, "
+             "then start each session by saying \"be the supervisor\" in a new top-level Antigravity conversation opened on the repository.")
+
+# Explainer pace for the MP4: hold each stage about 10 s and type the phrase slowly enough to read.
+VIDEO_DUR = {"intro": 5000, "hold": 9000, "pathA": 4500, "typing": 220, "sweep": 90, "loop": 120, "outro": 8000}
+
+
+def frames():
+    out = [dict(mode="intro", stage=-1, prog=0, dur=2600, kind="intro")]
+    prev = 0.0
+    for i, s in enumerate(STAGES):
+        for k in (1, 2, 3):  # sweep the progress arc to this stage
+            out.append(dict(mode="stage", stage=i, prog=prev + (i - prev) * k / 3, typed=0, dur=70, kind="sweep"))
+        if s["phrase"]:
+            for k in (1, 2, 3, 4):
+                out.append(dict(mode="stage", stage=i, prog=i, typed=k / 4, dur=150, kind="typing"))
+            out.append(dict(mode="stage", stage=i, prog=i, typed=1, recorded=True, dur=2300, kind="hold"))
+        else:
+            out.append(dict(mode="stage", stage=i, prog=i, typed=0, dur=2300, kind="hold"))
+        if s["name"] == "Audit":
+            out.append(dict(mode="stage", stage=i, prog=i, typed=0, pathA=True, dur=1500, kind="pathA"))
+        prev = i
+    for k in (1, 2, 3):
+        out.append(dict(mode="loop", stage=9, prog=9 + k / 3, dur=90, kind="loop"))
+    out.append(dict(mode="outro", stage=-1, prog=10, dur=4200, kind="outro"))
+    return out
+
+
+HTML = r"""<!doctype html>
+<html><head><meta charset="utf-8"><title>plan-swarm@3.0 loop</title>
+<style>
+:root{--bg:#f7f5f0;--panel:#ffffff;--ink:#1d1d1f;--muted:#6b6f76;--line:#dcd8cf;--ring:#e6e2d9;
+--accent:#2f5bd3;--accent-soft:#dbe4fb;--amber:#b06f00;--amber-soft:#fff1d6;--green:#1f7a4d;--green-soft:#e3f3ea;
+--red:#c0392b;--purple:#7b3fd1;--purple-soft:#efe7fc;--term:#1e1f24;--termink:#f3c56b;--gray:#9aa0a8}
+.dark{--bg:#121316;--panel:#1b1c20;--ink:#ececec;--muted:#a0a3aa;--line:#33353b;--ring:#2a2c31;
+--accent:#7c9cff;--accent-soft:#25304f;--amber:#f0b44c;--amber-soft:#3a2d12;--green:#5cc98f;--green-soft:#173424;
+--red:#ff7b72;--purple:#b38cff;--purple-soft:#2c2142;--term:#0b0c0e;--termink:#f3c56b;--gray:#6f747c}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink);
+font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,Helvetica,Arial,sans-serif}
+#canvas{position:relative;width:960px;height:600px;overflow:hidden;background:var(--bg)}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+#hdr{position:absolute;left:32px;top:24px}
+#hdr .t{font-size:21px;font-weight:750;letter-spacing:-.01em}
+#hdr .s{font-size:13px;color:var(--muted);margin-top:2px}
+#legend{position:absolute;right:32px;top:30px;display:flex;gap:14px;font-size:12px;color:var(--muted)}
+#legend span{display:inline-flex;align-items:center;gap:6px}
+#legend i{width:10px;height:10px;border-radius:50%;display:inline-block}
+#canvas svg{position:absolute;left:0;top:0}
+.lbl{font-size:13px;font-weight:600;fill:var(--muted)}
+.lbl.on{fill:var(--ink);font-weight:750}
+#panel{position:absolute;left:592px;top:84px;width:336px;height:452px;background:var(--panel);
+border:1px solid var(--line);border-radius:16px;padding:20px 22px;box-shadow:0 6px 24px rgba(0,0,0,.06)}
+.step{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.title{font-size:23px;font-weight:780;letter-spacing:-.01em;margin-top:4px}
+.goal{font-size:13.5px;color:var(--muted);margin-top:3px}
+.sec{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:14px 0 6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12px;padding:3px 9px;border-radius:999px;font-weight:650;white-space:nowrap}
+.chip.you{background:var(--amber-soft);color:var(--amber)}
+.chip.agent{background:var(--accent-soft);color:var(--accent);font-family:"SF Mono",ui-monospace,Menlo,monospace;font-weight:600}
+.chip.builtin{background:var(--ring);color:var(--ink)}
+.chip.script{background:var(--ring);color:var(--muted);font-family:"SF Mono",ui-monospace,Menlo,monospace;font-weight:500}
+.chip.off{background:var(--purple-soft);color:var(--purple)}
+.commit{font-size:12px;line-height:1.55;color:var(--ink)}
+.term{background:var(--term);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--termink);min-height:38px;
+font-family:"SF Mono",ui-monospace,Menlo,monospace;line-height:1.45;overflow-wrap:anywhere}
+.term .p{color:#8e9199}
+.caret{display:inline-block;width:7px;height:14px;background:var(--termink);vertical-align:-2px;margin-left:1px}
+.rec{font-size:12px;color:var(--green);font-weight:700;margin-top:6px}
+.none{font-size:12.5px;color:var(--muted);font-style:italic}
+.note{position:absolute;left:22px;right:22px;bottom:18px;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+#foot{position:absolute;left:592px;top:552px;font-size:12px;color:var(--muted)}
+#foot code{font-family:"SF Mono",ui-monospace,Menlo,monospace;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:var(--ink)}
+#cards{position:absolute;inset:0;display:none;align-items:center;justify-content:center}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:30px 36px;width:620px;box-shadow:0 10px 40px rgba(0,0,0,.08)}
+.card h1{font-size:30px;letter-spacing:-.015em}
+.card p{color:var(--muted);font-size:15px;margin-top:8px;line-height:1.5}
+.card .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.card code{font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:13px;background:var(--term);color:var(--termink);border-radius:8px;padding:6px 10px}
+.big{font-size:38px;font-weight:800;color:var(--accent)}
+.kpi{display:flex;gap:26px;margin-top:18px}
+.kpi div{font-size:12.5px;color:var(--muted)} .kpi b{display:block;font-size:24px;color:var(--ink)}
+__EXTRA_CSS__</style></head>
+<body>
+<div id="canvas">
+<div id="hdr"><div class="t">plan‑swarm@3.0 · the loop</div><div class="s">one milestone in Antigravity, from intent to release</div></div>
+<div id="legend"><span><i style="background:var(--amber)"></i>you approve</span><span><i style="background:var(--accent)"></i>subagent works</span><span><i style="background:var(--purple)"></i>offered check</span></div>
+<svg id="ring" width="960" height="600"></svg>
+<div id="panel"></div>
+<div id="foot">start: say <code>be the supervisor</code> in a top-level conversation</div>
+<div id="cards"></div>
+</div>
+__EXTRA_BODY__
+<script>
+const STAGES = __STAGES__;
+const FRAMES = __FRAMES__;
+const $ = id => document.getElementById(id);
+const esc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const CX = 300, CY = 330, R = 196, N = STAGES.length;
+const ang = i => (-90 + i * 360 / N) * Math.PI / 180;
+const pt = (i, r = R) => [CX + r * Math.cos(ang(i)), CY + r * Math.sin(ang(i))];
+const GATES = new Set(STAGES.map((s, i) => s.phrase ? i : -1));
+function arc(a0, a1, r) {
+  const p0 = [CX + r * Math.cos(a0), CY + r * Math.sin(a0)], p1 = [CX + r * Math.cos(a1), CY + r * Math.sin(a1)];
+  const large = (a1 - a0) > Math.PI ? 1 : 0;
+  return `M${p0[0].toFixed(1)},${p0[1].toFixed(1)} A${r},${r} 0 ${large} 1 ${p1[0].toFixed(1)},${p1[1].toFixed(1)}`;
+}
+function lock(x, y) {
+  return `<g transform="translate(${x - 9},${y - 9})"><circle cx="9" cy="9" r="10" fill="var(--amber)" stroke="var(--bg)" stroke-width="2"/>
+  <rect x="5" y="8.2" width="8" height="6" rx="1.2" fill="var(--bg)"/><path d="M6.6 8.4 V6.8 a2.4 2.4 0 0 1 4.8 0 V8.4" fill="none" stroke="var(--bg)" stroke-width="1.5"/></g>`;
+}
+function render(fr) {
+const panel = $("panel"), cards = $("cards"), ring = $("ring"), foot = $("foot");
+panel.style.display = ""; cards.style.display = "none"; cards.innerHTML = ""; ring.style.opacity = ""; foot.style.display = "";
+let s = `<defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--red)"/></marker>
+<marker id="ag" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--gray)"/></marker></defs>`;
+s += `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="var(--ring)" stroke-width="10"/>`;
+const prog = Math.min(fr.prog, N - 1);
+if (prog > 0.001) s += `<path d="${arc(ang(0), ang(prog), R)}" fill="none" stroke="var(--accent)" stroke-width="10" stroke-linecap="round"/>`;
+if (fr.prog > N - 1) s += `<path d="${arc(ang(N - 1), ang(fr.prog), R)}" fill="none" stroke="var(--gray)" stroke-width="4" stroke-dasharray="7 7" marker-end="url(#ag)"/>`;
+if (fr.pathA) {  // Path A: an arc just inside the ring, from Audit (7) back to Build (6)
+  const r = R - 40, a0 = ang(6) + 0.13, a1 = ang(5) + 0.11;
+  const p0 = [CX + r * Math.cos(a0), CY + r * Math.sin(a0)], p1 = [CX + r * Math.cos(a1), CY + r * Math.sin(a1)];
+  s += `<path d="M${p0[0].toFixed(1)},${p0[1].toFixed(1)} A${r},${r} 0 0 0 ${p1[0].toFixed(1)},${p1[1].toFixed(1)}" fill="none" stroke="var(--red)" stroke-width="3.5" stroke-dasharray="7 5" marker-end="url(#ar)"/>
+  <rect x="${CX - 92}" y="${CY + 50}" width="184" height="26" rx="13" fill="var(--panel)" stroke="var(--red)" stroke-width="1.5"/>
+  <text x="${CX}" y="${CY + 67}" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--red)">FAIL → back to Build · ≤3</text>`;
+}
+STAGES.forEach((st, i) => {
+  const [x, y] = pt(i);
+  const cur = i === fr.stage, past = fr.mode === "outro" || i < fr.stage || (fr.mode === "loop");
+  const gate = GATES.has(i);
+  if (cur) s += `<circle cx="${x}" cy="${y}" r="38" fill="var(--accent)" opacity=".16"/>`;
+  const fill = cur ? "var(--accent)" : past ? "var(--accent-soft)" : "var(--panel)";
+  const stroke = gate ? "var(--amber)" : cur || past ? "var(--accent)" : "var(--line)";
+  s += `<circle cx="${x}" cy="${y}" r="25" fill="${fill}" stroke="${stroke}" stroke-width="${gate ? 3 : 2}"/>`;
+  s += `<text x="${x}" y="${y + 5}" text-anchor="middle" font-size="15" font-weight="800" fill="${cur ? "#fff" : past ? "var(--accent)" : "var(--muted)"}">${i + 1}</text>`;
+  if (gate) s += lock(x + 18, y - 18);
+  const [lx, ly] = pt(i, R + 50);
+  const anchor = Math.abs(lx - CX) < 30 ? "middle" : (lx > CX ? "start" : "end");
+  s += `<text class="lbl ${cur ? "on" : ""}" x="${lx}" y="${ly + 5}" text-anchor="${anchor}">${st.name}</text>`;
+});
+if (fr.mode === "stage") {
+  const st = STAGES[fr.stage];
+  s += `<text x="${CX}" y="${CY - 8}" text-anchor="middle" font-size="44" font-weight="800" fill="var(--ink)">${fr.stage + 1}<tspan font-size="20" fill="var(--muted)" font-weight="700"> / ${N}</tspan></text>
+  <text x="${CX}" y="${CY + 22}" text-anchor="middle" font-size="16" font-weight="700" fill="var(--muted)">${st.name}</text>`;
+} else if (fr.mode === "loop" || fr.mode === "outro") {
+  s += `<text x="${CX}" y="${CY - 2}" text-anchor="middle" font-size="22" font-weight="800" fill="var(--ink)">next intent</text>
+  <text x="${CX}" y="${CY + 22}" text-anchor="middle" font-size="13.5" fill="var(--muted)">the loop starts again</text>`;
+}
+ring.innerHTML = s;
+if (fr.mode === "stage" || fr.mode === "loop") {
+  const st = STAGES[fr.stage];
+  const chips = st.who.map(([k, t]) => `<span class="chip ${k}">${esc(t)}</span>`).join("");
+  const off = st.offered.length ? `<div class="sec">Offered (you choose)</div><div class="chips">${st.offered.map(t => `<span class="chip off">${t}</span>`).join("")}</div>` : "";
+  let phrase = `<div class="none">no approval at this step</div>`;
+  if (st.phrase) {
+    const n = Math.round(st.phrase.length * (fr.typed || 0));
+    const shown = esc(st.phrase.slice(0, n));
+    phrase = `<div class="term"><span class="p">› </span>${shown}${fr.recorded ? "" : '<span class="caret"></span>'}</div>` +
+      (fr.recorded ? `<div class="rec">✓ approval recorded · single use · 15 min</div>` : "");
+  }
+  panel.innerHTML = `<div class="step">Step ${fr.stage + 1} of ${N}</div><div class="title">${st.title}</div><div class="goal">${st.goal}</div>
+  <div class="sec">Who acts</div><div class="chips">${chips}</div>${off}
+  <div class="sec">Committed</div><div class="commit mono">${st.commits.map(esc).join("<br>")}</div>
+  <div class="sec">You type (the whole message)</div>${phrase}<div class="note">${esc(st.note)}</div>`;
+} else panel.style.display = "none";
+if (fr.mode === "intro" || fr.mode === "outro") {
+  ring.style.opacity = fr.mode === "intro" ? ".25" : ".22";
+  foot.style.display = "none";
+  cards.style.display = "flex";
+  cards.innerHTML = fr.mode === "intro"
+    ? `<div class="card"><div class="step">plan‑swarm@3.0 · Antigravity</div><h1>From intent to release, one loop</h1>
+       <p>Role subagents write the intent, spec, plan, code, and audit. You make six decisions, each by typing an exact phrase in the top-level conversation. Every step is committed.</p>
+       <div class="row"><code>be the supervisor</code></div></div>`
+    : `<div class="card"><div class="step">every milestone</div><h1>Six phrases. Everything in git.</h1>
+       <div class="kpi"><div><b>6</b>approval phrases</div><div><b>≤5</b>engineers in parallel</div><div><b>1</b>commit per audited group</div></div>
+       <p>approve intent · spec · plan · commit · pr · release. Antigravity hooks and git hooks refuse anything without your phrase; the approvals ledger ships with each commit.</p>
+       <div class="row"><code>swarm init</code><code>be the supervisor</code></div></div>`;
+}
+}
+__DRIVER__
+</script></body></html>
+"""
+
+
+# loop.html: render the one frame named in the URL (#f=<n>&t=dark); the GIF and MP4 are screenshots of it.
+FRAME_CSS = "html,body{width:960px;height:600px;overflow:hidden}"
+FRAME_DRIVER = """
+const P = new URLSearchParams(location.hash.slice(1));
+if (P.get("t") === "dark") document.documentElement.classList.add("dark");
+render(FRAMES[Math.min(+P.get("f") || 0, FRAMES.length - 1)]);
+"""
+
+# Stepper: the same scene scaled to the window, one stage per click.
+STEPPER_CSS = """
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center}
+#app{display:flex;flex-direction:column;align-items:center;gap:12px;padding:16px}
+#fit{position:relative;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.10);cursor:pointer}
+#fit #canvas{position:absolute;left:0;top:0;transform-origin:0 0}
+#notes{box-sizing:border-box;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 16px;
+font-size:15px;line-height:1.5;color:var(--ink)}
+#notes b{color:var(--accent);margin-right:8px;white-space:nowrap}
+#bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px;font-size:13px;color:var(--muted)}
+#bar button,#bar select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 10px;cursor:pointer}
+#bar button:hover{border-color:var(--accent)}
+#dots{display:flex;gap:5px}
+#dots button{width:28px;height:28px;padding:0;border-radius:50%;font-size:11.5px;font-weight:750;color:var(--muted)}
+#dots button.gate{border:2px solid var(--amber)}
+#dots button.done{background:var(--accent-soft);color:var(--accent)}
+#dots button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.sep{width:1px;height:20px;background:var(--line);margin:0 4px}
+#hint{font-size:12px;color:var(--muted)}
+.hidden{display:none!important}
+"""
+STEPPER_BODY = """<main id="app">
+<div id="fit" title="Click for the next stage"></div>
+<div id="notes"><b id="nstep"></b><span id="ntext"></span></div>
+<nav id="bar">
+  <button id="prev" title="Previous (\u2190)">\u25c0 Back</button>
+  <div id="dots"></div>
+  <button id="next" title="Next (\u2192, Space, click)">Next \u25b6</button>
+  <span class="sep"></span>
+  <label>Autoplay <select id="auto"><option value="0">off</option><option value="4000">every 4 s</option><option value="7000">every 7 s</option><option value="10000">every 10 s</option></select></label>
+  <button id="notesbtn" title="Speaker notes (N)">Notes</button>
+  <button id="theme" title="Light / dark (T)">\u25d0 Theme</button>
+  <button id="full" title="Full screen (F)">\u26f6 Full screen</button>
+</nav>
+<div id="hint">click or \u2192 next \u00b7 \u2190 back \u00b7 1\u20139, 0 jump to a stage \u00b7 N notes \u00b7 T theme \u00b7 F full screen</div>
+</main>"""
+STEPPER_DRIVER = """
+const SAYS = __SAYS__;
+// one segment per step: 0 intro, 1..10 stages, 11 outro; each is the run of frames that animates into it
+const SEG = [];
+FRAMES.forEach((f, i) => { const k = f.mode === "intro" ? 0 : f.mode === "stage" ? f.stage + 1 : N + 1; (SEG[k] = SEG[k] || []).push(i); });
+const LAST = SEG.length - 1, canvas = $("canvas"), fitEl = $("fit"), notes = $("notes");
+fitEl.appendChild(canvas);
+let step = 0, timer = null, playing = false;
+const P = new URLSearchParams(location.hash.slice(1));
+const dark = P.get("t") ? P.get("t") === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+document.documentElement.classList.toggle("dark", dark);
+if (P.get("notes") === "0") notes.classList.add("hidden");
+
+$("dots").innerHTML = SEG.map((_, k) => {
+  const label = k === 0 ? "\\u2022" : k === LAST ? "\\u21ba" : k;
+  const title = k === 0 ? "Intro" : k === LAST ? "Summary" : `${k} \\u00b7 ${STAGES[k - 1].name}`;
+  const gate = k > 0 && k < LAST && STAGES[k - 1].phrase ? " gate" : "";
+  return `<button class="${gate}" data-k="${k}" title="${title}">${label}</button>`;
+}).join("");
+
+function fit() {
+  const chrome = $("bar").offsetHeight + $("hint").offsetHeight + (notes.classList.contains("hidden") ? 0 : notes.offsetHeight) + 76;
+  const sc = Math.max(0.3, Math.min((innerWidth - 40) / 960, (innerHeight - chrome) / 600));
+  canvas.style.transform = `scale(${sc})`;
+  fitEl.style.width = 960 * sc + "px"; fitEl.style.height = 600 * sc + "px";
+  notes.style.width = Math.min(innerWidth - 40, Math.max(560, 960 * sc)) + "px";
+}
+function chrome() {
+  document.querySelectorAll("#dots button").forEach(b => {
+    const k = +b.dataset.k;
+    b.classList.toggle("on", k === step); b.classList.toggle("done", k < step);
+  });
+  $("nstep").textContent = step === 0 ? "Intro" : step === LAST ? "Summary" : `${step} / ${N} \\u00b7 ${STAGES[step - 1].name}`;
+  $("ntext").textContent = SAYS[step];
+  const t = document.documentElement.classList.contains("dark") ? "&t=dark" : "&t=light";
+  history.replaceState(null, "", `#stage=${step}${t}${notes.classList.contains("hidden") ? "&notes=0" : ""}`);
+}
+function schedule() {
+  const ms = +$("auto").value;
+  if (ms) timer = setTimeout(() => show(step + 1, true), ms);
+}
+// show step k; animate plays its frames at their GIF timing, otherwise jump to its final frame
+function show(k, animate) {
+  clearTimeout(timer); playing = false;
+  step = (k + SEG.length) % SEG.length;
+  const seg = SEG[step];
+  chrome();
+  if (!animate) { render(FRAMES[seg[seg.length - 1]]); schedule(); return; }
+  playing = true;
+  let j = 0;
+  const tick = () => {
+    render(FRAMES[seg[j]]);
+    if (j === seg.length - 1) { playing = false; schedule(); return; }
+    timer = setTimeout(tick, FRAMES[seg[j]].dur);
+    j++;
+  };
+  tick();
+}
+// a click while a stage is still animating finishes it; the next click moves on
+const next = () => playing ? show(step, false) : show(step + 1, true);
+const prev = () => show(step - 1, false);
+function toggleNotes() { notes.classList.toggle("hidden"); fit(); chrome(); }
+function toggleTheme() { document.documentElement.classList.toggle("dark"); chrome(); }
+function full() { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); }
+
+fitEl.addEventListener("click", next);
+$("next").onclick = next; $("prev").onclick = prev;
+$("notesbtn").onclick = toggleNotes; $("theme").onclick = toggleTheme; $("full").onclick = full;
+$("dots").onclick = e => { const b = e.target.closest("button"); if (b) show(+b.dataset.k, false); };
+$("auto").onchange = () => { clearTimeout(timer); if (!playing) schedule(); $("auto").blur(); };
+document.querySelectorAll("#bar button").forEach(b => b.addEventListener("click", () => b.blur()));
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "SELECT" || e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key;
+  if (k === "ArrowRight" || k === "PageDown" || k === " " || k === "Enter") next();  // clickers send PageDown/PageUp
+  else if (k === "ArrowLeft" || k === "PageUp" || k === "Backspace") prev();
+  else if (k === "Home") show(0, false);
+  else if (k === "End") show(LAST, false);
+  else if (/^[0-9]$/.test(k)) show(k === "0" ? 10 : +k, false);
+  else if (k === "n" || k === "N") toggleNotes();
+  else if (k === "t" || k === "T") toggleTheme();
+  else if (k === "f" || k === "F") full();
+  else return;
+  e.preventDefault();
+});
+addEventListener("resize", fit);
+fit();
+show(Math.min(Math.max(+P.get("stage") || 0, 0), LAST), false);
+"""
+
+
+def page(fr, extra_css, extra_body, driver):
+    html = HTML.replace("__STAGES__", json.dumps(STAGES)).replace("__FRAMES__", json.dumps(fr))
+    return html.replace("__EXTRA_CSS__", extra_css).replace("__EXTRA_BODY__", extra_body).replace("__DRIVER__", driver)
+
+
+def write(name, text):
+    with open(os.path.join(HERE, name), "w", encoding="utf-8") as fh:
+        fh.write(text)
+
+
+def main(argv):
+    fr = frames()
+    write("loop.html", page(fr, FRAME_CSS, "", FRAME_DRIVER))
+    says = [INTRO_SAY] + [s["say"] for s in STAGES] + [OUTRO_SAY]
+    write("plan-swarm-loop-stepper.html",
+          page(fr, STEPPER_CSS, STEPPER_BODY, STEPPER_DRIVER.replace("__SAYS__", json.dumps(says)))
+          .replace("<title>plan-swarm@3.0 loop</title>", "<title>plan-swarm@3.0 · the loop, step by step</title>"))
+    if "--html-only" in argv:
+        print("wrote loop.html and plan-swarm-loop-stepper.html")
+        return
+    themes = [argv[argv.index("--theme") + 1]] if "--theme" in argv else ["light", "dark"]
+    durations = [f["dur"] for f in fr]
+    video = [VIDEO_DUR[f["kind"]] for f in fr]
+    still = next(i for i, f in enumerate(fr) if f.get("stage") == 7 and f.get("recorded"))
+    page_path = os.path.join(HERE, "loop.html")
+    for theme in themes:
+        tmp, pngs = gifkit.render_frames(page_path, [f"f={i}&t={theme}" for i in range(len(fr))], W, H)
+        try:
+            size = gifkit.save_gif(pngs, durations, os.path.join(HERE, f"plan-swarm-loop-{theme}.gif"), W, H)
+            print(f"{theme}: GIF {len(pngs)} frames, {sum(durations) / 1000:.1f}s, {size / 1e6:.2f} MB")
+            size = gifkit.save_png(pngs[still], os.path.join(HERE, f"plan-swarm-loop-{theme}.png"), W, H)
+            print(f"{theme}: PNG {W}x{H}, {size / 1e3:.0f} KB")
+            if "--no-mp4" not in argv:
+                size = gifkit.save_mp4(pngs, video, os.path.join(HERE, f"plan-swarm-loop-{theme}.mp4"))
+                print(f"{theme}: MP4 {2 * W}x{2 * H}, {sum(video) / 1000:.1f}s, {size / 1e6:.2f} MB")
+        finally:
+            gifkit.cleanup(tmp)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

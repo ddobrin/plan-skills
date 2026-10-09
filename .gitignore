@@ -24,3 +24,9 @@ hs_err_pid*
 replay_pid*
 
 .agents/
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+docs/

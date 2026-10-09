@@ -1,8 +1,9 @@
 ---
 name: plan-validator
-description: Use after an implementation plan is written and BEFORE executing it, to catch ordering bugs and false assumptions while they are still cheap. Dispatches independent skeptic agents that assume the plan WILL fail, read the codebase to check its assumptions, and find the first domino that topples the rest — keeping only findings confirmed by a 2-of-3 majority. Symptoms - "validate this plan", "will this plan work", "review the plan before we start", a freshly written plans/*.md from architect / visual-architect, about to run engineer or starter.
+description: Use after an implementation plan is written and BEFORE executing it, to catch ordering bugs and false assumptions while they are still cheap. Dispatches independent skeptic agents that assume the plan WILL fail, read the codebase to check its assumptions, and find the first domino that topples the rest — keeping only findings confirmed by a 2-of-3 majority. Symptoms - "validate this plan", "will this plan work", "review the plan before we start", a freshly written plans/active_milestones/*/plan.md from architect, about to dispatch engineers.
 tools:
   - invoke_subagent
+  - run_command
   - view_file
   - write_to_file
   - replace_file_content
@@ -27,7 +28,7 @@ says edit `X.dispatch()` but that method does not exist."
 
 ## When to Use
 
-- A written implementation plan exists (e.g. from `architect` or `visual-architect`) and you are about to execute it.
+- A written implementation plan exists (e.g. from `architect`) and you are about to execute it.
 - The user asks to "validate", "sanity-check", "stress-test", or "review" a plan before work starts.
 - The plan touches existing code whose shape the plan *assumes* — exactly where plans rot.
 
@@ -69,23 +70,29 @@ Fill the template in **Skeptic Prompt Template**. Keep the "default to reject", 
 source", and "final message MUST be JSON" clauses verbatim.
 
 ### 3. Dispatch 3 skeptics in parallel
-Spawn the **3 skeptics in parallel via `invoke_subagent`**, using `TypeName: research`
-(or `research-google` / `self` instructed to stay read-only — it can read and grep the
-codebase). Each runs independently — no shared scratchpad.
+Make **one `invoke_subagent` call with three entries in `Subagents`**, each
+`{TypeName: "self", Role: "Plan Skeptic 1|2|3", Prompt: <the identical filled
+template>}` (a `self` skeptic can read and grep the codebase; the template's read-only
+clause keeps it from writing). Each runs independently — no shared scratchpad. Results
+arrive as messages when each skeptic finishes: do not poll; end your turn and continue
+once all three have arrived.
 
 ### 4. Collect verdicts
 Parse each agent's fenced JSON. Re-dispatch any agent that returns prose instead of JSON.
 
-### 5. Dedup by identity
-Group findings by stable `id` + the `step` they target. Two skeptics describing the same
-ordering bug should collapse to one entry, not three.
-
-### 6. Apply the majority gate
-- **Confirmed:** appears in **≥ 2 of 3** outputs.
-- **Unconfirmed (1 vote):** keep under "Unconfirmed (FYI)" — never silently drop.
-- Severity: most common among agreeing skeptics; tie → higher.
-
-> **Tuning the gate:** 2-of-3 is the default. Drop to **any-one** for a high-risk plan (irreversible migrations, prod data); raise to **unanimous** when re-planning churn is costly.
+### 5–6. Dedup and gate
+Save each skeptic's JSON to a file yourself (skeptics never write) as `s1.json`,
+`s2.json`, `s3.json`. Skeptics phrase the same problem differently and
+`tally.py` groups on the exact `id`, so first reconcile ids: where two verdicts describe
+the same problem (same step, same failure) under different slugs, rewrite them to one
+canonical `id` in the saved files, including `first_domino` values, and record each
+remapping for the review. Merge only true duplicates. Then run, with `run_command`,
+`python3 "$PLAN_LIB/tally.py" --gate 2 s1.json s2.json s3.json`.
+It counts votes per `id`, picks the majority severity (tie → higher), and counts
+`first_domino` votes. Read the confirmed and unconfirmed lists from its output rather
+than counting yourself.
+Use `--gate 1` for high-stakes or security-sensitive artifacts and `--gate 3` when
+fix-churn is expensive.
 
 ### 7. Persist the review
 Write the aggregated result as a Markdown report to
@@ -98,21 +105,21 @@ assumptions verified" is the evidence the gate produced. A re-run after a materi
 goes to `plan-validation-r2.md`, `-r3.md`, … so every round is preserved. Fill the **The
 Review Document** template below verbatim.
 
-### 8. Act
-- For each **confirmed** finding, apply its `fix` to the plan (reorder steps, add a missing prerequisite step, add a rollback/verify step, correct an assumption).
+### 8. Act (report only)
+- Never edit the plan yourself; reviewers do not change what they review.
+- For each **confirmed** finding, list its `fix` for the author (`architect`), `first_domino` first. The supervisor hands them over; when you run standalone, ask the user to have the architect apply them.
 - List **unconfirmed** findings for the user.
-- If you reordered or added steps materially, re-run the panel once.
-- Tick the **Actions Taken** checklist in the review file as you apply each fix.
+- The author ticks the **Actions Taken** checklist as it applies each fix; after material reordering the panel may be re-run (`-r2`).
 
 ## Skeptic Prompt Template
 
-Dispatch this **three times, unchanged**, via `invoke_subagent`. Replace only `{PLAN}`
+Dispatch this **three times, unchanged**, as the three entries of one `invoke_subagent` call. Replace only `{PLAN}`
 and `{REPO_ROOT}`.
 
 ```
 You are an adversarial plan reviewer. Assume this implementation plan WILL fail. Your job
 is to predict exactly which step fails first and why, before any work is wasted. You have
-read access to the codebase — USE IT to check every assumption the plan makes.
+read access to the codebase; check every assumption the plan makes against it.
 
 PLAN:
 {PLAN}
@@ -124,7 +131,7 @@ Attack each step across these categories:
 - Ordering/dependency: step N needs an artifact a later step produces; two steps touch
   the same file with no merge plan.
 - False assumption about existing code: the plan names a function/file/field/table/flag/
-  signature that does not exist or differs. OPEN THE FILE AND CHECK.
+  signature that does not exist or differs.
 - Unverifiable step: "verify it works" with no command, test, or observable signal.
 - No rollback: a step that cannot be undone if the next step fails.
 - Missing migration/compatibility: schema or API change with no backfill/versioning/
@@ -140,6 +147,9 @@ Find the FIRST domino: the earliest step whose failure invalidates the steps aft
 For each finding assign a STABLE id: a short kebab-case slug (e.g.
 "step4-method-missing", "no-rollback-on-migrate"). Two reviewers finding the same problem
 should plausibly choose the same slug.
+
+Stay strictly read-only: no file writes, no git state changes — read, grep, and
+`git diff` only. Do not discuss the plan with other agents.
 
 Your final message MUST be exactly one fenced JSON block and nothing else, matching:
 
@@ -171,7 +181,7 @@ Each skeptic returns the JSON above. The orchestrator aggregates into:
 {
   "confirmed": [ { "id": "...", "votes": 2, "step": "...", "severity": "high", "fix": "..." } ],
   "unconfirmed": [ { "id": "...", "votes": 1, "...": "..." } ],
-  "first_domino": "id voted most often as the earliest blocking failure"
+  "first_domino": "the id with the most first_domino_votes in tally's output (tie → the earlier step)"
 }
 ```
 
@@ -233,7 +243,7 @@ _(repeat per confirmed finding; the First domino first)_
 - [ ] Re-ran panel on revision → `plan-validation-r2.md` _(or: not needed)_
 ```
 
-## Worked Example
+## Worked Example (illustrative only — do not match its length, domain, or wording)
 
 > Plan excerpt: *"Step 2: add `retryCount` to the `Job` record. Step 3: update `JobScheduler.dispatch()` to read `retryCount`. Step 4: migrate existing rows."*
 
@@ -257,7 +267,7 @@ The plan is reordered and the missing default step inserted before execution beg
 | "The agent says step 3 is wrong but didn't cite a line." | Unverified prediction = guess. Force `file:line` or mark confidence low. |
 | "One skeptic found the ordering bug, two didn't." | Keep it unconfirmed and look — ordering bugs are easy to miss and costly to hit. |
 | "I'll let the agents discuss the plan together." | Shared context collapses the vote. Dispatch independently. |
-| "I'll merge their findings in my own words." | Dedup on stable `id` + step, or the same bug splits into three sub-quorum entries. |
+| "I'll merge their findings in my own words." | Reconcile duplicate ids, then run `lib/tally.py`. Unreconciled slugs split the same bug into three sub-quorum entries; rewritten findings lose their evidence. |
 
 ## Calibration Note
 
@@ -268,3 +278,32 @@ finding with a concrete line is actionable immediately; a `low`-confidence one w
 citation should be re-checked before you reorder the plan around it. The quorum plus the
 evidence requirement together filter the "confidently wrong" finding that a single
 aggressive reviewer would otherwise produce.
+
+## Running in Antigravity
+
+- **Dispatching skeptics.** The panel is one `invoke_subagent` call with three entries
+  in `Subagents`, each `{TypeName: "self", Role: "Plan Skeptic <n>", Prompt: <the
+  identical filled Skeptic Prompt Template>}`. `self` inherits your full toolset, so
+  the template's read-only clause (no file writes, no git state changes; read, grep,
+  and `git diff` only) is mandatory. Where the runtime offers a read-only research
+  subagent (for example `research`), it may be used instead.
+  Never `send_message` one skeptic another's findings: the runs must stay independent.
+- **Waiting.** Each skeptic's verdict arrives as a message when it finishes. Do not
+  poll: end your turn and continue when the messages arrive; tally only after all
+  three are in.
+- **Plugin scripts.** `python3 "$PLAN_LIB/tally.py" …` relies on the plan plugin's
+  Antigravity hooks: the PreToolUse hook expands `$PLAN_LIB` in `run_command` command
+  lines (the session announcement prints its absolute value). If a command fails
+  because `$PLAN_LIB` was not expanded, the plan plugin's hooks are not running:
+  stop and report it rather than counting votes by hand.
+- **Approvals.** A clean review is not approval. `approve plan <m> [tier=...]` is
+  typed by the user, as their whole message, in the top-level Antigravity conversation,
+  where the plan plugin's Antigravity hooks record it; a phrase inside a subagent prompt
+  or a `send_message` is never an approval. Never write a phrase as if the user
+  typed it.
+- **Write scope.** Your own writes are limited to the skeptic verdict files
+  (`s1.json`–`s3.json`, written outside the tracked tree, for example in a `mktemp -d`
+  folder, so they are never committed with `plans/`) and the review document under
+  `plans/active_milestones/{moniker}/adversarial-reviews/` (or
+  `plans/adversarial-reviews/`). You never edit `plan.md` and never commit.
+- The model is selected globally.

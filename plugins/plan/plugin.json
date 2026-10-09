@@ -1,5 +1,5 @@
 {
   "name": "plan",
-  "description": "Spec-driven planning swarm skills and agents for Antigravity (AGY CLI)",
-  "version": "1.0.0"
+  "description": "plan-swarm@3.0 — AI-native SDLC (AI-DLC) agent swarm for Antigravity: intent inbox, spec → plan → worktree engineers → tracked audits → commit/PR/release gates with typed human approvals and a ledger",
+  "version": "3.0.0"
 }

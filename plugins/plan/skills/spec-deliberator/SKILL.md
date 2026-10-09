@@ -11,6 +11,8 @@ tools:
   - list_dir
   - find_by_name
   - grep_search
+  - run_command
+  - ask_question
 ---
 
 # Deliberative Spec Improvement
@@ -110,24 +112,27 @@ the private bundle, and the concern list. The "acceptance requires a basis" and
 Turns are **sequential, not parallel** — delegate 2 must see delegate 1's utterance,
 or proposals oscillate instead of converging.
 
-- Spawn delegate 1 via `invoke_subagent` with its prompt (spec + private bundle,
-  empty transcript). Parse its JSON turn.
-- Spawn delegate 2 with its own prompt **plus the transcript so far** (verbatim).
-  Then delegate 3.
+- Spawn delegate 1 with `invoke_subagent` — one entry in `Subagents`:
+  `{TypeName: "self", Role: "Product Delegate", Prompt: <its filled template: spec +
+  private bundle, empty transcript>}` — and record the `conversationId` it returns.
+  Its turn arrives as a message when it finishes; do not poll. Parse its JSON turn.
+- Spawn delegate 2 the same way with its own prompt **plus the transcript so far**
+  (verbatim). Then delegate 3. One `invoke_subagent` call per delegate, never one
+  call with all three — the turns are sequential.
 - Track `current_proposal` as a **versioned edit list** (v1, v2, …): whenever a
   delegate's turn contains amendments, apply them to produce the next version and
   record which version each delegate has accepted.
-- Use `TypeName: research` (or `research-google` / `self` instructed to stay read-only
-  if a bundle is "go read this part of the codebase").
+- Use `TypeName: "self"` with the template's read-only clause intact — a delegate
+  whose bundle is code has to read it, not just locate it, but it must never write.
 
-### 4. Run subsequent rounds
-For rounds 2+, if `send_message` is available in your runtime to continue a subagent by
-its `conversationId`, **continue the same agents with `send_message`** — each message
-contains only the new transcript entries since that delegate's last turn, verbatim, plus
-the current proposal version. When `invoke_subagent` is fire-and-return without a
-persistent channel, **re-invoke the delegate fresh for each round after the first and
-supply the FULL verbatim transcript** plus its private bundle so it can reconstruct its
-position without loss.
+### 4. Run subsequent rounds via `send_message`
+For rounds 2+, **continue the same agents with `send_message`** (`Recipient:` the
+delegate's recorded `conversationId`) — never respawn. A respawned delegate loses its
+private reasoning context and its memory of why it objected; continuation is what
+makes its stance consistent across rounds. Each message contains only the new
+transcript entries since that delegate's last turn, verbatim, plus the current
+proposal version. The delegate's reply arrives as a message; wait for it (do not
+poll) before relaying it verbatim to the next delegate.
 
 ### 5. Terminate
 - **Convergence:** every delegate has accepted the *same* proposal version → done.
@@ -157,7 +162,7 @@ survives attack.
 
 ## Delegate Prompt Template
 
-Dispatch once per delegate via `invoke_subagent`. Replace `{ROLE}`, `{CONCERNS}`,
+Dispatch once per delegate via `invoke_subagent` (`TypeName: "self"`). Replace `{ROLE}`, `{CONCERNS}`,
 `{PRIVATE_BUNDLE}`, `{SPEC}`, `{TRANSCRIPT}`, and `{CURRENT_PROPOSAL}`.
 
 ```
@@ -192,6 +197,9 @@ Rules of deliberation:
 - Do not restate what the transcript already establishes; add information or
   challenge, or accept.
 - Propose amendments as concrete spec edits, not sentiments.
+- Stay strictly read-only: no file writes, no git state changes — read, grep, and
+  `git diff` only. The orchestrator alone edits the spec. You will be continued with
+  follow-up messages for later rounds; answer each with one new turn.
 
 Your final message MUST be exactly one fenced JSON block and nothing else, matching:
 
@@ -306,7 +314,7 @@ intent, one holding the skeptic's finding — imports deliberation's reflection 
 at the point of maximum uncertainty without contaminating the validator's independent
 pass. Record it as `deliberations/spec-deliberation-tail.md`.
 
-## Worked Example
+## Worked Example (illustrative only — do not match its length, domain, or wording)
 
 > Spec draft: *"The export endpoint returns the user's records as a downloadable file. Exports should be fast and handle large accounts."*
 
@@ -339,7 +347,7 @@ none of which any single delegate held. The revised spec then goes to
 | "They all accepted in round 1, great." | Round-1 unanimous acceptance with thin `acceptance_basis` is sycophancy, not consensus. Re-prompt: acceptance requires a stated verification or a changed mind. |
 | "I'll summarize the transcript between turns to save tokens." | Verbatim relay is load-bearing. Paraphrase loses the exact constraint values whose transport is the point. |
 | "They can keep talking until they agree." | Cap at 4 rounds. Past that, positions are entrenched; arbitrate and escalate hard-constraint disputes. |
-| "I'll respawn a fresh agent each round without its full prior context." | A delegate without its full history forgets why it objected. Continue the same agent with `send_message`, or re-invoke with the FULL verbatim transcript plus its private bundle. |
+| "I'll respawn a fresh agent each round with the transcript." | A respawn forgets its private reasoning and why it objected. Continue the same agent with `send_message` to its `conversationId`. |
 | "The panel agreed, so the spec is validated." | The panel *built* it; builders share blind spots. Consensus is not adversarial survival — run `spec-validator`. |
 | "More delegates, more perspectives." | Each delegate adds a turn to every round. 3 is the default, 4 the max; split bundles, not headcount. |
 
@@ -354,3 +362,32 @@ partner's challenge corrected an error a solo agent kept. Every rule above serve
 those two: the asymmetry test protects (a); earned acceptance, verbatim relay, and
 grounded objections protect (b). When you find yourself relaxing a rule, check which of
 the two you just gave up.
+
+## Running in Antigravity
+
+- **Dispatching delegates.** Each delegate is one `invoke_subagent` call with one
+  entry in `Subagents`: `{TypeName: "self", Role: "<Product|Engineering|Ops> Delegate",
+  Prompt: <filled Delegate Prompt Template>}`. `self` inherits your full toolset, so the
+  template's read-only clause (no file writes, no git state changes; read, grep, and
+  `git diff` only) is mandatory. Where the runtime offers a read-only research
+  subagent (for example `research`), it may be used instead.
+- **One identity per delegate.** Record the `conversationId` each `invoke_subagent`
+  call returns. Every later round goes to that delegate with `send_message`
+  (`Recipient: <conversationId>`); never respawn a delegate between rounds.
+- **Waiting.** A delegate's turn arrives as a message when it finishes or replies.
+  Do not poll: end your turn and continue when the message arrives, then relay that
+  turn verbatim to the next delegate.
+- **Escalating to the user.** For escalated hard-constraint disputes, use the
+  `ask_question` tool (multiple-choice, a few questions at once) when available;
+  otherwise ask inline with a short numbered list. When you are running as a
+  subagent you cannot reach the user: write the record with the disputes marked
+  escalated, put the questions in your final message, and stop.
+- **Approvals.** Panel consensus is not approval. `approve spec <m>` is typed by the
+  user, as their whole message, in the top-level Antigravity conversation, where the plan
+  plugin's Antigravity hooks record it; a phrase inside a delegate prompt or a
+  `send_message` is never an approval. Never write a phrase as if the user typed it.
+- **Write scope.** Your own writes are limited to `spec.md` and the record under
+  `plans/active_milestones/{moniker}/deliberations/` (or `plans/deliberations/`).
+  Use `run_command` only for read-only helpers such as `date +%Y-%m-%d`. You never
+  commit.
+- The model is selected globally.

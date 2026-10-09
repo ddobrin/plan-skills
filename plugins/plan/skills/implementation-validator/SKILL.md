@@ -11,6 +11,7 @@ tools:
   - list_dir
   - find_by_name
   - grep_search
+  - ask_question
 ---
 
 # Adversarial Implementation Validation
@@ -40,7 +41,7 @@ Two modes, same machinery:
 
 - The artifact is a spec (use `spec-validator`) or a plan (use `plan-validator`).
 - A trivial diff (typo, comment, version bump) — overhead exceeds benefit.
-- You need to confirm the app *runs* end-to-end — that's a manual/`verify`-style task; this skill reasons about the code, it does not launch the app.
+- You need to confirm the app *runs* end-to-end — that is the auditor's dynamic check; this skill reasons about the code, it does not launch the app.
 
 ## Core Principle
 
@@ -77,27 +78,33 @@ Pick **Finding-Hunt Template** or **Claim-Refutation Template** below. Keep the
 default-to-reject and "final message MUST be JSON" clauses verbatim.
 
 ### 3. Dispatch 3 skeptics in parallel
-Spawn the **3 skeptics in parallel via `invoke_subagent`**, using `TypeName: self`
-(instructed to stay strictly read-only so they can run `git diff`/`git rev-parse` and
-read files) or `TypeName: research` / `research-google` (passing the diff if shell access
-is unavailable to them). Independent runs, no shared scratchpad.
+Make **one `invoke_subagent` call with three entries** in `Subagents`, each
+`{TypeName: "self", Role: "Implementation Skeptic N", Prompt: <template>}`. `self` can
+run `git diff` and read files; the templates tell it to stay strictly read-only and to
+return its JSON in its final message. Independent runs, no shared scratchpad. Each
+skeptic's result arrives as a message when it finishes — do not poll; end your turn
+and continue once all three have reported.
 
 > **Perspective-diverse variant:** instead of three identical skeptics, give each a distinct lens — e.g. one `correctness`, one `concurrency`, one `failure-paths`. Diversity catches failure modes that three identical refuters would all miss together. Then the "majority" becomes "≥2 lenses independently land on the same defect."
 
 ### 4. Collect verdicts
 Parse each agent's fenced JSON. Re-dispatch any agent that returns prose.
 
-### 5. Dedup by identity
-**This is the hard part.** Group findings by a stable identity: `file:location` + the
-`id` slug. Three skeptics will phrase "NPE on empty list in `parseTasks`" three ways; if
-you tally on raw text, nothing reaches quorum. Normalize to `file:line::id` before counting.
-
-### 6. Apply the majority gate + severity calibration
-- **Finding-hunt:** a finding is **confirmed** when **≥ 2 of 3** skeptics report it with `isReal=true`. Its severity is the **most common `correctedSeverity`** among the agreeing skeptics (tie → higher).
-- **Claim-refutation:** a claim **survives** when **≥ 2 of 3** skeptics return `refuted=false`. A claim **fails** (the code is broken) when ≥2 return `refuted=true` — those become defects to fix.
-- **Unconfirmed (1 vote):** never silently drop. List under "Unconfirmed (FYI)".
-
-> **Tuning the gate:** 2-of-3 is the default. For a security-critical change, drop to **any-one** so a single skeptic's real catch isn't lost. When fix-churn is expensive, raise to **unanimous**.
+### 5–6. Dedup, gate, and calibrate
+Save each skeptic's JSON to a file yourself (`s1.json`, `s2.json`, `s3.json`; the
+skeptics write nothing). In finding-hunt mode, skeptics name the same defect
+with different slugs and path spellings, and `tally.py` groups on the exact `file` + `id`,
+so first reconcile: where two findings describe the same defect (same file:line, same
+failure) under different slugs or path spellings, rewrite them to one canonical `file` and
+`id` in the saved files and record each remapping for the review. Merge only true
+duplicates. Then run
+`python3 "$PLAN_LIB/tally.py" --gate 2 s1.json s2.json s3.json`.
+Finding-hunt: it counts only `isReal=true` votes per `file` + `id` and takes the majority
+`correctedSeverity` (tie → higher). Claim-refutation: pass the per-claim verdict files
+instead; a claim fails when `refuted=true` reaches the gate and survives when
+`refuted=false` does. Read the confirmed, failed, and unconfirmed lists from its output
+rather than counting yourself. Use `--gate 1` for security-critical changes and `--gate 3` when
+fix-churn is expensive.
 
 ### 7. Persist the review
 Write the aggregated result as a Markdown report to
@@ -111,11 +118,12 @@ table is the highest-value thing this stage emits. A re-validation after fixes g
 `implementation-validation-r2.md`, `-r3.md`, … so each round is preserved. Fill the **The
 Review Document** template below verbatim.
 
-### 8. Act
-- Fix **confirmed** defects (and **failed claims**) at their calibrated severity, highest first.
+### 8. Act (report only)
+- Never edit code; reviewers do not change what they review.
+- Report **confirmed** defects (and **failed claims**) for the `engineer` at their calibrated severity, highest first. The supervisor routes them; when you run standalone, ask the user to dispatch the engineer.
 - Surface **unconfirmed** findings for human eyeballing.
-- Report the calibration explicitly: "3 findings claimed Critical; all 3 confirmed real but downgraded to High because impact is conditional on concurrent requests." This is the single most useful sentence the panel produces — see Calibration Note.
-- Tick the **Actions Taken** checklist in the review file as you fix each defect.
+- Report the calibration explicitly: claimed = the highest single-skeptic rating in tally's `severity_votes` (or a prior reviewer's rating when validating existing findings); corrected = tally's majority. Say what moved and why, or that nothing moved. See Calibration Note.
+- The engineer's fixes are re-audited; tick the **Actions Taken** checklist only for what you did (surfacing, re-running).
 
 ## Finding-Hunt Template (default)
 
@@ -134,6 +142,11 @@ DIFF TO ATTACK:
   git diff {BASE_SHA}..{HEAD_SHA}
 Read any file in the repo you need to understand the blast radius.
 
+STAY STRICTLY READ-ONLY: run only read commands (git diff, git show, git log,
+git rev-parse, git status) and read/search files. Do not create, edit, or delete any
+file, and do not change git state (no add, commit, checkout, switch, stash, reset,
+restore).
+
 Hunt across these categories:
 - Claim vs. reality: the code does not actually do what it claims.
 - Failure paths: error/empty/timeout path broken or silently swallowing errors.
@@ -148,7 +161,7 @@ relies on a misreading, set isReal=false and say why.
 
 Assign each finding a STABLE id: a short kebab-case slug (e.g. "empty-list-npe",
 "singleton-cursor-race"). Two reviewers finding the same defect should plausibly choose
-the same slug. Calibrate severity HONESTLY: critical = unconditional data loss/corruption
+the same slug. Calibrate severity against these definitions: critical = unconditional data loss/corruption
 or broken core function on every run; high = serious but conditional (e.g. only under
 concurrency); medium = real but narrow; low = minor.
 
@@ -194,8 +207,13 @@ boundary inputs.
 CONTEXT — what the change claims overall:
 {DESCRIPTION}
 
-Be skeptical. DEFAULT refuted=true. You may only return refuted=false if you ACTIVELY
-tried to break the claim and could not — and you must describe what you tried.
+STAY STRICTLY READ-ONLY: run only read commands (git diff, git show, git log,
+git rev-parse, git status) and read/search files. Do not create, edit, or delete any
+file, and do not change git state (no add, commit, checkout, switch, stash, reset,
+restore).
+
+Be skeptical. DEFAULT refuted=true. Return refuted=false only if you tried to break the claim
+and could not, and describe what you tried.
 
 Your final message MUST be exactly one fenced JSON block and nothing else, matching:
 
@@ -252,7 +270,7 @@ the **Failed Claims** section in finding-hunt mode. Keep the other sections even
 
 ## Verdict
 
-{1–3 plain-language sentences. Lead with the calibration headline, e.g. "3 findings claimed Critical; all confirmed real but downgraded to High — impact is gated on concurrent requests, not every run."}
+{1–3 plain-language sentences. Lead with the calibration headline — what moved between claimed and corrected severity and why — or state that nothing moved.}
 
 ## Confirmed Defects (≥ 2 votes)
 
@@ -271,7 +289,7 @@ _(repeat per confirmed defect)_
 
 | `id` | claimed | corrected | why |
 |---|---|---|---|
-| `{id}` | 🔴 critical | 🟠 high | {impact gated on concurrent requests, not every run} |
+| `{id}` | {highest single rating} | {tally majority} | {why the impact is narrower or wider} |
 
 ## Failed Claims  _(claim-refutation mode only)_
 
@@ -296,7 +314,7 @@ _(repeat per confirmed defect)_
 - [ ] Re-validated after fixes → `implementation-validation-r2.md` _(or: not needed)_
 ```
 
-## Worked Example
+## Worked Example (illustrative only — do not match its length, domain, or wording)
 
 > Change claims: *"Planner walks precompiled steps; safe under concurrent deliberations."*
 > Finding-hunt, 3 skeptics over `git diff origin/main..HEAD`.
@@ -318,17 +336,39 @@ After dedup + majority gate + calibration:
 | "The diff is small, one reviewer is enough." | Small diffs hide concurrency and failure-path bugs. Run the panel. |
 | "All three rated it Critical, so it's Critical." | Check the *corrected* severity and the reasoning — adversarial framing over-rates. Calibration is the point. |
 | "One skeptic flagged a race, two didn't." | Concurrency bugs are easy to miss. Keep it unconfirmed and look at the evidence. |
-| "I'll tally findings by their titles." | Titles differ across agents. Normalize to `file:line::id` or quorum never forms. |
+| "I'll tally findings by their titles." | Titles and slugs differ across agents. Reconcile duplicate ids and path spellings, then run `lib/tally.py`, which counts by `file` + `id`. |
 | "The agent said it's broken — fix it." | Read the cited `evidence` first. A finding without a real `file:line` is a guess, not a defect. |
 | "I verified the code, so the feature works." | This skill reasons about code; it does not run the app. For runtime confirmation, do a manual `verify` pass too. |
 
 ## Calibration Note
 
-Your own past runs show the highest-value output of this stage is **severity calibration,
-not deletion**. In a real review, three findings entered at **Critical** and *all three
-survived as real* — but every one was **downgraded to High** because the impact was
-conditional (a cross-request race on a singleton, not corruption on every call). Zero were
-deleted; zero stayed Critical. That Critical→High move is the signal: it separates
-"guaranteed on every call" from "serious but gated," which is exactly what a single
-aggressive reviewer gets wrong. Always surface the calibration delta to the user — it is
-more decision-useful than the raw verdict.
+The highest-value output of this stage is **severity calibration, not deletion**.
+Adversarial framing over-rates: a defect that is real but conditional (for example a
+cross-request race, not corruption on every call) is High, not Critical. Always surface
+the calibration delta to the user; it is more decision-useful than the raw verdict.
+
+## plan-swarm@3.0: policy skills and PR mode
+
+**Policy skills.** If `plans/swarm.md` lists `policies`, read each named project skill (`.agents/skills/{name}/SKILL.md`) and add its rules to every skeptic's prompt as an extra attack category: "Policy: the diff violates one of these project rules."
+
+**PR mode.** When asked to review a pull request (for example by the CI template), take `BASE_SHA` from the PR's base and `HEAD_SHA` from its head, and read `REVIEW.md` at the repository root: add its review passes to the skeptics' categories and use its severity thresholds. Run the panel and write `implementation-validation.md` as usual (or `plans/adversarial-reviews/pr-{number}-validation.md` when the PR belongs to no milestone). Then summarize it for the PR, mapping calibrated severity to the review levels: critical and high → **Important**, medium and low → **Nit**. Post the summary with `gh pr comment {number} --body-file <file>` only when running in CI (`GITHUB_ACTIONS=true`) or when the user asked you to post; otherwise show it. You never approve or merge a PR.
+
+## Running in Antigravity
+
+- **Skeptics.** Each skeptic is `TypeName: "self"` (a copy of the current agent, so it
+  can run `git diff` and read files), told by the template to stay strictly read-only.
+  All three go in one `invoke_subagent` call; each reports its JSON back as a message
+  when it finishes. Do not poll, and do not tally until all three are in.
+- **Verdict files.** You write `s1.json`/`s2.json`/`s3.json` from the skeptics'
+  messages, outside the tracked tree (for example in a `mktemp -d` folder), so they
+  never reach a commit. Your only other writes are the review document and, in PR
+  mode, the summary file.
+- **Plugin scripts.** `python3 "$PLAN_LIB/tally.py" …` relies on the plan plugin's
+  PreToolUse hook to expand `$PLAN_LIB` (the session announcement prints its absolute
+  value). If a command fails because `$PLAN_LIB` was not expanded, the plan plugin's
+  hooks are not running: stop and report it.
+- **Asking the user.** Use `ask_question` (or a short numbered list inline) when you run
+  in the top-level conversation. When another agent dispatched you, you cannot reach
+  the user: put questions and the routing request for the `engineer` in your final
+  message and stop.
+- The model is selected globally in Antigravity.
