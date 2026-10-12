@@ -10,6 +10,15 @@ tools:
   - list_dir
   - find_by_name
   - grep_search
+x-plan-model: opus-5.5-high         # EXACT model for whoever runs this role (effort = suffix); honored by swarm dispatch
+x-plan-tier: pro                    # fallback tier when exact pinning is unavailable
+x-plan-panel:
+  mode: lens-per-model             # lens-per-model (N = seats) | matrix (every seat prompt x every seat model)
+  gate: majority                   # majority of N | any-one | unanimous
+x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
+  - { lens: sequencing,   model: opus-5.5-high,         tier: pro }
+  - { lens: ground-truth, model: gemini-3.8-flash-high, tier: flash }
+  - { lens: blast-radius, model: gemini-3.1-pro-high,   tier: inherit }
 ---
 
 # Adversarial Plan Validation
@@ -68,10 +77,34 @@ finding — the template forces them to cite `file:line`.
 Fill the template in **Skeptic Prompt Template**. Keep the "default to reject", "verify in
 source", and "final message MUST be JSON" clauses verbatim.
 
-### 3. Dispatch 3 skeptics in parallel
-Spawn the **3 skeptics in parallel via `invoke_subagent`**, using `TypeName: research`
-(or `research-google` / `self` instructed to stay read-only — it can read and grep the
-codebase). Each runs independently — no shared scratchpad.
+### 3. Dispatch N skeptics in parallel — one model per seat
+Seats are declared in this file's `x-plan-seats` (N = number of seats; gate per
+`x-plan-panel.gate`, default majority of N). Every seat runs the **identical** Skeptic
+Prompt Template; only the model differs, so the votes come from uncorrelated models.
+`lens` is the seat's label.
+
+- **Exact route (top-level conversation with the `swarm` tool):** in ONE turn add one
+  worker per seat:
+  `swarm{action:"add", name:"plan-<lens>", model:"<seat.model>", brief:"Read
+  <PLUGIN>/skills/plan-validator/SKILL.md → 'Skeptic Prompt Template'. PLAN: <path>.
+  REPO_ROOT: <root>. INDEPENDENCE: do NOT call read_board and do NOT open other seats'
+  files. Write ONLY your fenced-JSON verdict to
+  <milestone>/adversarial-reviews/seats/plan-r<k>-<lens>.json, then post
+  '@coordinator done <lens>' with no findings in the post."}`
+  End the turn; on each wake, check which seat files exist. When all N exist, add the
+  chair: `swarm{action:"add", name:"plan-chair", model:"<x-plan-model>", brief:"Read the N
+  seat files under <milestone>/adversarial-reviews/seats/ and this skill; dedup by id+step,
+  apply the gate, calibrate severity, write plan-validation.md, apply confirmed fixes to
+  plan.md. Post '@coordinator done'."}` Kill the seat workers and the chair afterwards.
+  Take each seat's model for the Panel table from `swarm status`, never from a worker's own
+  claim.
+- **Portable route (no `swarm`, or running as a subagent):** N parallel `invoke_subagent`
+  calls in one turn, `TypeName: research` (or `research-google` / `self` instructed to stay
+  read-only — it can read and grep the codebase), each with `Model: <seat.tier>` and the
+  same template. You act as the chair.
+- **Independence.** With `invoke_subagent`, skeptics cannot see each other. With the swarm
+  the platform does not prevent it, so: verdicts go to files, not the board; seats are told
+  not to call `read_board` or open other seats' files; all seats are added in the same turn.
 
 ### 4. Collect verdicts
 Parse each agent's fenced JSON. Re-dispatch any agent that returns prose instead of JSON.
@@ -106,8 +139,8 @@ Review Document** template below verbatim.
 
 ## Skeptic Prompt Template
 
-Dispatch this **three times, unchanged**, via `invoke_subagent`. Replace only `{PLAN}`
-and `{REPO_ROOT}`.
+Dispatch this **once per seat, unchanged** (N seats, each on its own model — see step 3).
+Replace only `{PLAN}` and `{REPO_ROOT}`.
 
 ```
 You are an adversarial plan reviewer. Assume this implementation plan WILL fail. Your job
@@ -188,14 +221,22 @@ not a finding. Keep every section, even when empty (write `_None._`).
 ```markdown
 # Plan Adversarial Review — {plan title}
 
-> `plan-validator` · 3 independent skeptics, no shared scratchpad · default-to-reject · skeptics READ the codebase · {2-of-3} majority gate
+> `plan-validator` · {N} independent skeptics on {M} model families, no shared scratchpad · default-to-reject · skeptics READ the codebase · {majority-of-N} gate
+
+## Panel
+| Seat (lens) | Model | Route | Verdict file |
+|---|---|---|---|
+| sequencing | opus-5.5-high | swarm | seats/plan-r1-sequencing.json |
+| ground-truth | gemini-3.8-flash-high | swarm | seats/plan-r1-ground-truth.json |
+| blast-radius | gemini-3.1-pro-high | swarm | seats/plan-r1-blast-radius.json |
+| chair | opus-5.5-high | swarm | — |
 
 | Field | Value |
 |---|---|
 | Milestone | `{moniker}` |
 | Artifact | `plans/active_milestones/{moniker}/plan.md` |
 | Date | {YYYY-MM-DD} |
-| Gate | {2-of-3 · any-one · unanimous} |
+| Gate | {majority (2-of-3 with 3 seats) · any-one · unanimous} |
 | Result | **{N} confirmed · {M} unconfirmed** — highest severity **{high}** |
 | 🁢 First domino | `{id}` — {earliest failure that invalidates the steps after it, or `none`} |
 
@@ -207,7 +248,7 @@ not a finding. Keep every section, even when empty (write `_None._`).
 
 > Apply each **Fix** to the plan — reorder steps, insert a prerequisite, add a rollback/verify, or correct the assumption.
 
-### 🔴 `{id}` — {one-line name}  · {category} · {votes}/3 · confidence {high}
+### 🔴 `{id}` — {one-line name}  · {category} · {votes}/{N} · {agreeing models, e.g. opus + gemini-pro} · confidence {high}
 - **Step:** {step number / title this concerns}
 - **Failure:** {the concrete scenario in which the plan breaks}
 - **Evidence:** `{file:line}` you read _(or verbatim plan text)_

@@ -263,7 +263,7 @@ To run cleanly under the Antigravity CLI harness, the original Claude Code skill
 
 | Claude Code Plugin | Antigravity Port Adaptation |
 |---|---|
-| `model:` / `color:` / `tools:` frontmatter | `model:` and `color:` are dropped (model is chosen via `/model` or `invoke_subagent`); `tools:` is mapped to explicit Antigravity tool names (`view_file`, `write_to_file`, `replace_file_content`, `multi_replace_file_content`, `list_dir`, `find_by_name`, `grep_search`, `run_command`, `invoke_subagent`, `send_message`) alongside `mainAgent: true` and `subagent: true`. |
+| `model:` / `color:` / `tools:` frontmatter | `model:` is kept as the **enforced tier** (`inherit` / `flash` / `pro`), and each role additionally declares its **exact model id** in `x-plan-model` (plus `x-plan-tier`, and `x-plan-seats` for panel roles). The supervisor dispatches on the exact id via `swarm add model=` where the swarm is available, and on the tier via `invoke_subagent Model:` otherwise — see "Models per role" in [`../README.md`](../README.md). `color:` is dropped; `tools:` is mapped to explicit Antigravity tool names (`view_file`, `write_to_file`, `replace_file_content`, `multi_replace_file_content`, `list_dir`, `find_by_name`, `grep_search`, `run_command`, `invoke_subagent`, `send_message`) alongside `mainAgent: true` and `subagent: true`. |
 | `initialPrompt:` field | Folded into a leading `## On activation` body section in `agent.md`. |
 | `<example>` / `<commentary>` in `description` | Stripped to reduce context noise. |
 | `subagent_type: "general-purpose"` skeptic dispatch | Invokes subagent with `TypeName: research` (or `research-google` / `self`) for read-only skeptics/delegates. |

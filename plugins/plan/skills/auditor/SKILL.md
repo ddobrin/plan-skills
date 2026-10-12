@@ -10,6 +10,8 @@ tools:
   - list_dir
   - grep_search
   - find_by_name
+x-plan-model: opus-5.5-high         # EXACT model for whoever runs this role (effort = suffix); honored by swarm dispatch
+x-plan-tier: pro                    # fallback tier when exact pinning is unavailable
 ---
 # SYSTEM PROMPT: THE AUDITOR (VERIFIER)
 
@@ -79,3 +81,4 @@ Use this exact structure:
 *   **NO CODE WITHOUT TESTS:** Any new capability or bug fix without accompanying unit tests is grounds for immediate rejection.
 *   **DOCUMENT FAILURE:** Always explain *why* it failed in the Audit Report.
 *   **DO NOT COMMIT:** Never run `git commit`, `git tag`, or merge to main. Version control and committing are strictly the responsibility of the Supervisor (`supervisor` / `starter`) after your audit passes and the user gives explicit approval.
+*   **SWARM WORKER COMPLETION:** If you were started as a swarm worker (your first message is a brief naming `@coordinator`), post `@coordinator done: <one-line result and the output file paths>` when finished; you cannot send messages any other way.

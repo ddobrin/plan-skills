@@ -20,6 +20,12 @@ tools:
   - grep_search
 mainAgent: true
 subagent: true
+model: pro                          # ENFORCED by Antigravity when dispatched via invoke_subagent (tier only)
+x-plan-model: opus-5.5-high         # EXACT model (effort = suffix); honored by swarm dispatch
+x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
+  - { territory: intent,   model: opus-5.5-high,         tier: pro }
+  - { territory: codebase, model: gemini-3.8-flash-high, tier: flash }
+  - { territory: delivery, model: gemini-3.1-pro-high,   tier: inherit }
 ---
 
 You are the orchestrator of a **deliberative plan improvement** panel.
@@ -41,24 +47,44 @@ Relay turns verbatim, cap at 4 rounds, then hand the revised plan to plan-valida
 
 **Announce at start:** "Acting as `plan-deliberator` — improving this plan through a multi-territory delegate panel."
 
-## Running under Antigravity CLI (`agy`)
+## Running under Antigravity CLI (`agy`) and Antigravity
 
-- **Dispatching delegates.** Spawn each delegate with `invoke_subagent` using
-  `TypeName: research` (or `research-google` / `self` instructed to stay read-only —
-  they deep-read and grep the codebase but do not modify it; only you, the
-  orchestrator, edit `plan.md`).
-- **Multi-round dialogue.** If `send_message` is available in your runtime to continue
-  a subagent by its `conversationId`, relay subsequent rounds to the existing delegate
-  via `send_message`. When `invoke_subagent` is fire-and-return without a persistent
-  channel, **re-invoke the delegate fresh for each round after the first and supply the
-  FULL verbatim transcript** (every prior turn, plus its own earlier turns and their
-  cited evidence) in the prompt, so it can reconstruct its position. This costs
-  re-reading the territory each round; keep territories tight and the round cap at 4 to
-  bound it. Relay stays **verbatim, never paraphrased** — a paraphrased signature or
-  step number is exactly the information loss deliberation exists to overcome.
+- **Model routing — one model per territory.** Delegates are declared in this file's
+  `x-plan-seats` (`territory` + `model` + `tier`). Different models amplify the asymmetry
+  that disjoint territories create. Delegate *k* always runs on `x-plan-seats[k].model`.
+  (For multi-subsystem plans, split `codebase` into `codebase-api`, `codebase-worker`, …
+  on the same model.)
+  - *Exact route (top-level conversation with the `swarm` tool):* add one worker per
+    territory, named `pd-<territory>`, `model: <seat.model>`, brief: "Read
+    <PLUGIN>/skills/plan-deliberator/SKILL.md → 'Delegate Prompt Template'. Your territory:
+    <territory>, plan: <path>, repo root: <root>. Do the investigation phase (deep-read your
+    territory, cite file:line). Then WAIT until you are @-mentioned." **The board is the
+    verbatim transcript:** call each delegate in order — `@pd-intent round 1: give your
+    turn` → `@pd-codebase round 1: respond to #<seq>` → … — referring to earlier turns by
+    post number, never paraphrasing. Delegates post their fenced-JSON turn to the board.
+    Rounds ≤ 4. The same worker (and so the same model and the same investigated context)
+    persists across rounds; no re-invocation and no re-reading is needed. On convergence
+    (or arbitration), add the chair (`pd-chair`, `model: <x-plan-model>`) to apply the
+    agreed edit list to `plan.md` and write the deliberation record; then kill the
+    delegates and the chair. Take each delegate's model for the Panel table from
+    `swarm status`.
+  - *Portable route (no `swarm`, or running as a subagent):* spawn each delegate with
+    `invoke_subagent` at `Model: <seat.tier>`, `TypeName: research` (or `research-google` /
+    `self` instructed to stay read-only — they deep-read and grep the codebase but do not
+    modify it; only you, the orchestrator, edit `plan.md`). If `send_message` is available
+    to continue a subagent by its `conversationId`, relay subsequent rounds to the existing
+    delegate via `send_message` (same conversation, so the same model). When
+    `invoke_subagent` is fire-and-return without a persistent channel, **re-invoke the
+    delegate fresh for each round after the first, at the same seat tier, and supply the
+    FULL verbatim transcript** (every prior turn, plus its own earlier turns and their
+    cited evidence). This costs re-reading the territory each round; keep territories
+    tight and the round cap at 4 to bound it. Relay stays **verbatim, never paraphrased** —
+    a paraphrased signature or step number is exactly the information loss deliberation
+    exists to overcome.
 - Your own writes are limited to `plan.md` and the record under
   `plans/active_milestones/{moniker}/deliberations/`.
-- The model is selected globally (`/model`).
+- **Model:** declared in this file (`x-plan-model`, exact; `model:`, enforced tier). The
+  supervisor dispatches you on it.
 
 Dispatch a small panel of **delegate** agents — each assigned a *different
 territory* of the work (the spec's intent, a partition of the real codebase, the
@@ -221,6 +247,14 @@ Use `date +%Y-%m-%d`. Keep every section, even when empty (`_None._`).
 # Plan Deliberation — {plan title}
 
 > `plan-deliberator` · {N} delegates with disjoint territories · evidence-grounded turns · verbatim relay · {R} rounds to convergence
+
+## Panel
+| Delegate (territory) | Model | Route |
+|---|---|---|
+| intent | opus-5.5-high | swarm |
+| codebase | gemini-3.8-flash-high | swarm |
+| delivery | gemini-3.1-pro-high | swarm |
+| chair | opus-5.5-high | swarm |
 
 | Field | Value |
 |---|---|

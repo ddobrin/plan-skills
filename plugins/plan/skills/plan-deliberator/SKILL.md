@@ -11,6 +11,12 @@ tools:
   - list_dir
   - find_by_name
   - grep_search
+x-plan-model: opus-5.5-high         # EXACT model for whoever runs this role (effort = suffix); honored by swarm dispatch
+x-plan-tier: pro                    # fallback tier when exact pinning is unavailable
+x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
+  - { territory: intent,   model: opus-5.5-high,         tier: pro }
+  - { territory: codebase, model: gemini-3.8-flash-high, tier: flash }
+  - { territory: delivery, model: gemini-3.1-pro-high,   tier: inherit }
 ---
 
 # Deliberative Plan Improvement
@@ -111,27 +117,43 @@ the investigation instructions, and the guard list. The "cite your territory",
 "acceptance requires a basis", and "final message MUST be JSON" clauses are
 load-bearing — keep them verbatim.
 
-### 3. Dispatch round 1 (investigate, then sequential turns)
-Turns are **sequential, not parallel** — delegate 2 must see delegate 1's utterance, or
-proposals oscillate instead of converging.
+### 3. Dispatch round 1 (investigate, then sequential turns) — one model per territory
+Delegates are declared in this file's `x-plan-seats` (`territory` + `model` + `tier`);
+delegate *k* always runs on `x-plan-seats[k].model`. Different models amplify the
+asymmetry that disjoint territories create. (For multi-subsystem plans, split `codebase`
+into `codebase-api`, `codebase-worker`, … on the same model.) Turns are **sequential, not
+parallel** — delegate 2 must see delegate 1's utterance, or proposals oscillate instead of
+converging.
 
-- Spawn delegate 1 via `invoke_subagent` using `TypeName: research` (or
+- **Exact route (top-level conversation with the `swarm` tool):** add one worker per
+  territory in one turn, named `pd-<territory>`, `model: <seat.model>`, brief: "Read
+  <PLUGIN>/skills/plan-deliberator/SKILL.md → 'Delegate Prompt Template'. Your territory:
+  <territory>, plan: <path>, repo root: <root>. Do the investigation phase (deep-read your
+  territory, cite file:line). Then WAIT until you are @-mentioned." **The board is the
+  verbatim transcript:** call each delegate in order — `@pd-intent round 1: give your
+  turn` → `@pd-codebase round 1: respond to #<seq>` → `@pd-delivery round 1: respond to
+  #<seq>, #<seq>` — referring to earlier turns by post number, never paraphrasing.
+  Delegates post their fenced-JSON turn to the board.
+- **Portable route (no `swarm`, or running as a subagent):** spawn delegate 1 via
+  `invoke_subagent` at `Model: <seat.tier>` using `TypeName: research` (or
   `research-google` / `self` instructed to stay read-only — it must read and grep the
   codebase). Its first turn includes an **investigation phase**: deep-read the territory
-  *before* speaking. Parse its JSON turn.
-- Spawn delegate 2 with its own prompt **plus the transcript so far** (verbatim), then
-  delegate 3.
+  *before* speaking. Parse its JSON turn. Spawn delegate 2 (its own seat tier) with its
+  own prompt **plus the transcript so far** (verbatim), then delegate 3.
 - Track `current_proposal` as a **versioned plan edit list** (v1, v2, …): reorders,
   group boundary changes, inserted/removed/retargeted steps. Apply each turn's
   amendments to produce the next version; record which version each delegate accepted.
 
 ### 4. Run subsequent rounds
-For rounds 2+, if `send_message` is available in your runtime to continue a subagent by
-its `conversationId`, **continue the same agents with `send_message`** — each message
-carries only the new transcript entries since that delegate's last turn, verbatim, plus
-the current proposal version. When `invoke_subagent` is fire-and-return without a
-persistent channel, **re-invoke the delegate fresh for each round after the first and
-supply the FULL verbatim transcript** (every prior turn, plus its own earlier turns and
+On the exact route the same workers persist (same model, same investigated context): just
+@-mention each delegate with the round number and the post numbers to respond to. On the
+portable route, if `send_message` is available in your runtime to continue a subagent by
+its `conversationId`, **continue the same agents with `send_message`** (same conversation,
+so the same model) — each message carries only the new transcript entries since that
+delegate's last turn, verbatim, plus the current proposal version. When `invoke_subagent`
+is fire-and-return without a persistent channel, **re-invoke the delegate fresh for each
+round after the first, at the same seat tier, and supply the FULL verbatim transcript**
+(every prior turn, plus its own earlier turns and
 their cited evidence) so it can reconstruct its position. A delegate may investigate
 further mid-deliberation ("let me check whether `schedule()` tolerates a null") — that is
 the pattern working, not a stall.
@@ -251,6 +273,14 @@ section, even when empty (write `_None._`).
 # Plan Deliberation — {plan title}
 
 > `plan-deliberator` · {N} delegates with disjoint territories · evidence-grounded turns · verbatim relay · {R} rounds to convergence
+
+## Panel
+| Delegate (territory) | Model | Route |
+|---|---|---|
+| intent | opus-5.5-high | swarm |
+| codebase | gemini-3.8-flash-high | swarm |
+| delivery | gemini-3.1-pro-high | swarm |
+| chair | opus-5.5-high | swarm |
 
 | Field | Value |
 |---|---|

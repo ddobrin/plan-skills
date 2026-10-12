@@ -56,6 +56,16 @@ agy plugin install https://github.com/ddobrin/plan-skills
 
 ---
 
+## 🎛️ Models per role
+
+Each role declares its own model in the frontmatter of **both** its `agent.md` and `SKILL.md`: `model:` is the enforced tier (`flash` / `pro`), `x-plan-model` is the exact id (e.g. `opus-5.5-high`), and panel roles list one `x-plan-seats` entry per skeptic or delegate so every seat runs on a different model family. The supervisor (`starter`) reads these keys and dispatches each role on its declared model — exactly via `swarm add model=` where the swarm tool exists (Antigravity), by tier via `invoke_subagent` everywhere else, including agy.
+
+- **Run:** in a normal conversation, `/model gemini-3.8-flash-high`, then "be the supervisor". The supervisor prints the routing table before dispatching anything.
+- **Change a model:** edit `x-plan-model` (and `model:` if the tier changes) in the role's two files; start a new conversation.
+- **Full table, routes, and consistency checks:** [plugins/plan/README.md → Models per role](./plugins/plan/README.md#models-per-role).
+
+---
+
 ## 📚 Documentation Directory
 
 Explore the underlying documentation for details on individual roles, lifecycle stages, and deliverables:

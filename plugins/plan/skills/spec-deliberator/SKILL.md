@@ -11,6 +11,12 @@ tools:
   - list_dir
   - find_by_name
   - grep_search
+x-plan-model: opus-5.5-high         # EXACT model for whoever runs this role (effort = suffix); honored by swarm dispatch
+x-plan-tier: pro                    # fallback tier when exact pinning is unavailable
+x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
+  - { territory: product,      model: opus-5.5-high,       tier: pro }
+  - { territory: engineering,  model: gemini-3.1-pro-high, tier: inherit }
+  - { territory: ops-security, model: opus-5.5-high,      tier: pro }
 ---
 
 # Deliberative Spec Improvement
@@ -106,27 +112,42 @@ Fill the **Delegate Prompt Template** below once per delegate, varying only the 
 the private bundle, and the concern list. The "acceptance requires a basis" and
 "your final message MUST be JSON" clauses are load-bearing — keep them verbatim.
 
-### 3. Dispatch round 1 (sequential turns)
-Turns are **sequential, not parallel** — delegate 2 must see delegate 1's utterance,
-or proposals oscillate instead of converging.
+### 3. Dispatch round 1 (sequential turns) — one model per territory
+Delegates are declared in this file's `x-plan-seats` (`territory` + `model` + `tier`);
+delegate *k* always runs on `x-plan-seats[k].model`. Different models amplify the
+asymmetry that disjoint bundles create. Turns are **sequential, not parallel** — delegate
+2 must see delegate 1's utterance, or proposals oscillate instead of converging.
 
-- Spawn delegate 1 via `invoke_subagent` with its prompt (spec + private bundle,
-  empty transcript). Parse its JSON turn.
-- Spawn delegate 2 with its own prompt **plus the transcript so far** (verbatim).
-  Then delegate 3.
+- **Exact route (top-level conversation with the `swarm` tool):** write each private
+  bundle to its own file `<milestone>/deliberations/bundles/<territory>.md` (briefs are
+  public on the board, so the bundle must not be in the brief). Add one worker per
+  territory in one turn, named `sd-<territory>`, `model: <seat.model>`, brief: "Read
+  <PLUGIN>/skills/spec-deliberator/SKILL.md → 'Delegate Prompt Template'. Read ONLY your
+  private bundle file <path>. Then WAIT until you are @-mentioned." **The board is the
+  verbatim transcript:** call each delegate in order — `@sd-product round 1: give your
+  turn` → `@sd-engineering round 1: respond to #<seq>` → `@sd-ops-security round 1:
+  respond to #<seq>, #<seq>` — referring to earlier turns by post number, never
+  paraphrasing. Delegates post their fenced-JSON turn to the board.
+- **Portable route (no `swarm`, or running as a subagent):** spawn delegate 1 via
+  `invoke_subagent` at `Model: <seat.tier>` with its prompt (spec + private bundle, empty
+  transcript). Parse its JSON turn. Spawn delegate 2 (its own seat tier) with its own
+  prompt **plus the transcript so far** (verbatim). Then delegate 3. Use
+  `TypeName: research` (or `research-google` / `self` instructed to stay read-only if a
+  bundle is "go read this part of the codebase").
 - Track `current_proposal` as a **versioned edit list** (v1, v2, …): whenever a
   delegate's turn contains amendments, apply them to produce the next version and
   record which version each delegate has accepted.
-- Use `TypeName: research` (or `research-google` / `self` instructed to stay read-only
-  if a bundle is "go read this part of the codebase").
 
 ### 4. Run subsequent rounds
-For rounds 2+, if `send_message` is available in your runtime to continue a subagent by
-its `conversationId`, **continue the same agents with `send_message`** — each message
+On the exact route the same workers persist: just @-mention each delegate with the round
+number and the post numbers to respond to. On the portable route, if `send_message` is
+available in your runtime to continue a subagent by its `conversationId`, **continue the
+same agents with `send_message`** (same conversation, so the same model) — each message
 contains only the new transcript entries since that delegate's last turn, verbatim, plus
 the current proposal version. When `invoke_subagent` is fire-and-return without a
-persistent channel, **re-invoke the delegate fresh for each round after the first and
-supply the FULL verbatim transcript** plus its private bundle so it can reconstruct its
+persistent channel, **re-invoke the delegate fresh for each round after the first, at the
+same seat tier, and supply the FULL verbatim transcript** plus its private bundle so it can
+reconstruct its
 position without loss.
 
 ### 5. Terminate
@@ -236,6 +257,14 @@ A reader should understand what changed and *why* without opening any transcript
 # Spec Deliberation — {spec title}
 
 > `spec-deliberator` · {N} delegates with disjoint context bundles · verbatim relay · {R} rounds to convergence
+
+## Panel
+| Delegate (territory) | Model | Route |
+|---|---|---|
+| product | opus-5.5-high | swarm |
+| engineering | gemini-3.1-pro-high | swarm |
+| ops-security | opus-5.5-high | swarm |
+| chair | opus-5.5-high | swarm |
 
 | Field | Value |
 |---|---|

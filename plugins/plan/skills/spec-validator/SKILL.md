@@ -10,6 +10,15 @@ tools:
   - list_dir
   - find_by_name
   - grep_search
+x-plan-model: opus-5.5-high         # EXACT model for whoever runs this role (effort = suffix); honored by swarm dispatch
+x-plan-tier: pro                    # fallback tier when exact pinning is unavailable
+x-plan-panel:
+  mode: lens-per-model             # lens-per-model (N = seats) | matrix (every seat prompt x every seat model)
+  gate: majority                   # majority of N | any-one | unanimous
+x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
+  - { lens: internal-consistency, model: opus-5.5-high,       tier: pro }
+  - { lens: missing-requirement,  model: gemini-3.1-pro-high, tier: inherit }
+  - { lens: malicious-compliance, model: opus-5.5-high,      tier: pro }
 ---
 
 # Adversarial Spec Validation
@@ -68,14 +77,36 @@ Aggressive framing raises *recall* (catches more real holes) but lowers *precisi
 Fill the template in **Skeptic Prompt Template** below. Keep the framing verbatim — the
 "default to reject" and "your final message MUST be JSON" clauses are load-bearing.
 
-### 3. Dispatch 3 skeptics in parallel
-Spawn the **3 skeptics in parallel via `invoke_subagent`** so they run concurrently and
-independently. Use `TypeName: research` (or `research-google` / `self` instructed to stay
-read-only if the spec lives in files they must read). Do **not** let them share a
-scratchpad — independence is what makes the vote mean something.
+### 3. Dispatch N skeptics in parallel — one model per seat
+Seats are declared in this file's `x-plan-seats` (N = number of seats; gate per
+`x-plan-panel.gate`, default majority of N). Every seat runs the **identical** Skeptic
+Prompt Template; only the model differs, so the votes come from uncorrelated models.
+`lens` is the seat's label. Do **not** let seats share a scratchpad — independence is what
+makes the vote mean something.
+
+- **Exact route (top-level conversation with the `swarm` tool):** in ONE turn add one
+  worker per seat:
+  `swarm{action:"add", name:"spec-<lens>", model:"<seat.model>", brief:"Read
+  <PLUGIN>/skills/spec-validator/SKILL.md → 'Skeptic Prompt Template'. SPEC: <path>.
+  INDEPENDENCE: do NOT call read_board and do NOT open other seats' files. Write ONLY your
+  fenced-JSON verdict to <milestone>/adversarial-reviews/seats/spec-r<k>-<lens>.json, then
+  post '@coordinator done <lens>' with no findings in the post."}`
+  End the turn; on each wake, check which seat files exist. When all N exist, add the
+  chair: `swarm{action:"add", name:"spec-chair", model:"<x-plan-model>", brief:"Read the N
+  seat files under <milestone>/adversarial-reviews/seats/ and this skill; dedup by id,
+  apply the gate, write spec-validation.md, apply confirmed fixes to spec.md. Post
+  '@coordinator done'."}` Kill the seat workers and the chair afterwards. Take each seat's
+  model for the Panel table from `swarm status`, never from a worker's own claim.
+- **Portable route (no `swarm`, or running as a subagent):** N parallel `invoke_subagent`
+  calls in one turn, `TypeName: research` (or `research-google` / `self` instructed to stay
+  read-only if the spec lives in files they must read), each with `Model: <seat.tier>` and
+  the same template. You act as the chair.
+- **Independence.** With `invoke_subagent`, skeptics cannot see each other. With the swarm
+  the platform does not prevent it, so: verdicts go to files, not the board; seats are told
+  not to call `read_board` or open other seats' files; all seats are added in the same turn.
 
 ### 4. Collect verdicts
-Each agent's final message is a fenced JSON block (see **Output Contract**). Parse all three.
+Each seat's final message (or seat file, on the swarm route) is a fenced JSON block (see **Output Contract**). Parse all N.
 If an agent returns prose instead of JSON, re-dispatch that one — do not hand-guess its findings.
 
 ### 5. Dedup by identity
@@ -110,7 +141,7 @@ Fill the **The Review Document** template below verbatim.
 
 ## Skeptic Prompt Template
 
-Dispatch this **three times, unchanged**, via `invoke_subagent`. Replace only `{SPEC}`
+Dispatch this **once per seat, unchanged** (N seats, each on its own model — see step 3). Replace only `{SPEC}`
 (and `{CONTEXT}` if any).
 
 ```
@@ -184,14 +215,22 @@ even when empty (write `_None._`).
 ```markdown
 # Spec Adversarial Review — {spec title}
 
-> `spec-validator` · 3 independent skeptics, no shared scratchpad · default-to-reject · {2-of-3} majority gate
+> `spec-validator` · {N} independent skeptics on {M} model families, no shared scratchpad · default-to-reject · {majority-of-N} gate
+
+## Panel
+| Seat (lens) | Model | Route | Verdict file |
+|---|---|---|---|
+| internal-consistency | opus-5.5-high | swarm | seats/spec-r1-internal-consistency.json |
+| missing-requirement | gemini-3.1-pro-high | swarm | seats/spec-r1-missing-requirement.json |
+| malicious-compliance | opus-5.5-high | swarm | seats/spec-r1-malicious-compliance.json |
+| chair | opus-5.5-high | swarm | — |
 
 | Field | Value |
 |---|---|
 | Milestone | `{moniker}` |
 | Artifact | `plans/active_milestones/{moniker}/spec.md` |
 | Date | {YYYY-MM-DD} |
-| Gate | {2-of-3 · any-one · unanimous} |
+| Gate | {majority (2-of-3 with 3 seats) · any-one · unanimous} |
 | Result | **{N} confirmed · {M} unconfirmed** — highest severity **{high}** |
 
 ## Verdict
@@ -202,7 +241,7 @@ even when empty (write `_None._`).
 
 > Fold each **Tightening** into the spec before any plan is drafted.
 
-### 🔴 `{id}` — {one-line name}  · {votes}/3
+### 🔴 `{id}` — {one-line name}  · {votes}/{N} · {agreeing models, e.g. opus}
 - **Clause:** "{verbatim quote, or `<MISSING>`}"
 - **Malicious reading:** {the damaging interpretation this permits}
 - **Harm:** {user-facing or downstream consequence}

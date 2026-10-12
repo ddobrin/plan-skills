@@ -11,6 +11,15 @@ tools:
   - list_dir
   - find_by_name
   - grep_search
+x-plan-model: opus-5.5-high         # EXACT model for whoever runs this role (effort = suffix); honored by swarm dispatch
+x-plan-tier: pro                    # fallback tier when exact pinning is unavailable
+x-plan-panel:
+  mode: lens-per-model             # lens-per-model (N = seats) | matrix (every seat prompt x every seat model)
+  gate: majority                   # majority of N | any-one | unanimous
+x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
+  - { lens: claim-vs-reality, model: opus-5.5-high,         tier: pro }
+  - { lens: failure-paths,    model: gemini-3.1-pro-high,   tier: inherit }
+  - { lens: blast-radius,     model: gemini-3.8-flash-high, tier: flash }
 ---
 
 # Adversarial Implementation Validation
@@ -76,11 +85,34 @@ HEAD_SHA=$(git rev-parse HEAD)
 Pick **Finding-Hunt Template** or **Claim-Refutation Template** below. Keep the
 default-to-reject and "final message MUST be JSON" clauses verbatim.
 
-### 3. Dispatch 3 skeptics in parallel
-Spawn the **3 skeptics in parallel via `invoke_subagent`**, using `TypeName: self`
-(instructed to stay strictly read-only so they can run `git diff`/`git rev-parse` and
-read files) or `TypeName: research` / `research-google` (passing the diff if shell access
-is unavailable to them). Independent runs, no shared scratchpad.
+### 3. Dispatch N skeptics in parallel — one model per seat
+Seats are declared in this file's `x-plan-seats` (N = number of seats; gate per
+`x-plan-panel.gate`, default majority of N). Every seat runs the **identical** template;
+only the model differs, so the votes come from uncorrelated models. `lens` is the seat's
+label. Independent runs, no shared scratchpad.
+
+- **Exact route (top-level conversation with the `swarm` tool):** in ONE turn add one
+  worker per seat (workers have `run_command`, so they can run `git diff`):
+  `swarm{action:"add", name:"impl-<lens>", model:"<seat.model>", brief:"Read
+  <PLUGIN>/skills/implementation-validator/SKILL.md → the chosen Skeptic Prompt Template.
+  DIFF: git diff <BASE>..<HEAD> in <root>. Stay strictly read-only. INDEPENDENCE: do NOT
+  call read_board and do NOT open other seats' files. Write ONLY your fenced-JSON verdict
+  to <milestone>/adversarial-reviews/seats/impl-r<k>-<lens>.json, then post
+  '@coordinator done <lens>' with no findings in the post."}`
+  End the turn; on each wake, check which seat files exist. When all N exist, add the
+  chair: `swarm{action:"add", name:"impl-chair", model:"<x-plan-model>", brief:"Read the N
+  seat files under <milestone>/adversarial-reviews/seats/ and this skill; dedup by file+id,
+  apply the gate, calibrate severity, write implementation-validation.md. Post
+  '@coordinator done'."}` Kill the seat workers and the chair afterwards. Take each seat's
+  model for the Panel table from `swarm status`, never from a worker's own claim.
+- **Portable route (no `swarm`, or running as a subagent):** N parallel `invoke_subagent`
+  calls in one turn, `TypeName: self` (instructed to stay strictly read-only so they can
+  run `git diff`/`git rev-parse` and read files) or `TypeName: research` / `research-google`
+  (passing the diff if shell access is unavailable to them), each with `Model: <seat.tier>`
+  and the same template. You act as the chair.
+- **Independence.** With `invoke_subagent`, skeptics cannot see each other. With the swarm
+  the platform does not prevent it, so: verdicts go to files, not the board; seats are told
+  not to call `read_board` or open other seats' files; all seats are added in the same turn.
 
 > **Perspective-diverse variant:** instead of three identical skeptics, give each a distinct lens — e.g. one `correctness`, one `concurrency`, one `failure-paths`. Diversity catches failure modes that three identical refuters would all miss together. Then the "majority" becomes "≥2 lenses independently land on the same defect."
 
@@ -119,7 +151,7 @@ Review Document** template below verbatim.
 
 ## Finding-Hunt Template (default)
 
-Dispatch **three times, unchanged**. Replace `{DESCRIPTION}`, `{BASE_SHA}`, `{HEAD_SHA}`.
+Dispatch **once per seat, unchanged** (N seats, each on its own model — see step 3). Replace `{DESCRIPTION}`, `{BASE_SHA}`, `{HEAD_SHA}`.
 
 ```
 You are an adversarial implementation verifier. Your job is to BREAK this change, not to
@@ -178,7 +210,7 @@ Your final message MUST be exactly one fenced JSON block and nothing else, match
 
 ## Claim-Refutation Template (variant)
 
-When you have explicit acceptance claims, dispatch this **three times per claim**
+When you have explicit acceptance claims, dispatch this **once per seat per claim**
 (or once with the full claim list). Replace `{CLAIM}`, `{DESCRIPTION}`, `{BASE_SHA}`, `{HEAD_SHA}`.
 
 ```
@@ -239,7 +271,15 @@ the **Failed Claims** section in finding-hunt mode. Keep the other sections even
 ```markdown
 # Implementation Adversarial Review — {change title}
 
-> `implementation-validator` · 3 independent skeptics, no shared scratchpad · default-to-reject (`isReal=false` / `refuted=true`) · {2-of-3} majority gate · severity calibration
+> `implementation-validator` · {N} independent skeptics on {M} model families, no shared scratchpad · default-to-reject (`isReal=false` / `refuted=true`) · {majority-of-N} gate · severity calibration
+
+## Panel
+| Seat (lens) | Model | Route | Verdict file |
+|---|---|---|---|
+| claim-vs-reality | opus-5.5-high | swarm | seats/impl-r1-claim-vs-reality.json |
+| failure-paths | gemini-3.1-pro-high | swarm | seats/impl-r1-failure-paths.json |
+| blast-radius | gemini-3.8-flash-high | swarm | seats/impl-r1-blast-radius.json |
+| chair | opus-5.5-high | swarm | — |
 
 | Field | Value |
 |---|---|
@@ -247,7 +287,7 @@ the **Failed Claims** section in finding-hunt mode. Keep the other sections even
 | Diff | `{BASE_SHA}..{HEAD_SHA}` |
 | Date | {YYYY-MM-DD} |
 | Mode | {finding-hunt · claim-refutation} |
-| Gate | {2-of-3 · any-one · unanimous} |
+| Gate | {majority (2-of-3 with 3 seats) · any-one · unanimous} |
 | Result | **{N} confirmed defects · {F} failed claims · {M} unconfirmed** — highest corrected severity **{high}** |
 
 ## Verdict
@@ -258,7 +298,7 @@ the **Failed Claims** section in finding-hunt mode. Keep the other sections even
 
 > Fix at the **corrected** severity, highest first.
 
-### 🔴 `{id}` — {one-line title}  · severity {high} · {votes}/3
+### 🔴 `{id}` — {one-line title}  · severity {high} · {votes}/{N} · {agreeing models, e.g. opus + gemini-pro}
 - **Location:** `{file}:{location}`
 - **Attack:** {the input / sequence / edge case that triggers it}
 - **Evidence:** `{file:line}` — {the specific code that proves it}

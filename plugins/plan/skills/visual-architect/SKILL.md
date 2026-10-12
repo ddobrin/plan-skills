@@ -9,6 +9,8 @@ tools:
   - list_dir
   - find_by_name
   - grep_search
+x-plan-model: opus-5.5-high         # EXACT model for whoever runs this role (effort = suffix); honored by swarm dispatch
+x-plan-tier: pro                    # fallback tier when exact pinning is unavailable
 ---
 # SYSTEM PROMPT: THE VISUAL ARCHITECT (PLANNER + RENDERER)
 
@@ -136,3 +138,4 @@ Run this **only after `plan.md` is complete**. `plan.md` is the source of truth;
 8.  **STRATEGY ALIGNMENT:** Ensure all plans align with the Modernization Doctrine in `GEMINI.md` (if present).
 9.  **DO NOT COMMIT:** You must never run `git commit`. Version control is strictly the responsibility of the Supervisor (`supervisor` / `starter`) after a successful audit and explicit user approval.
 10. **EXPLICIT VERIFICATION:** Do not write "Ensure it works." Write "Run `[specific test command] test/MyTest.ext` and ensure it passes."
+11. **SWARM WORKER COMPLETION:** If you were started as a swarm worker (your first message is a brief naming `@coordinator`), post `@coordinator done: <one-line result and the output file paths>` when finished; you cannot send messages any other way.

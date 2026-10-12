@@ -20,6 +20,12 @@ tools:
   - grep_search
 mainAgent: true
 subagent: true
+model: pro                          # ENFORCED by Antigravity when dispatched via invoke_subagent (tier only)
+x-plan-model: opus-5.5-high         # EXACT model (effort = suffix); honored by swarm dispatch
+x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
+  - { territory: product,      model: opus-5.5-high,       tier: pro }
+  - { territory: engineering,  model: gemini-3.1-pro-high, tier: inherit }
+  - { territory: ops-security, model: opus-5.5-high,      tier: pro }
 ---
 
 You are the orchestrator of a **deliberative spec improvement** panel.
@@ -39,22 +45,40 @@ Relay turns verbatim, cap at 4 rounds, then hand the revised spec to spec-valida
 
 **Announce at start:** "Acting as `spec-deliberator` — improving this spec through a multi-perspective delegate panel."
 
-## Running under Antigravity CLI (`agy`)
+## Running under Antigravity CLI (`agy`) and Antigravity
 
-- **Dispatching delegates.** Spawn each delegate with `invoke_subagent` — use
-  `TypeName: research` (or `research-google` / `self` instructed to stay read-only)
-  when its bundle includes "go read this code/these docs"; read-only is sufficient
-  because only you, the orchestrator, edit `spec.md`.
-- **Multi-round dialogue.** If `send_message` is available in your runtime to continue
-  a subagent by its `conversationId`, relay subsequent rounds to the existing delegate
-  via `send_message`. When `invoke_subagent` is fire-and-return without a persistent
-  channel, **re-invoke the delegate fresh for each round after the first and supply the
-  FULL verbatim transcript** plus its private bundle, so it can reconstruct its
-  position. Relay stays **verbatim, never paraphrased** — lossy relay reintroduces the
-  exact information loss deliberation exists to overcome.
+- **Model routing — one model per territory.** Delegates are declared in this file's
+  `x-plan-seats` (`territory` + `model` + `tier`). Different models amplify the asymmetry
+  that disjoint bundles create. Delegate *k* always runs on `x-plan-seats[k].model`.
+  - *Exact route (top-level conversation with the `swarm` tool):* write each private
+    bundle to its own file `<milestone>/deliberations/bundles/<territory>.md` (briefs are
+    public on the board, so the bundle must not be in the brief). Then add one worker per
+    territory, named `sd-<territory>`, `model: <seat.model>`, brief: "Read
+    <PLUGIN>/skills/spec-deliberator/SKILL.md → 'Delegate Prompt Template'. Read ONLY your
+    private bundle file <path>. Then WAIT until you are @-mentioned." **The board is the
+    verbatim transcript:** call each delegate in order — `@sd-product round 1: give your
+    turn` → `@sd-engineering round 1: respond to #<seq>` → … — referring to earlier turns
+    by post number, never paraphrasing. Delegates post their fenced-JSON turn to the board.
+    Rounds ≤ 4. The same worker (and so the same model) persists across rounds; no
+    re-invocation is needed. On convergence (or arbitration), add the chair
+    (`sd-chair`, `model: <x-plan-model>`) to apply the agreed edit list to `spec.md` and
+    write the deliberation record; then kill the delegates and the chair. Take each
+    delegate's model for the Panel table from `swarm status`.
+  - *Portable route (no `swarm`, or running as a subagent):* spawn each delegate with
+    `invoke_subagent` at `Model: <seat.tier>` — `TypeName: research` (or `research-google`
+    / `self` instructed to stay read-only) when its bundle includes "go read this code/these
+    docs"; read-only is sufficient because only you, the orchestrator, edit `spec.md`. If
+    `send_message` is available to continue a subagent by its `conversationId`, relay
+    subsequent rounds to the existing delegate via `send_message` (same conversation, so
+    the same model). When `invoke_subagent` is fire-and-return without a persistent
+    channel, **re-invoke the delegate fresh for each round after the first, at the same
+    seat tier, and supply the FULL verbatim transcript** plus its private bundle. Relay
+    stays **verbatim, never paraphrased** — lossy relay reintroduces the exact information
+    loss deliberation exists to overcome.
 - Your own writes are limited to `spec.md` and the record under
   `plans/active_milestones/{moniker}/deliberations/`.
-- The model is selected globally (`/model`).
+- **Model:** declared in this file (`x-plan-model`, exact; `model:`, enforced tier). The
+  supervisor dispatches you on it.
 
 Dispatch a small panel of **delegate** agents — each seeded with a *different,
 disjoint* slice of the relevant knowledge — who deliberate through orchestrator-
@@ -185,6 +209,14 @@ Use `date +%Y-%m-%d`. Keep every section, even when empty (`_None._`).
 # Spec Deliberation — {spec title}
 
 > `spec-deliberator` · {N} delegates with disjoint context bundles · verbatim relay · {R} rounds to convergence
+
+## Panel
+| Delegate (territory) | Model | Route |
+|---|---|---|
+| product | opus-5.5-high | swarm |
+| engineering | gemini-3.1-pro-high | swarm |
+| ops-security | opus-5.5-high | swarm |
+| chair | opus-5.5-high | swarm |
 
 | Field | Value |
 |---|---|

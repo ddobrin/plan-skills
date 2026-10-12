@@ -223,6 +223,78 @@ A typical end-to-end run:
 
 ---
 
+## Models per role
+
+Every role declares the model it runs on in its own frontmatter — in **both** `agents/<role>/agent.md` and `skills/<role>/SKILL.md` (the supervisor's skill is `starter`):
+
+| Key | Meaning | Who reads it |
+|---|---|---|
+| `model:` | Enforced tier (`inherit` / `flash` / `pro`). The only key the harness itself honours. | Antigravity, when the role is loaded as a custom agent or via `invoke_subagent Model:` |
+| `x-plan-model` | Exact model id (e.g. `opus-5.5-high`). | The supervisor, when it dispatches via `swarm add model=` |
+| `x-plan-tier` | Same tier as `model:`, repeated so the skill file is self-describing. | The supervisor, on the portable route |
+| `x-plan-fallback-model` | Exact id to escalate to on repeated failure (engineer only). | The supervisor |
+| `x-plan-panel` / `x-plan-seats` | Panel roles only: one `{lens\|territory, model, tier}` entry per seat; the gate is a majority of the seat count. | Validators and deliberators |
+
+**Current assignments** (unknown `x-plan-*` keys are ignored by the harness, so they are safe everywhere):
+
+| Role | `x-plan-model` | `model:` |
+|---|---|---|
+| `supervisor` / `starter` | `gemini-3.8-flash-high` | `flash` |
+| `product-owner`, `visual-product-owner` | `opus-5.5-high` | `pro` |
+| `architect`, `visual-architect` | `opus-5.5-high` | `pro` |
+| `engineer` | `gemini-3.8-flash-high` (fallback `opus-5.5-medium`) | `flash` |
+| `auditor` | `opus-5.5-high` | `pro` |
+| `simplifier` | `gemini-3.8-flash-medium` | `flash` |
+| `visual-implementation-recap` | `gemini-3.8-flash-high` | `flash` |
+| `spec-validator` chair | `opus-5.5-high` — seats: `opus-5.5-high` · `gemini-3.1-pro-high` · `opus-5.5-high` | `pro` |
+| `plan-validator` chair | `opus-5.5-high` — seats: `opus-5.5-high` · `gemini-3.8-flash-high` · `gemini-3.1-pro-high` | `pro` |
+| `implementation-validator` chair | `opus-5.5-high` — seats: `opus-5.5-high` · `gemini-3.1-pro-high` · `gemini-3.8-flash-high` | `pro` |
+| `spec-deliberator` chair | `opus-5.5-high` — delegates: `opus-5.5-high` · `gemini-3.1-pro-high` · `opus-5.5-high` | `pro` |
+| `plan-deliberator` chair | `opus-5.5-high` — delegates: `opus-5.5-high` · `gemini-3.8-flash-high` · `gemini-3.1-pro-high` | `pro` |
+
+### Two routes
+
+The supervisor checks whether it has the `swarm` tool and picks the route automatically — the role files are identical on both:
+
+| | **Exact (swarm)** | **Portable (tiers)** |
+|---|---|---|
+| **When** | The `swarm` tool is present: a **root** Antigravity conversation running the default agent. | Everywhere else, including **agy** and any subagent conversation. |
+| **How a role starts** | `swarm add name:<role> model:<x-plan-model>` — a persistent worker pinned to the exact id, briefed to read the role's `SKILL.md`. | `invoke_subagent` with `TypeName: <role>` and **no** `Model`, so the custom agent's own `model:` tier applies. If the harness cannot target custom agents by name: `TypeName: self` with `Model: <x-plan-tier>`, seeded with the role charter (degraded). |
+| **Panels** | One worker per `x-plan-seats` entry, each pinned to its seat model; a `<stage>-chair` worker merges the verdicts. | One `invoke_subagent` per seat at `Model: <seat.tier>`; the calling role acts as chair. |
+| **What is guaranteed** | The exact model id and effort level. | Only the tier; `x-plan-model` is advisory. |
+| **How to see what ran** | `swarm{action:"status"}` lists each worker's real model. **Trust that, not the worker's self-report** — workers mis-identify their own model. | The agent's `model:` tier, or the `Model:` argument passed. |
+
+The portable route is the graceful degradation: same files, same roles, less precision.
+
+### Operating it
+
+**Run a milestone**
+1. Open a **normal** conversation — not the `supervisor` custom agent. The `swarm` tool is mounted only on the default agent, so a custom agent selected as the main agent can never coordinate and would silently fall back to the portable route.
+2. `/model gemini-3.8-flash-high` — the supervisor's own declared model.
+3. Say "be the supervisor". The supervisor compares its model with `starter`'s `x-plan-model` (if they differ it says so and asks you to switch with `/model`), prints the routing table — every role and seat with the model it will get, and which route is active — and only then dispatches.
+4. At any point, `swarm{action:"status"}` shows the live roster and models.
+
+**Change a model** — edit `x-plan-model` in the role's `agent.md` **and** `SKILL.md`. If the tier class changes (e.g. flash → pro), also change `model:` in `agent.md` and `x-plan-tier` in `SKILL.md`. Start a new conversation; nothing else needs regenerating. Because the supervisor runs on flash, no role inherits a model by accident — every change is local to the role's two files.
+
+**Change a panel** — edit `x-plan-seats` in the validator's or deliberator's two files. Adding or removing a seat changes N; the gate stays a majority of N (3 seats → 2 must agree, 5 seats → 3). Keep the seats on **different model families** — that diversity is what makes a confirmed finding meaningful.
+
+**Escalate the engineer** — the supervisor does this itself: after repeated failures on `x-plan-model` it re-dispatches the task on `x-plan-fallback-model`.
+
+**Consistency checks** — plain shell, run from the repo root; each catches one way the scheme can rot, and each should print nothing:
+
+```bash
+# 1. A role with no exact id (the supervisor would have nothing to pin)
+grep -L '^x-plan-model:' plugins/plan/agents/*/agent.md
+# 2. An invalid `model:` value — this one is dangerous: the harness drops the agent silently (inline comments are ignored)
+grep -Hn '^model:' plugins/plan/agents/*/agent.md | sed 's/[[:space:]]*#.*$//' | grep -Ev 'model: (inherit|flash_lite|flash|pro)$'
+# 3. agent.md and SKILL.md disagree on the exact id (the supervisor's skill is `starter`)
+for a in plugins/plan/agents/*/agent.md; do r=$(basename $(dirname $a)); s=plugins/plan/skills/$r/SKILL.md; [ "$r" = supervisor ] && s=plugins/plan/skills/starter/SKILL.md; [ -f "$s" ] || { echo "missing skill: $r"; continue; }; [ "$(sed -n 's/^x-plan-model:[[:space:]]*\([^[:space:]#]*\).*/\1/p' $a)" = "$(sed -n 's/^x-plan-model:[[:space:]]*\([^[:space:]#]*\).*/\1/p' $s)" ] || echo "drift: $r"; done
+```
+
+After editing frontmatter, open `/agents` and confirm all **13** agents are still listed.
+
+---
+
 ## Invoking a Skill
 
-In **Antigravity CLI (`agy`) / Jetski**, install the plugin (`agy plugin install plugins/plan`) and let any skill activate from the triggers in its `description` (or read its `SKILL.md` directly via `view_file`). The natural entry point for an end-to-end run is **`starter`** ("be the supervisor", "run the swarm"); the role, deliberator, and validator skills can also be invoked standalone for a single phase (e.g. "validate this spec" → `spec-validator`, "simplify this file" → `simplifier`). You can also invoke the corresponding custom agents via `/agents` or `invoke_subagent` (see [`agents/README.md`](./agents/README.md)).
+In **Antigravity CLI (`agy`) / Antigravity**, install the plugin (`agy plugin install plugins/plan`) and let any skill activate from the triggers in its `description` (or read its `SKILL.md` directly via `view_file`). The natural entry point for an end-to-end run is **`starter`** ("be the supervisor", "run the swarm"); the role, deliberator, and validator skills can also be invoked standalone for a single phase (e.g. "validate this spec" → `spec-validator`, "simplify this file" → `simplifier`). You can also invoke the corresponding custom agents via `/agents` or `invoke_subagent` (see [`agents/README.md`](./agents/README.md)).

@@ -17,6 +17,15 @@ tools:
   - grep_search
 mainAgent: true
 subagent: true
+model: pro                          # ENFORCED by Antigravity when dispatched via invoke_subagent (tier only)
+x-plan-model: opus-5.5-high         # EXACT model (effort = suffix); honored by swarm dispatch
+x-plan-panel:
+  mode: lens-per-model             # lens-per-model (N = seats) | matrix (every seat prompt x every seat model)
+  gate: majority                   # majority of N | any-one | unanimous
+x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
+  - { lens: sequencing,   model: opus-5.5-high,         tier: pro }
+  - { lens: ground-truth, model: gemini-3.8-flash-high, tier: flash }
+  - { lens: blast-radius, model: gemini-3.1-pro-high,   tier: inherit }
 ---
 
 You are the orchestrator of an **adversarial plan validation** panel.
@@ -28,22 +37,45 @@ Orient before attacking:
 1. Identify the `plan.md` to validate (from `plans/active_milestones/*/plan.md` or a
    path the user gives) and the repository root the skeptics must read. Confirm both.
 
-Then dispatch the 3 independent skeptics in parallel — they must READ the codebase and
-cite file:line — apply the 2-of-3 gate, name the first domino, and write the review to
+Then dispatch one independent skeptic per `x-plan-seats` entry in parallel, each on its
+seat model — they must READ the codebase and
+cite file:line — apply the majority-of-N gate, name the first domino, and write the review to
 `plans/active_milestones/{moniker}/adversarial-reviews/plan-validation.md`.
 
 **Announce at start:** "Acting as `plan-validator` — attacking this plan with an independent skeptic panel."
 
-## Running under Antigravity CLI (`agy`)
+## Running under Antigravity CLI (`agy`) and Antigravity
 
-- **Dispatching skeptics.** Spawn the 3 skeptics with `invoke_subagent` using
-  `TypeName: research` (or `research-google` / `self` instructed to stay read-only —
-  skeptics read and grep the codebase but never modify it). Fire all three in parallel,
-  seeded with the identical prompt template below; the runs must be independent (no
-  shared scratchpad).
+- **Model routing — one model per seat.** Seats are declared in this file's `x-plan-seats`
+  (N = number of seats; gate per `x-plan-panel.gate`, default majority of N). Every seat
+  runs the **identical** Skeptic Prompt Template below; only the model differs, so the
+  votes come from uncorrelated models. `lens` is the seat's label.
+  - *Exact route (top-level conversation with the `swarm` tool):* in ONE turn add one
+    worker per seat:
+    `swarm{action:"add", name:"plan-<lens>", model:"<seat.model>", brief:"Read
+    <PLUGIN>/skills/plan-validator/SKILL.md → 'Skeptic Prompt Template'. PLAN: <path>.
+    REPO_ROOT: <root>. INDEPENDENCE: do NOT call read_board and do NOT open other seats'
+    files. Write ONLY your fenced-JSON verdict to
+    <milestone>/adversarial-reviews/seats/plan-r<k>-<lens>.json, then post
+    '@coordinator done <lens>' with no findings in the post."}`
+    End the turn; on each wake, check which seat files exist. When all N exist, add the
+    chair: `swarm{action:"add", name:"plan-chair", model:"<x-plan-model>", brief:"Read the
+    N seat files under <milestone>/adversarial-reviews/seats/ and
+    <PLUGIN>/skills/plan-validator/SKILL.md; dedup by id+step, apply the gate, calibrate
+    severity, write plan-validation.md, apply confirmed fixes to plan.md. Post
+    '@coordinator done'."}` Kill the seat workers and the chair afterwards. Take each
+    seat's model for the Panel table from `swarm status`, never from a worker's own claim.
+  - *Portable route (no `swarm`, or running as a subagent):* N parallel `invoke_subagent`
+    calls in one turn, `TypeName: research` (or `research-google` / `self` instructed to
+    stay read-only — skeptics read and grep the codebase but never modify it), each with
+    `Model: <seat.tier>` and the same template. You act as the chair.
+- **Independence.** With `invoke_subagent`, skeptics cannot see each other. With the swarm
+  the platform does not prevent it, so: verdicts go to files, not the board; seats are told
+  not to call `read_board` or open other seats' files; all seats are added in the same turn.
 - Your own writes are limited to the review document under
   `plans/active_milestones/{moniker}/adversarial-reviews/`.
-- The model is selected globally (`/model`).
+- **Model:** declared in this file (`x-plan-model`, exact; `model:`, enforced tier). The
+  supervisor dispatches you on it.
 
 Dispatch independent **skeptic** agents that assume the plan **will fail** and race
 to predict exactly where and why — *before* a single task runs. Unlike spec
@@ -76,8 +108,10 @@ compatibility; hidden coupling that fans out to unmentioned callers.
    root** the skeptics must read.
 2. **Author the skeptic prompt** — keep "default to reject", "verify in source", and
    "final message MUST be JSON" clauses verbatim.
-3. **Dispatch 3 skeptics in parallel** — three `invoke_subagent` calls
-   (`TypeName: research`) in one turn; each can read/grep the codebase. Independent runs.
+3. **Dispatch N skeptics in parallel, one per `x-plan-seats` entry** — follow "Model
+   routing" above (swarm workers on the exact route, `invoke_subagent` with
+   `Model: <seat.tier>` on the portable route), all in one turn; each can read/grep the
+   codebase. Independent runs.
 4. **Collect verdicts:** parse each fenced JSON; re-dispatch any that returns prose.
 5. **Dedup by identity:** group by stable `id` + the `step` targeted.
 6. **Apply the majority gate:** confirmed = ≥2 of 3; 1-vote → "Unconfirmed (FYI)";
@@ -155,14 +189,22 @@ section, even when empty (`_None._`).
 ```markdown
 # Plan Adversarial Review — {plan title}
 
-> `plan-validator` · 3 independent skeptics, no shared scratchpad · default-to-reject · skeptics READ the codebase · {2-of-3} majority gate
+> `plan-validator` · {N} independent skeptics on {M} model families, no shared scratchpad · default-to-reject · skeptics READ the codebase · {majority-of-N} gate
+
+## Panel
+| Seat (lens) | Model | Route | Verdict file |
+|---|---|---|---|
+| sequencing | opus-5.5-high | swarm | seats/plan-r1-sequencing.json |
+| ground-truth | gemini-3.8-flash-high | swarm | seats/plan-r1-ground-truth.json |
+| blast-radius | gemini-3.1-pro-high | swarm | seats/plan-r1-blast-radius.json |
+| chair | opus-5.5-high | swarm | — |
 
 | Field | Value |
 |---|---|
 | Milestone | `{moniker}` |
 | Artifact | `plans/active_milestones/{moniker}/plan.md` |
 | Date | {YYYY-MM-DD} |
-| Gate | {2-of-3 · any-one · unanimous} |
+| Gate | {majority (2-of-3 with 3 seats) · any-one · unanimous} |
 | Result | **{N} confirmed · {M} unconfirmed** — highest severity **{high}** |
 | 🁢 First domino | `{id}` — {earliest failure that invalidates later steps, or `none`} |
 
@@ -170,7 +212,7 @@ section, even when empty (`_None._`).
 {1–3 sentences: will the plan survive execution, and which step topples first?}
 
 ## Confirmed Findings (≥ 2 votes)
-### 🔴 `{id}` — {one-line name} · {category} · {votes}/3 · confidence {high}
+### 🔴 `{id}` — {one-line name} · {category} · {votes}/{N} · {agreeing models, e.g. opus + gemini-pro} · confidence {high}
 - **Step:** {step number / title}
 - **Failure:** {concrete scenario}
 - **Evidence:** `{file:line}` _(or verbatim plan text)_

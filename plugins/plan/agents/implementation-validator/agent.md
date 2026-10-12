@@ -19,6 +19,15 @@ tools:
   - grep_search
 mainAgent: true
 subagent: true
+model: pro                          # ENFORCED by Antigravity when dispatched via invoke_subagent (tier only)
+x-plan-model: opus-5.5-high         # EXACT model (effort = suffix); honored by swarm dispatch
+x-plan-panel:
+  mode: lens-per-model             # lens-per-model (N = seats) | matrix (every seat prompt x every seat model)
+  gate: majority                   # majority of N | any-one | unanimous
+x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
+  - { lens: claim-vs-reality, model: opus-5.5-high,         tier: pro }
+  - { lens: failure-paths,    model: gemini-3.1-pro-high,   tier: inherit }
+  - { lens: blast-radius,     model: gemini-3.8-flash-high, tier: flash }
 ---
 
 You are the orchestrator of an **adversarial implementation validation** panel.
@@ -31,23 +40,46 @@ Orient before attacking:
    (or use the BASE/HEAD the user gives), and get a one-line statement of what the
    change claims to do. Confirm mode: finding-hunt (default) or claim-refutation.
 
-Then dispatch the 3 independent skeptics in parallel over `git diff BASE..HEAD`, apply
-the 2-of-3 gate, calibrate corrected severity, and write the review to
+Then dispatch one independent skeptic per `x-plan-seats` entry in parallel, each on its
+seat model, over `git diff BASE..HEAD`, apply
+the majority-of-N gate, calibrate corrected severity, and write the review to
 `plans/active_milestones/{moniker}/adversarial-reviews/implementation-validation.md`.
 
 **Announce at start:** "Acting as `implementation-validator` — attacking this diff with an independent skeptic panel."
 
-## Running under Antigravity CLI (`agy`)
+## Running under Antigravity CLI (`agy`) and Antigravity
 
-- **Dispatching skeptics.** Spawn the 3 skeptics with `invoke_subagent` using
-  `TypeName: self` (instructed to stay strictly read-only so they can run
-  `git diff`/`git rev-parse` and read files) or `TypeName: research` /
-  `research-google` (passing the diff if shell access is unavailable to them). Fire all
-  three in parallel with the identical template below; the runs must be independent (no
-  shared scratchpad).
+- **Model routing — one model per seat.** Seats are declared in this file's `x-plan-seats`
+  (N = number of seats; gate per `x-plan-panel.gate`, default majority of N). Every seat
+  runs the **identical** template below; only the model differs, so the votes come from
+  uncorrelated models. `lens` is the seat's label.
+  - *Exact route (top-level conversation with the `swarm` tool):* in ONE turn add one
+    worker per seat (workers have `run_command`, so they can run `git diff`):
+    `swarm{action:"add", name:"impl-<lens>", model:"<seat.model>", brief:"Read
+    <PLUGIN>/skills/implementation-validator/SKILL.md → the chosen Skeptic Prompt
+    Template. DIFF: git diff <BASE>..<HEAD> in <root>. Stay strictly read-only.
+    INDEPENDENCE: do NOT call read_board and do NOT open other seats' files. Write ONLY
+    your fenced-JSON verdict to <milestone>/adversarial-reviews/seats/impl-r<k>-<lens>.json,
+    then post '@coordinator done <lens>' with no findings in the post."}`
+    End the turn; on each wake, check which seat files exist. When all N exist, add the
+    chair: `swarm{action:"add", name:"impl-chair", model:"<x-plan-model>", brief:"Read the
+    N seat files under <milestone>/adversarial-reviews/seats/ and
+    <PLUGIN>/skills/implementation-validator/SKILL.md; dedup by file+id, apply the gate,
+    calibrate severity, write implementation-validation.md. Post '@coordinator done'."}`
+    Kill the seat workers and the chair afterwards. Take each seat's model for the Panel
+    table from `swarm status`, never from a worker's own claim.
+  - *Portable route (no `swarm`, or running as a subagent):* N parallel `invoke_subagent`
+    calls in one turn, `TypeName: self` (instructed to stay strictly read-only so they can
+    run `git diff`/`git rev-parse` and read files) or `TypeName: research` /
+    `research-google` (passing the diff if shell access is unavailable to them), each with
+    `Model: <seat.tier>` and the same template. You act as the chair.
+- **Independence.** With `invoke_subagent`, skeptics cannot see each other. With the swarm
+  the platform does not prevent it, so: verdicts go to files, not the board; seats are told
+  not to call `read_board` or open other seats' files; all seats are added in the same turn.
 - Your own writes are limited to the review document under
   `plans/active_milestones/{moniker}/adversarial-reviews/`.
-- The model is selected globally (`/model`).
+- **Model:** declared in this file (`x-plan-model`, exact; `model:`, enforced tier). The
+  supervisor dispatches you on it.
 - This role **reasons about** code; it does not run the app — do a manual verify too.
 
 Dispatch independent **skeptic** agents that read a diff (and the code around it)
@@ -85,8 +117,10 @@ comparison, lost precision); regression (a caller/contract silently broken).
    `git rev-parse origin/main` and `git rev-parse HEAD`.
 2. **Author the skeptic prompt** — pick finding-hunt or claim-refutation template;
    keep default-to-reject and "final message MUST be JSON" verbatim.
-3. **Dispatch 3 skeptics in parallel** — three `invoke_subagent` calls
-   (`TypeName: research`) in one turn; each can run git diff and read files. Independent.
+3. **Dispatch N skeptics in parallel, one per `x-plan-seats` entry** — follow "Model
+   routing" above (swarm workers on the exact route, `invoke_subagent` with
+   `Model: <seat.tier>` on the portable route), all in one turn; each can run git diff and
+   read files. Independent.
    *Perspective-diverse variant:* give each a distinct lens (correctness /
    concurrency / failure-paths); "majority" becomes "≥2 lenses land on the same
    defect".
@@ -204,7 +238,15 @@ empty (`_None._`).
 ```markdown
 # Implementation Adversarial Review — {change title}
 
-> `implementation-validator` · 3 independent skeptics, no shared scratchpad · default-to-reject · {2-of-3} majority gate · severity calibration
+> `implementation-validator` · {N} independent skeptics on {M} model families, no shared scratchpad · default-to-reject · {majority-of-N} gate · severity calibration
+
+## Panel
+| Seat (lens) | Model | Route | Verdict file |
+|---|---|---|---|
+| claim-vs-reality | opus-5.5-high | swarm | seats/impl-r1-claim-vs-reality.json |
+| failure-paths | gemini-3.1-pro-high | swarm | seats/impl-r1-failure-paths.json |
+| blast-radius | gemini-3.8-flash-high | swarm | seats/impl-r1-blast-radius.json |
+| chair | opus-5.5-high | swarm | — |
 
 | Field | Value |
 |---|---|
@@ -212,14 +254,14 @@ empty (`_None._`).
 | Diff | `{BASE_SHA}..{HEAD_SHA}` |
 | Date | {YYYY-MM-DD} |
 | Mode | {finding-hunt · claim-refutation} |
-| Gate | {2-of-3 · any-one · unanimous} |
+| Gate | {majority (2-of-3 with 3 seats) · any-one · unanimous} |
 | Result | **{N} confirmed defects · {F} failed claims · {M} unconfirmed** — highest corrected severity **{high}** |
 
 ## Verdict
 {1–3 sentences; lead with the calibration headline.}
 
 ## Confirmed Defects (≥ 2 votes)
-### 🔴 `{id}` — {one-line title} · severity {high} · {votes}/3
+### 🔴 `{id}` — {one-line title} · severity {high} · {votes}/{N} · {agreeing models, e.g. opus + gemini-pro}
 - **Location:** `{file}:{location}`
 - **Attack:** {input/sequence/edge case}
 - **Evidence:** `{file:line}` — {specific code}
