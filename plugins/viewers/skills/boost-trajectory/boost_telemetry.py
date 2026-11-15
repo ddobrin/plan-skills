@@ -242,18 +242,23 @@ def _extract_subagent_spawns(steps: Sequence[Dict[str, Any]]) -> Dict[str, Dict[
 
         if step_type == "GENERIC":
             content = str(step.get("content") or "")
-            if "Created the following subagent" in content:
+            if pending_calls and "Created the following subagent" in content:
                 for info in _extract_json_objects_with_key(content, "conversationId"):
+                    if not pending_calls:
+                        break
                     cid = info.get("conversationId")
                     if not cid:
                         continue
-                    call_meta = pending_calls.pop(0) if pending_calls else {}
-                    spawns[cid] = {
-                        **call_meta,
-                        "log_uri": info.get("logAbsoluteUri") or "",
-                        "spawn_completed_ts": step_ts,
-                    }
-            elif pending_calls and ("Failed" in content or "Error" in content or "Rejected" in content):
+                    call_meta = pending_calls.pop(0)
+                    if cid not in spawns:
+                        spawns[cid] = {
+                            **call_meta,
+                            "log_uri": info.get("logAbsoluteUri") or "",
+                            "spawn_completed_ts": step_ts,
+                        }
+            elif pending_calls and any(
+                tok in content.lower() for tok in ("encountered error", "failed", "error", "rejected")
+            ):
                 pending_calls.clear()
     return spawns
 
@@ -277,19 +282,22 @@ def _extract_sent_recipients(steps: Sequence[Dict[str, Any]]) -> Set[str]:
 
 
 def _extract_settings_model_changes(steps: Sequence[Dict[str, Any]]) -> List[Tuple[int, str]]:
-    """Extract (step_index, model_name) entries from <USER_SETTINGS_CHANGE> blocks."""
+    """Extract (step_index, model_name) entries from USER_INPUT <USER_SETTINGS_CHANGE> blocks."""
     changes: List[Tuple[int, str]] = []
     for idx, step in enumerate(steps):
+        if step.get("type") != "USER_INPUT":
+            continue
         content = str(step.get("content") or "")
         if "<USER_SETTINGS_CHANGE>" not in content:
             continue
-        m = re.search(
-            r"Model Selection`?\s+from\s+.+?\s+to\s+(.+?)(?=\.(?:\s|$|<)|[\n<]|$)",
-            content,
-            re.IGNORECASE,
-        )
-        if m:
-            changes.append((idx, m.group(1).strip()))
+        for block in re.findall(r"<USER_SETTINGS_CHANGE>(.*?)</USER_SETTINGS_CHANGE>", content, re.DOTALL):
+            m = re.search(
+                r"Model Selection`?\s+from\s+.+?\s+to\s+(.+?)(?=\.(?:\s|$|<)|[\n<]|$)",
+                block,
+                re.IGNORECASE,
+            )
+            if m:
+                changes.append((idx, m.group(1).strip()))
     return changes
 
 
@@ -307,20 +315,32 @@ def _parse_dispatch_header(steps: Sequence[Dict[str, Any]]) -> Tuple[Optional[da
     if first.get("type") == "USER_INPUT":
         return parse_iso_timestamp(first.get("created_at")), None, _extract_user_request_text(str(first.get("content") or ""))
 
-    for step in steps[:4]:
+    for step in steps[:6]:
         if step.get("type") == "USER_INPUT":
-            break
+            return (
+                parse_iso_timestamp(step.get("created_at")),
+                None,
+                _extract_user_request_text(str(step.get("content") or "")),
+            )
         if step.get("type") == "SYSTEM_MESSAGE" and step.get("source") == "SYSTEM_SDK":
             continue
+        if step.get("type") not in (None, "SYSTEM_MESSAGE"):
+            continue
         content = str(step.get("content") or "")
-        if "[Notice]" in content:
+        header = content.split("content=", 1)[0]
+        sender_match = re.search(r"\bsender=([^\s]+)", header)
+        sender_id = sender_match.group(1).strip() if sender_match else None
+        if sender_id and sender_id.lower() == "system":
+            continue
+        if "[Notice]" in header and not sender_id:
             continue
         if "sender=" in content or "[Message]" in content:
             ts_match = re.search(r"timestamp=([^\s]+)", content)
-            sender_match = re.search(r"sender=([^\s]+)", content)
-            sender_id = sender_match.group(1).strip() if sender_match else None
-            if sender_id and sender_id.lower() == "system":
-                continue
+            if not sender_id:
+                sender_match = re.search(r"\bsender=([^\s]+)", content)
+                sender_id = sender_match.group(1).strip() if sender_match else None
+                if sender_id and sender_id.lower() == "system":
+                    continue
             msg_match = re.search(r"content=(.*)", content, re.DOTALL)
             spawn_dt = (
                 parse_iso_timestamp(ts_match.group(1))
@@ -747,7 +767,7 @@ def _segment_boost_invocations(
             inv = invocations[-1]
             inv["end_pos"] = end_idx
             inv["steps"].extend(seg_steps)
-            inv["spawns"].update(spawns)
+            inv["spawns"].update({k: v for k, v in spawns.items() if k not in inv["spawns"]})
             for cid in spawns.keys():
                 if cid not in inv["child_ids"]:
                     inv["child_ids"].append(cid)
@@ -1019,10 +1039,17 @@ def _collect_invocation_tree(
 
         discovered_children: List[str] = list(children_by_parent.get(cid, []))
         for scid in spawns.keys():
+            db_parent = (by_id.get(scid) or {}).get("parent_id") or ""
+            if db_parent and db_parent != cid:
+                continue
             if scid not in discovered_children:
                 discovered_children.append(scid)
         for scid in discovered_children:
-            queue.append((scid, cid, depth + 1, spawns.get(scid) or {}))
+            db_parent = (by_id.get(scid) or {}).get("parent_id") or ""
+            meta = spawns.get(scid) or {}
+            if db_parent and db_parent != cid:
+                meta = {}
+            queue.append((scid, cid, depth + 1, meta))
 
     return nodes
 

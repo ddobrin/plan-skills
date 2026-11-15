@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
@@ -81,13 +82,26 @@ def _is_sdk_reminder(step: Dict[str, Any]) -> bool:
     return step.get("type") == "SYSTEM_MESSAGE" and step.get("source") == "SYSTEM_SDK"
 
 
+def _is_system_notice(step: Dict[str, Any]) -> bool:
+    if step.get("type") == "SYSTEM_MESSAGE" and step.get("source") == "SYSTEM":
+        content = str(step.get("content") or "")
+        header = content.split("content=", 1)[0]
+        sender_match = re.search(r"\bsender=([^\s]+)", header)
+        sender_id = sender_match.group(1).strip() if sender_match else ""
+        if sender_id.lower() == "system":
+            return True
+        if "[Notice]" in header and not sender_id:
+            return True
+    return False
+
+
 def _is_agent_wakeup(step: Dict[str, Any]) -> bool:
     if step.get("type") == "USER_INPUT":
         return True
     if step.get("type") == "SYSTEM_MESSAGE" and step.get("source") == "SYSTEM":
-        content = str(step.get("content") or "")
-        if "sender=system" in content and "[Notice]" in content:
+        if _is_system_notice(step):
             return False
+        content = str(step.get("content") or "")
         return "sender=" in content or "[Message]" in content
     return False
 
@@ -125,7 +139,7 @@ def segment_active_turns(
 
     for dt, step in timed_steps:
         step_type = step.get("type", "")
-        is_sdk = _is_sdk_reminder(step)
+        is_sdk = _is_sdk_reminder(step) or _is_system_notice(step)
         is_wakeup = _is_agent_wakeup(step)
 
         if cur_start is not None and is_sdk and idle_since_dt is not None:

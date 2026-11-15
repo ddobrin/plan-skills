@@ -443,18 +443,25 @@ class BoostTrajectoryTests(unittest.TestCase):
             self.assertEqual(data["summary"]["total_agents"], 1)
 
     def test_versioned_model_names_and_report_classification_regressions(self) -> None:
-        # 1. Versioned model names containing dots must NOT be truncated
+        # 1. Versioned model names containing dots must NOT be truncated, and only USER_INPUT <USER_SETTINGS_CHANGE> blocks count
         changes = _extract_settings_model_changes([
             {
                 "step_index": 0,
-                "content": "<USER_SETTINGS_CHANGE>Changed `Model Selection` from Gemini 3.1 Pro (High) to Gemini 3.8 Flash (High).\n</USER_SETTINGS_CHANGE>",
+                "type": "USER_INPUT",
+                "content": "<USER_REQUEST>Model Selection from Foo to Bar</USER_REQUEST><USER_SETTINGS_CHANGE>Changed `Model Selection` from Gemini 3.1 Pro (High) to Gemini 3.8 Flash (High).\n</USER_SETTINGS_CHANGE>",
+            },
+            {
+                "step_index": 3,
+                "type": "GENERIC",
+                "content": "<USER_SETTINGS_CHANGE>Changed `Model Selection` from X to Fake Tool Output Model.</USER_SETTINGS_CHANGE>",
             },
             {
                 "step_index": 5,
+                "type": "USER_INPUT",
                 "content": "<USER_SETTINGS_CHANGE>Changed `Model Selection` from Gemini 3.8 Flash (High) to Claude Opus 5.5 (High).</USER_SETTINGS_CHANGE>",
             },
         ])
-        self.assertEqual(changes, [(0, "Gemini 3.8 Flash (High)"), (1, "Claude Opus 5.5 (High)")])
+        self.assertEqual(changes, [(0, "Gemini 3.8 Flash (High)"), (2, "Claude Opus 5.5 (High)")])
 
         # 2. DeepInvestigator report mentioning Verification Record / Known Issues in prose
         inv_text = (
@@ -572,6 +579,100 @@ class BoostTrajectoryTests(unittest.TestCase):
             self.assertEqual([p["routine"] for p in all_data["pipelines"]], ["delegation", "solo"])
             self.assertEqual(all_data["pipelines"][0]["summary"]["total_agents"], 3)
             self.assertEqual(all_data["pipelines"][1]["summary"]["total_agents"], 1)
+
+    def test_shared_parsing_guards_backport(self) -> None:
+        # 1. GENERIC tool output containing "Created the following subagent" with empty pending_calls
+        #    must NOT create phantom subagents, and lowercase "encountered error" must clear pending_calls.
+        spawns = _extract_subagent_spawns([
+            {
+                "step_index": 1,
+                "type": "GENERIC",
+                "created_at": "2026-11-15T10:00:01Z",
+                "content": 'Read transcript:\nCreated the following subagent:\n{"conversationId": "phantom-123"}\n{"conversationId": "{c1_id}"}',
+            },
+            {
+                "step_index": 2,
+                "type": "PLANNER_RESPONSE",
+                "created_at": "2026-11-15T10:00:05Z",
+                "tool_calls": [{"name": "invoke_subagent", "args": {"TypeName": "DeepCoder", "Prompt": "stale"}}],
+            },
+            {
+                "step_index": 3,
+                "type": "GENERIC",
+                "created_at": "2026-11-15T10:00:06Z",
+                "content": "Encountered error in step execution: subagent rejected",
+            },
+            {
+                "step_index": 4,
+                "type": "PLANNER_RESPONSE",
+                "created_at": "2026-11-15T10:00:10Z",
+                "tool_calls": [{"name": "invoke_subagent", "args": {"TypeName": "DeepInvestigator", "Prompt": "real"}}],
+            },
+            {
+                "step_index": 5,
+                "type": "GENERIC",
+                "created_at": "2026-11-15T10:00:11Z",
+                "content": 'Created the following subagent:\n{"conversationId": "real-t2"}\nExtra quoted {"conversationId": "phantom-extra"}',
+            },
+        ])
+        self.assertEqual(list(spawns.keys()), ["real-t2"])
+        self.assertEqual(spawns["real-t2"]["requested_type"], "DeepInvestigator")
+        self.assertEqual(spawns["real-t2"]["prompt"], "real")
+
+        # 2. [Notice] in message body from real parent sender must NOT be skipped, while sender=system Notice IS skipped
+        spawn_dt, sender_id, prompt = _parse_dispatch_header([
+            {
+                "step_index": 0,
+                "type": "SYSTEM_MESSAGE",
+                "source": "SYSTEM",
+                "created_at": "2026-11-15T10:00:00Z",
+                "content": "[Notice] timestamp=2026-11-15T10:00:00Z sender=system content=system notice",
+            },
+            {
+                "step_index": 1,
+                "type": "SYSTEM_MESSAGE",
+                "source": "SYSTEM",
+                "created_at": "2026-11-15T10:00:01Z",
+                "content": "[Message] timestamp=2026-11-15T10:00:01Z sender=root-uuid content=Handle [Notice] sender=system properly",
+            },
+        ])
+        self.assertEqual(sender_id, "root-uuid")
+        self.assertEqual(prompt, "Handle [Notice] sender=system properly")
+        self.assertIsNotNone(spawn_dt)
+
+        # 3. Descendant cannot overwrite parent's true spawn_meta even if DB/transcript has stale child link
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = os.path.join(tmp, "proj")
+            agy = os.path.join(tmp, "agy")
+            os.makedirs(ws)
+            uri = json.dumps([f"file://{ws}"])
+            root_id = "r0000000-0000-0000-0000-000000000001"
+            t2_id = "t2000000-0000-0000-0000-000000000002"
+            t3_id = "t3000000-0000-0000-0000-000000000003"
+            _create_db(agy, [
+                (root_id, "Root", "", "", 0, 4, "2026-11-15T10:05:00Z", uri, "CASCADE_RUN_STATUS_IDLE", 0),
+                (t2_id, "", "DeepCoder", root_id, 1, 4, "2026-11-15T10:04:00Z", uri, "CASCADE_RUN_STATUS_IDLE", 0),
+                (t3_id, "", "DeepCoderWorkerL0", t2_id, 2, 2, "2026-11-15T10:03:00Z", uri, "CASCADE_RUN_STATUS_IDLE", 0),
+            ])
+            _write_transcript(agy, root_id, [
+                {"step_index": 0, "type": "USER_INPUT", "created_at": "2026-11-15T10:00:00Z", "content": "<USER_REQUEST>/boost test</USER_REQUEST>"},
+                {"step_index": 1, "type": "PLANNER_RESPONSE", "created_at": "2026-11-15T10:00:02Z", "tool_calls": [{"name": "invoke_subagent", "args": {"TypeName": "DeepCoder", "Role": "TrueRole", "Prompt": "TruePrompt"}}]},
+                {"step_index": 2, "type": "GENERIC", "created_at": "2026-11-15T10:00:03Z", "content": f'Created the following subagent:\n{{"conversationId": "{t2_id}"}}'},
+            ])
+            _write_transcript(agy, t2_id, [
+                {"step_index": 0, "type": "SYSTEM_MESSAGE", "source": "SYSTEM", "created_at": "2026-11-15T10:00:03Z", "content": f"[Message] timestamp=2026-11-15T10:00:03Z sender={root_id} content=TruePrompt"},
+                {"step_index": 1, "type": "PLANNER_RESPONSE", "created_at": "2026-11-15T10:00:05Z", "tool_calls": [{"name": "invoke_subagent", "args": {"TypeName": "DeepCoderWorkerL0", "Prompt": "Work"}}]},
+                {"step_index": 2, "type": "GENERIC", "created_at": "2026-11-15T10:00:06Z", "content": f'Created the following subagent:\n{{"conversationId": "{t3_id}"}}'},
+            ])
+            _write_transcript(agy, t3_id, [
+                {"step_index": 0, "type": "SYSTEM_MESSAGE", "source": "SYSTEM", "created_at": "2026-11-15T10:00:06Z", "content": f"[Message] timestamp=2026-11-15T10:00:06Z sender={t2_id} content=Work"},
+                {"step_index": 1, "type": "GENERIC", "created_at": "2026-11-15T10:01:00Z", "content": f'Created the following subagent:\n{{"conversationId": "{t2_id}"}}'},
+            ])
+            data = parse_boost_run(agy, root_id, ws)
+            by_id = {a["conv_id"]: a for a in data["pipelines"][0]["agents"]}
+            self.assertEqual(len(by_id), 3)
+            self.assertEqual(by_id[t2_id]["role"], "TrueRole")
+            self.assertEqual(by_id[t2_id]["spawn_step_index"], 1)
 
 
 if __name__ == "__main__":

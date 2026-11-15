@@ -13,8 +13,10 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from urllib.parse import unquote, urlparse
 
 from timeline import (
+    HANDOFF_OVERLAP_TOLERANCE_S,
     compute_gantt_layout,
     compute_peak_concurrency,
+    compute_worker_concurrency,
     format_duration,
     format_local_clock,
     get_local_tz_label,
@@ -34,6 +36,15 @@ WRITE_TOOL_NAMES = {
 }
 
 LEGACY_AGENT_PLACEHOLDERS = {"orchestrator", "sentinel", "victory_auditor"}
+
+BOOST_AGENT_NAMES = {
+    "DeepCoder",
+    "DeepInvestigator",
+    "DeepCoderWorkerL0",
+    "DeepCoderImprovementWorker",
+    "DeepInvestigatorWorkerL0",
+    "DeepInvestigatorImprovementWorker",
+}
 
 
 def resolve_workspace_root(start_dir: Optional[str] = None) -> str:
@@ -109,27 +120,14 @@ def _open_db_readonly(db_path: str) -> Optional[sqlite3.Connection]:
             return None
 
 
-def _count_descendants(children_map: Dict[str, List[str]], root_id: str) -> int:
-    count = 0
-    stack = list(children_map.get(root_id, []))
-    seen: Set[str] = {root_id}
-    while stack:
-        cid = stack.pop()
-        if cid in seen:
-            continue
-        seen.add(cid)
-        count += 1
-        stack.extend(children_map.get(cid, []))
-    return count
-
-
-def list_agy_runs(agy_dir: str, workspace_root: str) -> List[Dict[str, Any]]:
-    """Return root AGY conversations matching workspace_root, newest first."""
+def _load_db_metadata(agy_dir: str) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, List[str]]]:
+    """Load all rows and parent->children map from conversation_summaries.db."""
     db_path = os.path.join(agy_dir, "conversation_summaries.db")
     conn = _open_db_readonly(db_path)
+    by_id: Dict[str, Dict[str, Any]] = {}
+    children_by_parent: Dict[str, List[str]] = {}
     if conn is None:
-        return []
-
+        return by_id, children_by_parent
     try:
         rows = conn.execute(
             """
@@ -139,30 +137,96 @@ def list_agy_runs(agy_dir: str, workspace_root: str) -> List[Dict[str, Any]]:
             ORDER BY last_modified_time DESC
             """
         ).fetchall()
+        for row in rows:
+            cid = row["conversation_id"]
+            pid = row["parent_conversation_id"] or ""
+            by_id[cid] = {
+                "conversation_id": cid,
+                "title": row["title"] or "",
+                "agent_name": row["agent_name"] or "",
+                "parent_id": pid,
+                "depth": int(row["nesting_depth"] or 0),
+                "db_step_count": int(row["step_count"] or 0),
+                "last_modified_time": row["last_modified_time"] or "",
+                "workspace_uris": row["workspace_uris"] or "[]",
+                "status": row["status"] or "",
+                "killed": bool(row["killed"]),
+            }
+            if pid:
+                children_by_parent.setdefault(pid, []).append(cid)
     except sqlite3.Error:
-        conn.close()
-        return []
+        pass
     finally:
         conn.close()
+    return by_id, children_by_parent
 
-    children_map: Dict[str, List[str]] = {}
-    for row in rows:
-        pid = row["parent_conversation_id"] or ""
-        if pid:
-            children_map.setdefault(pid, []).append(row["conversation_id"])
+
+def _collect_descendants(children_map: Dict[str, List[str]], root_id: str) -> List[str]:
+    descendants: List[str] = []
+    stack = list(children_map.get(root_id, []))
+    seen: Set[str] = {root_id}
+    while stack:
+        cid = stack.pop()
+        if cid in seen:
+            continue
+        seen.add(cid)
+        descendants.append(cid)
+        stack.extend(children_map.get(cid, []))
+    return descendants
+
+
+def _is_boost_only_run(
+    agy_dir: str,
+    root_id: str,
+    by_id: Dict[str, Dict[str, Any]],
+    children_map: Dict[str, List[str]],
+    descendants: Sequence[str],
+) -> bool:
+    """Return True if a root conversation is a /boost-only run (deprioritized behind swarm runs)."""
+    if descendants:
+        names = [(by_id.get(d) or {}).get("agent_name") or "" for d in descendants]
+        non_empty = [n for n in names if n]
+        if non_empty:
+            return all(n in BOOST_AGENT_NAMES for n in non_empty)
+    steps, _ = _read_transcript(agy_dir, root_id)
+    if not steps:
+        return False
+    spawns = _extract_subagent_spawns(steps)
+    if spawns:
+        types = [meta.get("requested_type") or "" for meta in spawns.values() if meta.get("requested_type")]
+        if types:
+            return all(t in BOOST_AGENT_NAMES for t in types)
+    for st in steps:
+        if st.get("type") == "USER_INPUT":
+            content = str(st.get("content") or "")
+            if "<ORCHESTRATOR>" in content:
+                return True
+            m = re.search(r"<USER_REQUEST>(.*?)</USER_REQUEST>", content, re.DOTALL)
+            user_req = m.group(1) if m else content
+            if re.match(r"^\s*/boost(?=$|\s|/boost)", user_req, re.IGNORECASE):
+                return True
+    return False
+
+
+def list_agy_runs(agy_dir: str, workspace_root: str) -> List[Dict[str, Any]]:
+    """Return root AGY conversations matching workspace_root, newest first."""
+    by_id, children_map = _load_db_metadata(agy_dir)
+    if not by_id:
+        return []
 
     runs: List[Dict[str, Any]] = []
-    for row in rows:
-        if row["parent_conversation_id"]:
+    for cid, row in by_id.items():
+        if row["parent_id"]:
             continue
         score = _match_workspace_score(row["workspace_uris"], workspace_root)
         if score == 0:
             continue
-        cid = row["conversation_id"]
-        subagent_count = _count_descendants(children_map, cid)
-        step_count = int(row["step_count"] or 0)
+        descendants = _collect_descendants(children_map, cid)
+        subagent_count = len(descendants)
+        step_count = int(row["db_step_count"] or 0)
         if step_count == 0 and subagent_count == 0:
             continue
+        is_boost_only = _is_boost_only_run(agy_dir, cid, by_id, children_map, descendants)
         runs.append({
             "conversation_id": cid,
             "title": row["title"] or "(untitled)",
@@ -171,6 +235,7 @@ def list_agy_runs(agy_dir: str, workspace_root: str) -> List[Dict[str, Any]]:
             "last_modified_time": row["last_modified_time"] or "",
             "status": row["status"] or "",
             "subagent_count": subagent_count,
+            "is_boost_only": is_boost_only,
             "match_score": score,
         })
 
@@ -182,45 +247,86 @@ def list_agy_runs(agy_dir: str, workspace_root: str) -> List[Dict[str, Any]]:
     return runs
 
 
+def _resolve_root_conversation(
+    agy_dir: str,
+    cid: str,
+    by_id: Dict[str, Dict[str, Any]],
+) -> str:
+    """Walk parent_conversation_id / dispatch sender pointers upward to the root conversation."""
+    cur = cid
+    seen: Set[str] = set()
+    while cur and cur not in seen:
+        seen.add(cur)
+        row = by_id.get(cur)
+        parent = (row or {}).get("parent_id") or ""
+        if not parent:
+            steps, _ = _read_transcript(agy_dir, cur)
+            _, sender_id, _ = _parse_step0_header(steps)
+            if (
+                sender_id
+                and sender_id not in seen
+                and (sender_id in by_id or os.path.isdir(os.path.join(agy_dir, "brain", sender_id)))
+            ):
+                parent = sender_id
+        if not parent:
+            break
+        cur = parent
+    return cur
+
+
 def select_agy_run(
     agy_dir: str,
     workspace_root: str,
     conversation_id: Optional[str] = None,
 ) -> Optional[str]:
-    """Select the target root conversation ID from AGY telemetry."""
+    """Select the target root conversation ID from AGY telemetry.
+
+    Deprioritizes /boost-only runs behind non-/boost multi-agent swarm runs,
+    while preserving /boost runs as a fallback or when explicitly targeted via -c.
+    """
     if conversation_id:
         prefix = conversation_id.strip()
+        by_id, _ = _load_db_metadata(agy_dir)
         brain_dir = os.path.join(agy_dir, "brain")
-        if os.path.isdir(os.path.join(brain_dir, prefix)):
-            return prefix
-        db_path = os.path.join(agy_dir, "conversation_summaries.db")
-        conn = _open_db_readonly(db_path)
-        if conn is not None:
-            try:
-                matches = conn.execute(
-                    "SELECT conversation_id FROM conversation_summaries WHERE conversation_id LIKE ?",
-                    (prefix + "%",),
-                ).fetchall()
-                if len(matches) == 1:
-                    return matches[0]["conversation_id"]
-                if len(matches) > 1:
-                    # Prefer root or exact match
-                    for m in matches:
-                        if m["conversation_id"] == prefix:
-                            return prefix
-                    return matches[0]["conversation_id"]
-            finally:
-                conn.close()
-        if os.path.isdir(brain_dir):
-            dir_matches = [d for d in os.listdir(brain_dir) if d.startswith(prefix)]
-            if len(dir_matches) == 1:
-                return dir_matches[0]
+        matched: Optional[str] = None
+        if prefix in by_id or os.path.isdir(os.path.join(brain_dir, prefix)):
+            matched = prefix
+        else:
+            db_path = os.path.join(agy_dir, "conversation_summaries.db")
+            conn = _open_db_readonly(db_path)
+            if conn is not None:
+                try:
+                    matches = conn.execute(
+                        """
+                        SELECT conversation_id, nesting_depth, last_modified_time
+                        FROM conversation_summaries
+                        WHERE substr(conversation_id, 1, length(?)) = ?
+                        ORDER BY nesting_depth ASC, last_modified_time DESC
+                        """,
+                        (prefix, prefix),
+                    ).fetchall()
+                    if matches:
+                        matched = matches[0]["conversation_id"]
+                finally:
+                    conn.close()
+            if not matched and os.path.isdir(brain_dir):
+                dir_matches = sorted(d for d in os.listdir(brain_dir) if d.startswith(prefix))
+                if len(dir_matches) == 1:
+                    matched = dir_matches[0]
+        if matched:
+            return _resolve_root_conversation(agy_dir, matched, by_id)
         return None
 
     runs = list_agy_runs(agy_dir, workspace_root)
+    non_boost_multi = [r for r in runs if r["subagent_count"] > 0 and not r.get("is_boost_only")]
+    if non_boost_multi:
+        return non_boost_multi[0]["conversation_id"]
     multi_agent = [r for r in runs if r["subagent_count"] > 0]
     if multi_agent:
         return multi_agent[0]["conversation_id"]
+    non_boost = [r for r in runs if not r.get("is_boost_only")]
+    if non_boost:
+        return non_boost[0]["conversation_id"]
     if runs:
         return runs[0]["conversation_id"]
     return None
@@ -246,25 +352,94 @@ def _read_transcript(agy_dir: str, conv_id: str) -> Tuple[List[Dict[str, Any]], 
     return [], None
 
 
+def _extract_user_request_text(content: str) -> str:
+    """Extract readable user request text from a USER_INPUT step, stripping XML wrappers."""
+    m = re.search(r"<USER_REQUEST>(.*?)</USER_REQUEST>", content, re.DOTALL)
+    text = m.group(1) if m else content
+    text = re.sub(r"<ADDITIONAL_METADATA>.*?</ADDITIONAL_METADATA>", "", text, flags=re.DOTALL)
+    text = re.sub(r"<ORCHESTRATOR>.*?</ORCHESTRATOR>", "", text, flags=re.DOTALL)
+    text = re.sub(r"<USER_SETTINGS_CHANGE>.*?</USER_SETTINGS_CHANGE>", "", text, flags=re.DOTALL)
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def _parse_step0_header(steps: Sequence[Dict[str, Any]]) -> Tuple[Optional[datetime], Optional[str], str]:
-    """Extract spawn timestamp, parent sender ID, and initial prompt from step 0."""
+    """Extract spawn timestamp, parent sender ID, and initial prompt from early steps.
+
+    Skips SYSTEM_SDK periodic reminders and sender=system [Notice] steps, and
+    strips XML wrappers from USER_INPUT root prompts.
+    """
     if not steps:
         return None, None, ""
-    content = str(steps[0].get("content") or "")
-    ts_match = re.search(r"timestamp=([^\s]+)", content)
-    sender_match = re.search(r"sender=([^\s]+)", content)
-    msg_match = re.search(r"content=(.*)", content, re.DOTALL)
 
-    spawn_dt = parse_iso_timestamp(ts_match.group(1)) if ts_match else parse_iso_timestamp(steps[0].get("created_at"))
-    sender_id = sender_match.group(1).strip() if sender_match else None
-    prompt = ""
-    if msg_match:
-        prompt = msg_match.group(1).strip()
-        if prompt.endswith("</SYSTEM_MESSAGE>"):
-            prompt = prompt[: -len("</SYSTEM_MESSAGE>")].strip()
-    elif steps[0].get("type") == "USER_INPUT":
-        prompt = content.strip()
-    return spawn_dt, sender_id, prompt
+    first = steps[0]
+    if first.get("type") == "USER_INPUT":
+        return (
+            parse_iso_timestamp(first.get("created_at")),
+            None,
+            _extract_user_request_text(str(first.get("content") or "")),
+        )
+
+    for step in steps[:6]:
+        if step.get("type") == "USER_INPUT":
+            return (
+                parse_iso_timestamp(step.get("created_at")),
+                None,
+                _extract_user_request_text(str(step.get("content") or "")),
+            )
+        if step.get("type") == "SYSTEM_MESSAGE" and step.get("source") == "SYSTEM_SDK":
+            continue
+        if step.get("type") not in (None, "SYSTEM_MESSAGE"):
+            continue
+        content = str(step.get("content") or "")
+        header = content.split("content=", 1)[0]
+        sender_match = re.search(r"\bsender=([^\s]+)", header)
+        sender_id = sender_match.group(1).strip() if sender_match else None
+        if sender_id and sender_id.lower() == "system":
+            continue
+        if "[Notice]" in header and not sender_id:
+            continue
+        if "sender=" in content or "[Message]" in content:
+            ts_match = re.search(r"timestamp=([^\s]+)", content)
+            if not sender_id:
+                sender_match = re.search(r"\bsender=([^\s]+)", content)
+                sender_id = sender_match.group(1).strip() if sender_match else None
+                if sender_id and sender_id.lower() == "system":
+                    continue
+            msg_match = re.search(r"content=(.*)", content, re.DOTALL)
+            spawn_dt = (
+                parse_iso_timestamp(ts_match.group(1))
+                if ts_match
+                else parse_iso_timestamp(step.get("created_at"))
+            )
+            prompt = ""
+            if msg_match:
+                prompt = msg_match.group(1).strip()
+                if prompt.endswith("</SYSTEM_MESSAGE>"):
+                    prompt = prompt[: -len("</SYSTEM_MESSAGE>")].strip()
+            return spawn_dt, sender_id, prompt
+
+    return parse_iso_timestamp(first.get("created_at")), None, ""
+
+
+def _extract_json_objects_with_key(content: str, key: str) -> List[Dict[str, Any]]:
+    """Extract JSON dicts containing `key` from mixed text, supporting nested braces."""
+    results: List[Dict[str, Any]] = []
+    decoder = json.JSONDecoder()
+    idx = 0
+    length = len(content)
+    while idx < length:
+        brace = content.find("{", idx)
+        if brace == -1:
+            break
+        try:
+            obj, end = decoder.raw_decode(content, brace)
+        except json.JSONDecodeError:
+            idx = brace + 1
+            continue
+        if isinstance(obj, dict) and key in obj:
+            results.append(obj)
+        idx = max(end, brace + 1)
+    return results
 
 
 def _extract_subagent_spawns(steps: Sequence[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
@@ -272,10 +447,17 @@ def _extract_subagent_spawns(steps: Sequence[Dict[str, Any]]) -> Dict[str, Dict[
     spawns: Dict[str, Dict[str, Any]] = {}
     pending_calls: List[Dict[str, Any]] = []
 
-    for step in steps:
+    for list_idx, step in enumerate(steps):
+        step_type = step.get("type")
         step_idx = step.get("step_index")
         step_ts = parse_iso_timestamp(step.get("created_at"))
+        if step_type == "USER_INPUT":
+            pending_calls.clear()
+
         tcs = step.get("tool_calls") or []
+        if any(tc.get("name") == "invoke_subagent" for tc in tcs) and pending_calls:
+            pending_calls.clear()
+
         for tc in tcs:
             if tc.get("name") != "invoke_subagent":
                 continue
@@ -296,6 +478,7 @@ def _extract_subagent_spawns(steps: Sequence[Dict[str, Any]]) -> Dict[str, Dict[
                     if isinstance(entry, dict):
                         pending_calls.append({
                             "spawn_step_index": step_idx,
+                            "spawn_list_index": list_idx,
                             "spawn_call_ts": step_ts,
                             "requested_type": _clean_arg_str(entry.get("TypeName")),
                             "requested_role": _clean_arg_str(entry.get("Role")),
@@ -306,6 +489,7 @@ def _extract_subagent_spawns(steps: Sequence[Dict[str, Any]]) -> Dict[str, Dict[
             else:
                 pending_calls.append({
                     "spawn_step_index": step_idx,
+                    "spawn_list_index": list_idx,
                     "spawn_call_ts": step_ts,
                     "requested_type": _clean_arg_str(args.get("TypeName")),
                     "requested_role": _clean_arg_str(args.get("Role")),
@@ -314,24 +498,26 @@ def _extract_subagent_spawns(steps: Sequence[Dict[str, Any]]) -> Dict[str, Dict[
                     "prompt": _clean_arg_str(args.get("Prompt")),
                 })
 
-        if step.get("type") == "GENERIC":
+        if step_type == "GENERIC":
             content = str(step.get("content") or "")
-            if "Created the following subagent" in content:
-                blocks = re.findall(r"\{[^{}]*\"conversationId\"[^{}]*\}", content, re.DOTALL)
-                for block in blocks:
-                    try:
-                        info = json.loads(block)
-                    except json.JSONDecodeError:
-                        continue
+            if pending_calls and "Created the following subagent" in content:
+                for info in _extract_json_objects_with_key(content, "conversationId"):
+                    if not pending_calls:
+                        break
                     cid = info.get("conversationId")
                     if not cid:
                         continue
-                    call_meta = pending_calls.pop(0) if pending_calls else {}
-                    spawns[cid] = {
-                        **call_meta,
-                        "log_uri": info.get("logAbsoluteUri") or "",
-                        "spawn_completed_ts": step_ts,
-                    }
+                    call_meta = pending_calls.pop(0)
+                    if cid not in spawns:
+                        spawns[cid] = {
+                            **call_meta,
+                            "log_uri": info.get("logAbsoluteUri") or "",
+                            "spawn_completed_ts": step_ts,
+                        }
+            elif pending_calls and any(
+                tok in content.lower() for tok in ("encountered error", "failed", "error", "rejected")
+            ):
+                pending_calls.clear()
     return spawns
 
 
@@ -347,14 +533,113 @@ def _clean_arg_str(val: Any) -> str:
     return s
 
 
+def _extract_settings_model_changes(steps: Sequence[Dict[str, Any]]) -> List[Tuple[int, str]]:
+    """Extract (list_index, model_name) entries from USER_INPUT <USER_SETTINGS_CHANGE> blocks."""
+    changes: List[Tuple[int, str]] = []
+    for idx, step in enumerate(steps):
+        if step.get("type") != "USER_INPUT":
+            continue
+        content = str(step.get("content") or "")
+        if "<USER_SETTINGS_CHANGE>" not in content:
+            continue
+        for block in re.findall(r"<USER_SETTINGS_CHANGE>(.*?)</USER_SETTINGS_CHANGE>", content, re.DOTALL):
+            m = re.search(
+                r"Model Selection`?\s+from\s+.+?\s+to\s+(.+?)(?=\.(?:\s|$|<)|[\n<]|$)",
+                block,
+                re.IGNORECASE,
+            )
+            if m:
+                changes.append((idx, m.group(1).strip()))
+    return changes
+
+
+def _settings_model_at(
+    steps: Sequence[Dict[str, Any]],
+    spawn_list_index: Optional[int] = None,
+    spawn_step_index: Optional[Any] = None,
+) -> str:
+    """Return the settings model active at a parent step position."""
+    changes = _extract_settings_model_changes(steps)
+    if not changes:
+        return ""
+    pos: Optional[int] = spawn_list_index
+    if pos is None and spawn_step_index is not None:
+        for idx, st in enumerate(steps):
+            if st.get("step_index") == spawn_step_index:
+                pos = idx
+                break
+    if pos is None:
+        pos = len(steps) - 1
+    chosen = ""
+    for idx, model_name in changes:
+        if idx <= pos:
+            chosen = model_name
+    return chosen
+
+
+def _resolve_model(
+    steps: Sequence[Dict[str, Any]],
+    requested_model: str,
+    inherited_model: str,
+    inherited_source: str,
+    settings_at_spawn: str,
+    fallback_settings_model: str,
+) -> Tuple[str, str]:
+    """Return (resolved_model, model_source) using PLANNER_RESPONSE, settings, and inheritance."""
+    seen_models: List[str] = []
+    for step in steps:
+        if step.get("type") != "PLANNER_RESPONSE":
+            continue
+        m = step.get("model")
+        if m and isinstance(m, str) and m not in seen_models:
+            seen_models.append(m)
+    if seen_models:
+        return ", ".join(seen_models), "planner_response"
+    req = (requested_model or "").strip()
+    if req and req.lower() not in ("inherit", "default", "none"):
+        return req, "requested"
+    if inherited_source == "planner_response" and inherited_model and inherited_model.lower() not in ("inherit", "default", "unknown"):
+        return inherited_model, "inherited"
+    if settings_at_spawn:
+        return settings_at_spawn, "user_settings"
+    if inherited_model and inherited_model.lower() not in ("inherit", "default", "unknown"):
+        return inherited_model, "inherited"
+    if fallback_settings_model:
+        return fallback_settings_model, "user_settings"
+    return req or "default", "fallback"
+
+
+def _is_failed_tool_result(content: str) -> bool:
+    """Return True if a GENERIC tool output indicates an error / failed tool call."""
+    lines = [ln.strip() for ln in content.splitlines() if ln.strip()]
+    body_lines = [
+        ln for ln in lines
+        if not ln.startswith("Created At:") and not ln.startswith("Completed At:")
+    ]
+    body = "\n".join(body_lines).strip().lower()
+    if not body:
+        return False
+    return (
+        body.startswith("error")
+        or body.startswith("encountered error")
+        or body.startswith("failed")
+        or body.startswith("rejected")
+        or "error invalid tool call" in body
+        or "encountered error in step execution" in body
+    )
+
+
 def _extract_produced_docs(steps: Sequence[Dict[str, Any]], workspace_root: str) -> List[Dict[str, str]]:
-    """Extract created or edited file paths from transcript tool calls."""
+    """Extract created or edited file paths from successful transcript write tool calls."""
     seen: Set[str] = set()
     docs: List[Dict[str, str]] = []
     ws_norm = os.path.normpath(os.path.abspath(workspace_root))
+    n_steps = len(steps)
 
-    for step in steps:
-        for tc in step.get("tool_calls") or []:
+    for idx, step in enumerate(steps):
+        tcs = step.get("tool_calls") or []
+        write_entries: List[Tuple[int, str, str]] = []
+        for tc_idx, tc in enumerate(tcs):
             tname = tc.get("name") or ""
             if tname not in WRITE_TOOL_NAMES:
                 continue
@@ -368,6 +653,34 @@ def _extract_produced_docs(steps: Sequence[Dict[str, Any]], workspace_root: str)
             if not raw_path:
                 continue
             abs_path = os.path.normpath(raw_path if os.path.isabs(raw_path) else os.path.join(ws_norm, raw_path))
+            write_entries.append((tc_idx, raw_path, abs_path))
+
+        if not write_entries:
+            continue
+
+        generic_results: List[str] = []
+        j = idx + 1
+        while j < n_steps and steps[j].get("type") == "GENERIC":
+            generic_results.append(str(steps[j].get("content") or ""))
+            j += 1
+
+        all_failed = bool(generic_results) and all(_is_failed_tool_result(g) for g in generic_results)
+
+        for tc_idx, raw_path, abs_path in write_entries:
+            if generic_results:
+                if len(tcs) == 1 and _is_failed_tool_result(generic_results[0]):
+                    continue
+                if all_failed:
+                    continue
+                matched_failed = any(
+                    _is_failed_tool_result(g) and (abs_path in g or raw_path in g)
+                    for g in generic_results
+                )
+                if matched_failed:
+                    continue
+                if len(generic_results) == len(tcs) and _is_failed_tool_result(generic_results[tc_idx]):
+                    continue
+
             if abs_path in seen:
                 continue
             seen.add(abs_path)
@@ -382,18 +695,50 @@ def _extract_produced_docs(steps: Sequence[Dict[str, Any]], workspace_root: str)
     return docs
 
 
+def _clean_summary_text(txt: str) -> str:
+    prose_only = re.sub(r"```[\s\S]*?```", "", txt)
+    prose_cleaned = re.sub(r"(?m)^>\s*", "", prose_only)
+    prose_cleaned = re.sub(r"[#*`]+", "", prose_cleaned)
+    prose_cleaned = re.sub(r"\s+", " ", prose_cleaned).strip()
+    if len(prose_cleaned) >= 30:
+        cleaned = re.sub(r"```[\s\S]*?```", "[code/json output]", txt)
+    else:
+        cleaned = re.sub(r"```[a-zA-Z0-9_-]*\s*", "", txt)
+        cleaned = cleaned.replace("```", "")
+    cleaned = re.sub(r"(?m)^>\s*", "", cleaned)
+    cleaned = re.sub(r"[#*`]+", "", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if len(cleaned) > 280:
+        return cleaned[:277].rstrip() + "..."
+    return cleaned
+
+
 def _extract_summary(steps: Sequence[Dict[str, Any]], status: str) -> str:
-    """Extract a readable summary from the last meaningful PLANNER_RESPONSE."""
+    """Extract a readable summary from the last meaningful PLANNER_RESPONSE or send_message."""
     for step in reversed(steps):
         if step.get("type") == "PLANNER_RESPONSE":
             txt = str(step.get("content") or "").strip()
             if txt:
-                cleaned = re.sub(r"```[\s\S]*?```", "[code/json output]", txt)
-                cleaned = re.sub(r"[#*`]+", "", cleaned)
-                cleaned = re.sub(r"\s+", " ", cleaned).strip()
-                if len(cleaned) > 280:
-                    return cleaned[:277].rstrip() + "..."
-                return cleaned
+                cleaned = _clean_summary_text(txt)
+                if cleaned:
+                    return cleaned
+    for step in reversed(steps):
+        for tc in reversed(step.get("tool_calls") or []):
+            if tc.get("name") != "send_message":
+                continue
+            args = tc.get("args") or tc.get("arguments") or {}
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except json.JSONDecodeError:
+                    continue
+            msg = _clean_arg_str(args.get("Message"))
+            if msg:
+                cleaned = _clean_summary_text(msg)
+                if cleaned:
+                    return cleaned
+    if status in ("running", "killed"):
+        return f"Interrupted / {status} before recording a final summary."
     return f"Completed ({status})." if status else "No planner summary recorded."
 
 
@@ -403,10 +748,28 @@ def _infer_phase(
     prompt: str,
     docs: Sequence[Dict[str, str]],
     depth: int,
+    parent_phase: str = "",
+    parent_label: str = "",
 ) -> str:
     """Classify an AGY agent into a plan-swarm lifecycle phase."""
     if depth == 0:
         return "orchestration"
+
+    parent_low = (parent_label or "").lower()
+    if any(
+        k in parent_low
+        for k in (
+            "spec-validator",
+            "spec-deliberator",
+            "plan-validator",
+            "plan-deliberator",
+            "implementation-validator",
+            "deepcoder",
+            "deepinvestigator",
+        )
+    ):
+        if parent_phase in ("discovery", "planning", "construction", "verification"):
+            return parent_phase
 
     label = f"{agent_name} {role}".lower()
     doc_names = " ".join(d["name"].lower() for d in docs)
@@ -414,21 +777,48 @@ def _infer_phase(
 
     if any(k in label for k in ("supervisor", "starter", "orchestrator", "coordinator")):
         return "orchestration"
-    if any(k in label for k in ("auditor", "implementation-validator", "visual-implementation-recap", "victory")):
+    if any(
+        k in label
+        for k in ("spec-validator", "spec-deliberator", "spec reviewer", "spec skeptic", "deepinvestigator", "boost investigator")
+    ):
+        return "discovery"
+    if any(
+        k in label
+        for k in ("plan-validator", "plan-deliberator", "plan skeptic", "plan reviewer")
+    ):
+        return "planning"
+    if any(
+        k in label
+        for k in ("implementation-validator", "implementation skeptic", "implementation reviewer", "visual-implementation-recap", "victory")
+    ):
+        return "verification"
+    if any(k in label for k in ("deepcoder", "boost coder")):
+        return "construction"
+
+    if any(k in prompt_head for k in ("spec reviewer", "spec skeptic", "adversarial spec")):
+        return "discovery"
+    if any(k in prompt_head for k in ("plan skeptic", "plan reviewer", "adversarial plan")):
+        return "planning"
+    if any(k in prompt_head for k in ("implementation skeptic", "implementation reviewer")) or (
+        "adversarially validate the" in prompt_head and "implementation" in prompt_head
+    ):
+        return "verification"
+
+    if "auditor" in label:
         return "verification"
     if any(k in label for k in ("engineer", "simplifier", "worker_impl", "builder")):
         return "construction"
-    if any(k in label for k in ("architect", "visual-architect", "plan-validator", "plan-deliberator", "planner")):
+    if any(k in label for k in ("architect", "visual-architect", "planner")):
         return "planning"
-    if any(k in label for k in ("product-owner", "visual-product-owner", "spec-validator", "spec-deliberator", "research")):
+    if any(k in label for k in ("product-owner", "visual-product-owner", "research")):
         return "discovery"
 
-    # Prompt & produced-document heuristics for generic `self` / `research` dispatches
-    if "implementation-review" in doc_names or "audit_" in doc_names or "adversarially validate the" in prompt_head and "implementation" in prompt_head:
+    # Prompt & produced-document heuristics for generic `self` / `subagent` dispatches
+    if "implementation-review" in doc_names or "audit_" in doc_names:
         return "verification"
     if "plan-review" in doc_names or "plan.md" in doc_names or "implementation plan" in prompt_head:
         return "planning"
-    if "spec-review" in doc_names or "spec.md" in doc_names or "plans/research/" in doc_names or "spec reviewer" in prompt_head:
+    if "spec-review" in doc_names or "spec.md" in doc_names or "plans/research/" in doc_names:
         return "discovery"
     return "construction" if docs else "discovery"
 
@@ -459,37 +849,7 @@ def _compute_tokens(steps: Sequence[Dict[str, Any]]) -> Dict[str, int]:
 
 def _collect_tree_rows(agy_dir: str, root_id: str) -> Dict[str, Dict[str, Any]]:
     """Collect metadata for root_id and all descendants from DB + transcripts."""
-    db_path = os.path.join(agy_dir, "conversation_summaries.db")
-    conn = _open_db_readonly(db_path)
-    by_id: Dict[str, Dict[str, Any]] = {}
-    children_by_parent: Dict[str, List[str]] = {}
-
-    if conn is not None:
-        try:
-            for row in conn.execute(
-                """
-                SELECT conversation_id, title, agent_name, parent_conversation_id,
-                       nesting_depth, step_count, last_modified_time, workspace_uris, status, killed
-                FROM conversation_summaries
-                """
-            ).fetchall():
-                cid = row["conversation_id"]
-                pid = row["parent_conversation_id"] or ""
-                by_id[cid] = {
-                    "conversation_id": cid,
-                    "title": row["title"] or "",
-                    "agent_name": row["agent_name"] or "",
-                    "parent_id": pid,
-                    "depth": int(row["nesting_depth"] or 0),
-                    "db_step_count": int(row["step_count"] or 0),
-                    "last_modified_time": row["last_modified_time"] or "",
-                    "status": row["status"] or "",
-                    "killed": bool(row["killed"]),
-                }
-                if pid:
-                    children_by_parent.setdefault(pid, []).append(cid)
-        finally:
-            conn.close()
+    by_id, children_by_parent = _load_db_metadata(agy_dir)
 
     # BFS from root_id, also discovering children from transcript invoke_subagent results
     ordered_nodes: Dict[str, Dict[str, Any]] = {}
@@ -515,6 +875,12 @@ def _collect_tree_rows(agy_dir: str, root_id: str) -> Dict[str, Dict[str, Any]]:
         })
         if cid == root_id:
             node["depth"] = 0
+            node["parent_id"] = ""
+        else:
+            if not node.get("parent_id"):
+                node["parent_id"] = fallback_parent
+            if node.get("depth", 0) == 0:
+                node["depth"] = fallback_depth
         steps, transcript_path = _read_transcript(agy_dir, cid)
         node["steps"] = steps
         node["transcript_path"] = transcript_path
@@ -523,6 +889,9 @@ def _collect_tree_rows(agy_dir: str, root_id: str) -> Dict[str, Dict[str, Any]]:
 
         discovered_children = list(children_by_parent.get(cid, []))
         for child_id in node["spawns"].keys():
+            db_parent = (by_id.get(child_id) or {}).get("parent_id") or ""
+            if db_parent and db_parent != cid:
+                continue
             if child_id not in discovered_children:
                 discovered_children.append(child_id)
         for child_id in discovered_children:
@@ -537,96 +906,160 @@ def parse_agy_run(agy_dir: str, root_id: str, workspace_root: str) -> Dict[str, 
     if root_id not in nodes or (not nodes[root_id]["steps"] and len(nodes) == 1):
         raise ValueError(f"Conversation '{root_id}' has no transcript or subagents under {agy_dir}")
 
-    # Attach parent spawn metadata to children
+    # Attach parent spawn metadata to children (protecting true parent metadata from descendant overwrites)
     for cid, node in nodes.items():
         for child_id, spawn_meta in node["spawns"].items():
-            if child_id in nodes:
-                nodes[child_id]["spawn_meta"] = spawn_meta
+            if child_id not in nodes or child_id == root_id:
+                continue
+            child_node = nodes[child_id]
+            db_parent = child_node.get("parent_id") or ""
+            if db_parent and db_parent != cid:
+                continue
+            if child_node["depth"] <= node["depth"]:
+                continue
+            if "spawn_meta" not in child_node:
+                child_node["spawn_meta"] = spawn_meta
 
+    # Resolve models top-down (root -> child -> grandchild)
+    root_latest_settings = _settings_model_at(nodes[root_id]["steps"])
+    resolved_models: Dict[str, Tuple[str, str]] = {}
+    for depth_pass in sorted({n["depth"] for n in nodes.values()}):
+        for cid, node in nodes.items():
+            if node["depth"] != depth_pass:
+                continue
+            pid = node.get("parent_id") or ""
+            parent_model, parent_source = resolved_models.get(pid, ("", "")) if pid else ("", "")
+            spawn_meta = node.get("spawn_meta") or {}
+            req_model = spawn_meta.get("requested_model") or ""
+            parent_steps = nodes[pid]["steps"] if (pid and pid in nodes) else []
+            settings_at_spawn = (
+                _settings_model_at(
+                    parent_steps,
+                    spawn_list_index=spawn_meta.get("spawn_list_index"),
+                    spawn_step_index=spawn_meta.get("spawn_step_index"),
+                )
+                if parent_steps
+                else ""
+            )
+            fallback_settings = _settings_model_at(node["steps"]) if cid == root_id else (settings_at_spawn or root_latest_settings)
+            resolved_models[cid] = _resolve_model(
+                node["steps"],
+                req_model,
+                parent_model,
+                parent_source,
+                settings_at_spawn,
+                fallback_settings,
+            )
+
+    # First build agent payloads in depth order so validator/deliberator children can inherit parent phase
     agents: List[Dict[str, Any]] = []
-    for cid, node in nodes.items():
-        steps = node["steps"]
-        depth = node["depth"]
-        spawn_meta = node.get("spawn_meta") or {}
-        step0_ts, step0_sender, step0_prompt = _parse_step0_header(steps)
+    phase_by_id: Dict[str, str] = {}
+    label_by_id: Dict[str, str] = {}
 
-        spawn_ts = spawn_meta.get("spawn_call_ts") or step0_ts
-        turns = segment_active_turns(steps, spawn_ts=spawn_ts)
+    for depth_pass in sorted({n["depth"] for n in nodes.values()}):
+        for cid, node in nodes.items():
+            if node["depth"] != depth_pass:
+                continue
+            steps = node["steps"]
+            depth = node["depth"]
+            spawn_meta = node.get("spawn_meta") or {}
+            step0_ts, step0_sender, step0_prompt = _parse_step0_header(steps)
 
-        wall_start_dt = parse_iso_timestamp(turns[0]["start_iso"]) if turns else spawn_ts
-        wall_end_dt = parse_iso_timestamp(turns[-1]["end_iso"]) if turns else parse_iso_timestamp(node["last_modified_time"])
-        wall_span_s = max(0.0, (wall_end_dt - wall_start_dt).total_seconds()) if (wall_start_dt and wall_end_dt) else 0.0
-        active_duration_s = sum(t["duration_s"] for t in turns)
+            spawn_ts = spawn_meta.get("spawn_call_ts") or step0_ts
+            turns = segment_active_turns(steps, spawn_ts=spawn_ts)
 
-        tool_count, tool_breakdown = _summarize_tool_calls(steps)
-        tokens = _compute_tokens(steps)
-        docs = _extract_produced_docs(steps, workspace_root)
-        prompt = spawn_meta.get("prompt") or step0_prompt
-        if depth == 0 and not prompt:
-            for st in steps:
-                if st.get("type") == "USER_INPUT":
-                    prompt = str(st.get("content") or "").strip()
-                    break
+            wall_start_dt = parse_iso_timestamp(turns[0]["start_iso"]) if turns else spawn_ts
+            wall_end_dt = parse_iso_timestamp(turns[-1]["end_iso"]) if turns else parse_iso_timestamp(node["last_modified_time"])
+            wall_span_s = max(0.0, (wall_end_dt - wall_start_dt).total_seconds()) if (wall_start_dt and wall_end_dt) else 0.0
+            active_duration_s = sum(t["duration_s"] for t in turns)
 
-        role = spawn_meta.get("requested_role") or ""
-        req_type = spawn_meta.get("requested_type") or node["agent_name"] or ("supervisor" if depth == 0 else "subagent")
-        display_name = node["agent_name"] or req_type
-        if depth == 0:
-            display_name = node["title"] or "root-orchestrator"
+            tool_count, tool_breakdown = _summarize_tool_calls(steps)
+            tokens = _compute_tokens(steps)
+            docs = _extract_produced_docs(steps, workspace_root)
+            prompt = spawn_meta.get("prompt") or step0_prompt
+            if depth == 0 and not prompt:
+                for st in steps:
+                    if st.get("type") == "USER_INPUT":
+                        prompt = _extract_user_request_text(str(st.get("content") or ""))
+                        break
 
-        phase = _infer_phase(node["agent_name"] or req_type, role, prompt, docs, depth)
-        summary = _extract_summary(steps, node["status"])
-        task_preview = re.sub(r"\s+", " ", prompt).strip()
-        if len(task_preview) > 280:
-            task_preview = task_preview[:277].rstrip() + "..."
+            role = spawn_meta.get("requested_role") or ""
+            req_type = spawn_meta.get("requested_type") or node["agent_name"] or ("supervisor" if depth == 0 else "subagent")
+            display_name = node["agent_name"] or req_type
+            if depth == 0:
+                display_name = node["title"] or "root-orchestrator"
 
-        status_raw = node["status"] or "DONE"
-        status_clean = status_raw.replace("CASCADE_RUN_STATUS_", "").lower()
-        if node["killed"]:
-            status_clean = "killed"
+            parent_id = "" if cid == root_id else (node["parent_id"] or step0_sender or "")
+            parent_phase = phase_by_id.get(parent_id, "")
+            parent_label = label_by_id.get(parent_id, "")
 
-        parent_id = node["parent_id"] or step0_sender or ""
-        if cid == root_id:
-            parent_id = ""
+            phase = _infer_phase(
+                node["agent_name"] or req_type,
+                role,
+                prompt,
+                docs,
+                depth,
+                parent_phase=parent_phase,
+                parent_label=parent_label,
+            )
+            phase_by_id[cid] = phase
+            label_by_id[cid] = f"{display_name} {req_type} {role}".strip()
 
-        agents.append({
-            "id": cid,
-            "conv_id": cid,
-            "parent_id": parent_id,
-            "depth": depth,
-            "name": display_name,
-            "type": req_type,
-            "role": role or req_type,
-            "requested_model": spawn_meta.get("requested_model") or ("default" if depth == 0 else "inherit"),
-            "workspace_mode": spawn_meta.get("workspace_mode") or "inherit",
-            "task": task_preview or "(no task prompt recorded)",
-            "status": status_clean,
-            "mode": "serial",
-            "spawn_step_index": spawn_meta.get("spawn_step_index"),
-            "roles": [role] if role else [],
-            "summary": summary,
-            "docs": docs,
-            "phase": phase,
-            "transcript_uri": f"file://{node['transcript_path']}" if node.get("transcript_path") else "",
-            "step_count": max(node["db_step_count"], len(steps)),
-            "tool_call_count": tool_count,
-            "tool_breakdown": tool_breakdown[:8],
-            "tokens": tokens,
-            "turns": turns,
-            "wall_start_ms": int(wall_start_dt.timestamp() * 1000) if wall_start_dt else None,
-            "wall_end_ms": int(wall_end_dt.timestamp() * 1000) if wall_end_dt else None,
-            "wall_start_iso": wall_start_dt.isoformat().replace("+00:00", "Z") if wall_start_dt else "",
-            "wall_end_iso": wall_end_dt.isoformat().replace("+00:00", "Z") if wall_end_dt else "",
-            "wall_start_local": format_local_clock(wall_start_dt),
-            "wall_end_local": format_local_clock(wall_end_dt),
-            "wall_start_local_full": format_local_clock(wall_start_dt, include_date=True),
-            "wall_end_local_full": format_local_clock(wall_end_dt, include_date=True),
-            "wall_span_s": round(wall_span_s, 3),
-            "wall_span_label": format_duration(wall_span_s),
-            "active_duration_s": round(active_duration_s, 3),
-            "active_duration_label": format_duration(active_duration_s),
-            "children_count": 0,
-        })
+            status_raw = node["status"] or ("DONE" if steps else "UNKNOWN")
+            status_clean = status_raw.replace("CASCADE_RUN_STATUS_", "").lower()
+            if node["killed"]:
+                status_clean = "killed"
+            elif not steps and depth > 0:
+                status_clean = "empty"
+
+            summary = _extract_summary(steps, status_clean)
+            task_preview = re.sub(r"\s+", " ", prompt).strip()
+            if len(task_preview) > 280:
+                task_preview = task_preview[:277].rstrip() + "..."
+
+            resolved_model, model_source = resolved_models.get(cid, ("default", "fallback"))
+            req_model = spawn_meta.get("requested_model") or ("default" if depth == 0 else "inherit")
+
+            agents.append({
+                "id": cid,
+                "conv_id": cid,
+                "parent_id": parent_id,
+                "depth": depth,
+                "name": display_name,
+                "type": req_type,
+                "role": role or req_type,
+                "model": resolved_model,
+                "model_source": model_source,
+                "requested_model": req_model,
+                "workspace_mode": spawn_meta.get("workspace_mode") or "inherit",
+                "task": task_preview or "(no task prompt recorded)",
+                "status": status_clean,
+                "mode": "serial",
+                "spawn_step_index": spawn_meta.get("spawn_step_index"),
+                "roles": [role] if role else [],
+                "summary": summary,
+                "docs": docs,
+                "phase": phase,
+                "transcript_uri": f"file://{node['transcript_path']}" if node.get("transcript_path") else "",
+                "step_count": max(node["db_step_count"], len(steps)),
+                "tool_call_count": tool_count,
+                "tool_breakdown": tool_breakdown[:8],
+                "tokens": tokens,
+                "turns": turns,
+                "wall_start_ms": int(wall_start_dt.timestamp() * 1000) if wall_start_dt else None,
+                "wall_end_ms": int(wall_end_dt.timestamp() * 1000) if wall_end_dt else None,
+                "wall_start_iso": wall_start_dt.isoformat().replace("+00:00", "Z") if wall_start_dt else "",
+                "wall_end_iso": wall_end_dt.isoformat().replace("+00:00", "Z") if wall_end_dt else "",
+                "wall_start_local": format_local_clock(wall_start_dt),
+                "wall_end_local": format_local_clock(wall_end_dt),
+                "wall_start_local_full": format_local_clock(wall_start_dt, include_date=True),
+                "wall_end_local_full": format_local_clock(wall_end_dt, include_date=True),
+                "wall_span_s": round(wall_span_s, 3),
+                "wall_span_label": format_duration(wall_span_s),
+                "active_duration_s": round(active_duration_s, 3),
+                "active_duration_label": format_duration(active_duration_s),
+                "children_count": 0,
+            })
 
     # Sort chronologically by start time, keeping root first
     agents.sort(key=lambda a: (0 if a["depth"] == 0 else 1, a["wall_start_ms"] or 0, a["depth"]))
@@ -641,8 +1074,20 @@ def parse_agy_run(agy_dir: str, root_id: str, workspace_root: str) -> Dict[str, 
             siblings_by_parent.setdefault(pid, []).append(a)
         a["parent_name"] = by_conv[pid]["name"] if pid and pid in by_conv else ""
 
+    def _turns_overlap(turns_a: Sequence[Dict[str, Any]], turns_b: Sequence[Dict[str, Any]]) -> bool:
+        for ta in turns_a:
+            a_s = ta["start_ms"]
+            a_e = ta["end_ms"]
+            for tb in turns_b:
+                b_s = tb["start_ms"]
+                b_e = tb["end_ms"]
+                overlap_s = (min(a_e, b_e) - max(a_s, b_s)) / 1000.0
+                if overlap_s > HANDOFF_OVERLAP_TOLERANCE_S:
+                    return True
+        return False
+
     for pid, sibs in siblings_by_parent.items():
-        # Detect parallelism: shared spawn_step_index OR overlapping initial active windows
+        # Detect parallelism: shared spawn_step_index OR overlapping active turn intervals
         step_counts: Dict[Any, int] = {}
         for s in sibs:
             idx = s.get("spawn_step_index")
@@ -653,18 +1098,14 @@ def parse_agy_run(agy_dir: str, root_id: str, workspace_root: str) -> Dict[str, 
             if idx is not None and step_counts.get(idx, 0) > 1:
                 a["mode"] = "parallel"
                 continue
-            a_s = a.get("wall_start_ms")
-            a_e = a.get("wall_end_ms")
-            if a_s is None or a_e is None:
+            a_turns = a.get("turns") or []
+            if not a_turns:
                 continue
             for j, b in enumerate(sibs):
                 if i == j:
                     continue
-                b_s = b.get("wall_start_ms")
-                b_e = b.get("wall_end_ms")
-                if b_s is None or b_e is None:
-                    continue
-                if max(a_s, b_s) < min(a_e, b_e):
+                b_turns = b.get("turns") or []
+                if b_turns and _turns_overlap(a_turns, b_turns):
                     a["mode"] = "parallel"
                     break
 
@@ -685,10 +1126,16 @@ def parse_agy_run(agy_dir: str, root_id: str, workspace_root: str) -> Dict[str, 
     subagent_active_wall_s = total_merged_duration(subagent_turn_intervals)
     subagent_cumulative_s = sum(a["active_duration_s"] for a in agents if a["depth"] > 0)
     speedup = round(subagent_cumulative_s / subagent_active_wall_s, 2) if subagent_active_wall_s > 0 else 1.0
-    peak_conc = compute_peak_concurrency(subagent_turn_intervals or all_turn_intervals)
+    peak_conc = compute_worker_concurrency(agents)
 
     gantt = compute_gantt_layout(agents)
     root_agent = by_conv[root_id]
+
+    models_used: List[str] = []
+    for a in agents:
+        for part in [p.strip() for p in str(a.get("model") or "").split(",") if p.strip()]:
+            if part not in models_used:
+                models_used.append(part)
 
     phase_order = ["orchestration", "discovery", "planning", "construction", "verification"]
     phase_rollups: Dict[str, Dict[str, Any]] = {}
@@ -751,6 +1198,7 @@ def parse_agy_run(agy_dir: str, root_id: str, workspace_root: str) -> Dict[str, 
             "max_depth": max((a["depth"] for a in agents), default=0),
             "total_steps": sum(a["step_count"] for a in agents),
             "total_tool_calls": sum(a["tool_call_count"] for a in agents),
+            "models_used": models_used,
             "tokens": total_tokens,
         },
         "phase_rollups": phase_rollups,
@@ -891,15 +1339,19 @@ def parse_legacy_agents_dir(agents_dir: str, workspace_root: str) -> Dict[str, A
         else:
             phase = "verification"
 
+        raw_cid = entry.get("conv_id") or ""
+        unique_id = raw_cid if (raw_cid and raw_cid != "unknown") else f"legacy-{agent_name}"
         parsed_agents.append({
-            "id": entry["conv_id"] or agent_name,
-            "conv_id": entry["conv_id"] or "unknown",
+            "id": unique_id,
+            "conv_id": raw_cid or "unknown",
             "parent_id": "",
             "parent_name": "",
             "depth": 0 if name_lower in ("orchestrator", "sentinel") else 1,
             "name": agent_name,
             "type": entry["type"],
             "role": roles[0] if roles else entry["type"],
+            "model": "legacy",
+            "model_source": "legacy",
             "requested_model": "legacy",
             "workspace_mode": "inherit",
             "task": entry["task"],
@@ -963,6 +1415,7 @@ def parse_legacy_agents_dir(agents_dir: str, workspace_root: str) -> Dict[str, A
             "max_depth": 1,
             "total_steps": 0,
             "total_tool_calls": 0,
+            "models_used": ["legacy"],
             "tokens": {"input": 0, "cache_read": 0, "output": 0, "total": 0},
         },
         "phase_rollups": {},

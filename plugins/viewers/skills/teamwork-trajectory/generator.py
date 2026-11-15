@@ -593,6 +593,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       border-radius: 8px;
     }
 
+    .status-badge {
+      font-size: 0.67rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 8px;
+    }
+    .st-completed, .st-complete, .st-idle, .st-done { background: rgba(16, 185, 129, 0.14); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .st-running { background: rgba(245, 158, 11, 0.16); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.35); }
+    .st-killed, .st-empty, .st-error, .st-unknown { background: rgba(239, 68, 68, 0.16); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.35); }
+
     .badge-serial { background: rgba(2, 132, 199, 0.15); color: #38bdf8; border: 1px solid rgba(2, 132, 199, 0.3); }
     .badge-parallel { background: rgba(219, 39, 119, 0.15); color: #f472b6; border: 1px solid rgba(219, 39, 119, 0.3); }
     .badge-clock {
@@ -816,6 +827,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     function renderSummary() {
       const s = telemetry.summary || {};
       const tok = s.tokens || {};
+      const models = (s.models_used || []).join(', ') || 'default';
       const cards = [
         {
           label: 'Wall-Clock Span',
@@ -843,9 +855,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           sub: `Max depth: ${s.max_depth || 0} • Direct+nested`
         },
         {
-          label: 'Steps & Tokens',
+          label: 'Models, Steps & Tokens',
           value: `${s.total_steps || 0} steps`,
-          sub: `${s.total_tool_calls || 0} tools • ${formatTokens(tok.total)} tok (${formatTokens(tok.output)} out)`
+          sub: `${models} • ${s.total_tool_calls || 0} tools • ${formatTokens(tok.total)} tok (${formatTokens(tok.output)} out)`
         }
       ];
 
@@ -856,6 +868,25 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <div class="kpi-sub">${escapeHtml(c.sub)}</div>
         </div>
       `).join('');
+    }
+
+    const agentsByKey = {};
+    agentsData.forEach((a, idx) => {
+      const base = a.id || a.conv_id || ('agent-' + idx);
+      const key = Object.prototype.hasOwnProperty.call(agentsByKey, base) ? (base + '-' + idx) : base;
+      a._domKey = key;
+      agentsByKey[key] = a;
+    });
+
+    function agentMatchesFilter(agent, query) {
+      if (activePhaseFilter !== 'all' && agent.phase !== activePhaseFilter) return false;
+      if (!query) return true;
+      const docsText = (agent.docs || []).map(d => d.name).join(' ');
+      const hay = [
+        agent.name, agent.type, agent.role, agent.model, agent.requested_model,
+        agent.conv_id, agent.status, agent.summary, agent.task, agent.parent_name, docsText
+      ].join(' ').toLowerCase();
+      return hay.includes(query);
     }
 
     function renderGantt() {
@@ -875,22 +906,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           `).join('')
         : '';
 
+      const query = (document.getElementById('searchInput').value || '').toLowerCase().trim();
       const rowsHtml = agentsData.map(agent => {
-        if (activePhaseFilter !== 'all' && agent.phase !== activePhaseFilter) return '';
+        if (!agentMatchesFilter(agent, query)) return '';
         const indent = (agent.depth || 0) * 14;
         const prefix = agent.depth > 0 ? '↳ ' : '';
+        const modelLabel = agent.model || agent.requested_model || 'inherit';
         const barsHtml = (agent.turns || []).map(turn => {
           const left = showCompressed ? turn.gantt_comp_left_pct : turn.gantt_true_left_pct;
           const width = showCompressed ? turn.gantt_comp_width_pct : turn.gantt_true_width_pct;
-          const tip = `${agent.name} • ${turn.label}\\nLocal: ${turn.start_local_full} → ${turn.end_local_full}\\nUTC: ${turn.start_iso} → ${turn.end_iso}\\nDuration: ${turn.duration_label} • Steps: ${turn.steps} • Tools: ${turn.tool_calls}`;
+          const tip = `${agent.name} • ${turn.label}\\nModel: ${modelLabel}\\nLocal: ${turn.start_local_full} → ${turn.end_local_full}\\nUTC: ${turn.start_iso} → ${turn.end_iso}\\nDuration: ${turn.duration_label} • Steps: ${turn.steps} • Tools: ${turn.tool_calls}`;
           return `<div class="gantt-bar bar-${escapeHtml(agent.phase)}" style="left:${left}%;width:${width}%;" title="${escapeHtml(tip)}"></div>`;
         }).join('');
 
         return `
-          <div class="gantt-row" onclick="jumpToAgent('${escapeHtml(agent.conv_id)}')">
-            <div class="gantt-label" style="padding-left:${indent}px;" title="${escapeHtml(agent.name)} (${escapeHtml(agent.role)})">
+          <div class="gantt-row" data-agent-key="${escapeHtml(agent._domKey)}" data-conv-id="${escapeHtml(agent.conv_id)}" onclick="jumpToAgent(this.dataset.agentKey)">
+            <div class="gantt-label" style="padding-left:${indent}px;" title="${escapeHtml(agent.name)} (${escapeHtml(agent.role)} · ${escapeHtml(modelLabel)})">
               <span class="gantt-label-text">${escapeHtml(prefix + agent.name)}</span>
-              <span class="gantt-model-chip">${escapeHtml(agent.requested_model || 'inherit')}</span>
+              <span class="gantt-model-chip">${escapeHtml(modelLabel)}</span>
             </div>
             <div class="gantt-track">
               ${gapOverlay}
@@ -924,13 +957,38 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
           <div style="text-align:right;">Active · Start</div>
         </div>
-        <div class="gantt-rows">${rowsHtml}</div>
+        <div class="gantt-rows">${rowsHtml || '<div class="kpi-sub">No agents match the active filter.</div>'}</div>
       `;
     }
 
     function setGanttMode(mode) {
       ganttMode = mode;
       renderGantt();
+    }
+
+    function agentsShareWave(group, candidate) {
+      return group.some(member => {
+        if (
+          member.parent_id && candidate.parent_id &&
+          member.parent_id === candidate.parent_id &&
+          member.spawn_step_index != null && candidate.spawn_step_index != null &&
+          member.spawn_step_index === candidate.spawn_step_index
+        ) {
+          return true;
+        }
+        const mTurns = member.turns || [];
+        const cTurns = candidate.turns || [];
+        for (const mt of mTurns) {
+          for (const ct of cTurns) {
+            const overlapMs = Math.min(mt.end_ms, ct.end_ms) - Math.max(mt.start_ms, ct.start_ms);
+            if (overlapMs > 3000) return true;
+            if (mt.start_ms === mt.end_ms && ct.start_ms === ct.end_ms && Math.abs(mt.start_ms - ct.start_ms) <= 3000) {
+              return true;
+            }
+          }
+        }
+        return false;
+      });
     }
 
     function renderTimeline(data) {
@@ -968,28 +1026,45 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         while (i < phaseAgents.length) {
           const agent = phaseAgents[i];
           if (agent.mode === 'parallel') {
-            const parallelGroup = [];
-            while (i < phaseAgents.length && phaseAgents[i].mode === 'parallel') {
+            const parallelGroup = [agent];
+            i++;
+            while (i < phaseAgents.length && phaseAgents[i].mode === 'parallel' && agentsShareWave(parallelGroup, phaseAgents[i])) {
               parallelGroup.push(phaseAgents[i]);
               i++;
             }
-            const pGroupContainer = document.createElement('div');
-            pGroupContainer.className = 'parallel-group-container';
-            pGroupContainer.setAttribute('data-search', parallelGroup.map(a => `${a.name} ${a.type} ${a.role} ${a.requested_model}`).join(' '));
-            const badge = document.createElement('div');
-            badge.className = 'parallel-group-badge';
-            badge.textContent = `PARALLEL GROUP · ${parallelGroup.length} CONCURRENT`;
-            pGroupContainer.appendChild(badge);
+            if (parallelGroup.length > 1) {
+              const pGroupContainer = document.createElement('div');
+              pGroupContainer.className = 'parallel-group-container';
+              pGroupContainer.setAttribute('data-search', parallelGroup.map(a => `${a.name} ${a.type} ${a.role} ${a.model || ''} ${a.requested_model}`).join(' '));
+              const badge = document.createElement('div');
+              badge.className = 'parallel-group-badge';
+              badge.textContent = `PARALLEL GROUP · ${parallelGroup.length} CONCURRENT`;
+              pGroupContainer.appendChild(badge);
 
-            const pGrid = document.createElement('div');
-            pGrid.className = 'parallel-grid';
-            parallelGroup.forEach(pAgent => pGrid.appendChild(createAgentBox(pAgent)));
-            pGroupContainer.appendChild(pGrid);
-            phaseSection.appendChild(pGroupContainer);
+              const pGrid = document.createElement('div');
+              pGrid.className = 'parallel-grid';
+              parallelGroup.forEach(pAgent => pGrid.appendChild(createAgentBox(pAgent)));
+              pGroupContainer.appendChild(pGrid);
+              phaseSection.appendChild(pGroupContainer);
+            } else {
+              const soloPar = parallelGroup[0];
+              const timelineItem = document.createElement('div');
+              timelineItem.className = 'timeline-item ' + (phase === 'verification' ? 'node-verifier' : 'node-serial');
+              timelineItem.setAttribute('data-agent-key', soloPar._domKey || '');
+              timelineItem.setAttribute('data-conv-id', soloPar.conv_id || '');
+              timelineItem.setAttribute('data-search', `${soloPar.name} ${soloPar.type} ${soloPar.role} ${soloPar.model || ''} ${soloPar.requested_model}`);
+              const dot = document.createElement('div');
+              dot.className = 'timeline-dot';
+              timelineItem.appendChild(dot);
+              timelineItem.appendChild(createAgentBox(soloPar));
+              phaseSection.appendChild(timelineItem);
+            }
           } else {
             const timelineItem = document.createElement('div');
             timelineItem.className = 'timeline-item ' + (phase === 'verification' ? 'node-verifier' : 'node-serial');
-            timelineItem.setAttribute('data-search', `${agent.name} ${agent.type} ${agent.role} ${agent.requested_model}`);
+            timelineItem.setAttribute('data-agent-key', agent._domKey || '');
+            timelineItem.setAttribute('data-conv-id', agent.conv_id || '');
+            timelineItem.setAttribute('data-search', `${agent.name} ${agent.type} ${agent.role} ${agent.model || ''} ${agent.requested_model}`);
             const dot = document.createElement('div');
             dot.className = 'timeline-dot';
             timelineItem.appendChild(dot);
@@ -1000,12 +1075,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
         container.appendChild(phaseSection);
       });
+      applyTimelineFilter();
     }
 
     function createAgentBox(agent) {
       const box = document.createElement('div');
       box.className = 'agent-box';
-      box.id = 'agent-' + agent.conv_id;
+      box.id = 'agent-' + (agent._domKey || agent.conv_id);
+      box.setAttribute('data-agent-key', agent._domKey || '');
+      box.setAttribute('data-conv-id', agent.conv_id || '');
       box.onclick = () => toggleDetails(box);
 
       const initials = escapeHtml(
@@ -1025,6 +1103,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       else if (nLow.includes('deliberator') || nLow.includes('reviewer')) avatarClass = 'avatar-reviewer';
 
       const modeClass = agent.mode === 'parallel' ? 'badge-parallel' : 'badge-serial';
+      const statusText = agent.status || 'unknown';
+      const statusClass = 'st-' + escapeHtml(statusText.toLowerCase());
       const safeConvId = escapeHtml(agent.conv_id || 'unknown');
       const tok = agent.tokens || {};
 
@@ -1063,9 +1143,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         ? `<span class="telemetry-pill">Parent: ${escapeHtml(agent.parent_name)} (depth ${escapeHtml(agent.depth)})</span>`
         : `<span class="telemetry-pill">Depth ${escapeHtml(agent.depth)}</span>`;
 
+      const transcriptName = agent.transcript_uri ? agent.transcript_uri.split('/').pop() : 'transcript.jsonl';
       const transcriptLink = agent.transcript_uri
-        ? `<a class="doc-link-item" href="${escapeHtml(agent.transcript_uri)}" onclick="event.stopPropagation()">Open transcript.jsonl</a>`
+        ? `<a class="doc-link-item" href="${escapeHtml(agent.transcript_uri)}" onclick="event.stopPropagation()">Open ${escapeHtml(transcriptName)}</a>`
         : '';
+
+      const rawModel = agent.model || agent.requested_model || 'inherit';
+      const modelMeta = agent.model_source === 'inherited' || agent.model_source === 'user_settings'
+        ? `${rawModel} (${agent.model_source})`
+        : rawModel;
 
       box.innerHTML = `
         <div class="agent-meta">
@@ -1073,13 +1159,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <div class="agent-avatar ${avatarClass}">${initials}</div>
             <div class="agent-name-role">
               <div class="agent-name">${escapeHtml(agent.name)}</div>
-              <div class="agent-role-badge">${escapeHtml(agent.role || agent.type)} · model: ${escapeHtml(agent.requested_model || 'inherit')}</div>
+              <div class="agent-role-badge">${escapeHtml(agent.role || agent.type)} · model: ${escapeHtml(modelMeta)}</div>
             </div>
           </div>
           <div class="badge-cluster">
             <span class="badge-clock" title="Wall span: ${escapeHtml(agent.wall_span_label)} (${escapeHtml(agent.wall_start_iso)} → ${escapeHtml(agent.wall_end_iso)})">
               ${escapeHtml(agent.wall_start_local)}–${escapeHtml(agent.wall_end_local)} · ${escapeHtml(agent.active_duration_label)}
             </span>
+            <span class="status-badge ${statusClass}">${escapeHtml(statusText)}</span>
             <span class="execution-badge ${modeClass}">${escapeHtml(agent.mode)}</span>
           </div>
         </div>
@@ -1096,7 +1183,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <div>
               <div class="detail-label">Conversation ID &amp; Transcript</div>
               <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-                <div class="id-tag" onclick="copyId('${safeConvId}', event)">
+                <div class="id-tag" data-conv-id="${safeConvId}" onclick="copyId(this.dataset.convId, event)">
                   ID: ${safeConvId}
                 </div>
                 ${transcriptLink}
@@ -1126,8 +1213,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       if (details) details.classList.toggle('active');
     }
 
-    function jumpToAgent(convId) {
-      const el = document.getElementById('agent-' + convId);
+    function jumpToAgent(agentKey) {
+      const el = document.getElementById('agent-' + agentKey);
       if (!el) return;
       const details = el.querySelector('.box-expand-details');
       if (details && !details.classList.contains('active')) details.classList.add('active');
@@ -1151,32 +1238,53 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       setTimeout(() => toast.classList.remove('show'), 1800);
     }
 
+    function applyTimelineFilter() {
+      const query = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+      document.querySelectorAll('.timeline-phase').forEach(phaseEl => {
+        const phase = phaseEl.getAttribute('data-phase');
+        if (activePhaseFilter !== 'all' && phase !== activePhaseFilter) {
+          phaseEl.style.display = 'none';
+          return;
+        }
+        let phaseVisible = 0;
+        phaseEl.querySelectorAll('.timeline-item').forEach(item => {
+          const key = item.getAttribute('data-agent-key') || item.getAttribute('data-conv-id') || '';
+          const agent = agentsByKey[key];
+          const match = agent
+            ? agentMatchesFilter(agent, query)
+            : (!query || ((item.getAttribute('data-search') || '') + ' ' + item.textContent).toLowerCase().includes(query));
+          item.style.display = match ? 'flex' : 'none';
+          if (match) phaseVisible++;
+        });
+        phaseEl.querySelectorAll('.parallel-group-container').forEach(container => {
+          let groupVisible = 0;
+          container.querySelectorAll('.agent-box').forEach(child => {
+            const key = child.getAttribute('data-agent-key') || child.getAttribute('data-conv-id') || '';
+            const agent = agentsByKey[key];
+            const match = agent
+              ? agentMatchesFilter(agent, query)
+              : (!query || child.textContent.toLowerCase().includes(query));
+            child.style.display = match ? 'block' : 'none';
+            if (match) groupVisible++;
+          });
+          container.style.display = groupVisible > 0 ? 'block' : 'none';
+          phaseVisible += groupVisible;
+        });
+        phaseEl.style.display = phaseVisible > 0 ? 'block' : 'none';
+      });
+    }
+
     function filterPhase(phase, btn) {
       activePhaseFilter = phase;
       document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      document.querySelectorAll('.timeline-phase').forEach(p => {
-        p.style.display = (phase === 'all' || p.getAttribute('data-phase') === phase) ? 'block' : 'none';
-      });
+      applyTimelineFilter();
       renderGantt();
     }
 
     function filterSwarm() {
-      const query = document.getElementById('searchInput').value.toLowerCase().trim();
-      document.querySelectorAll('.timeline-item').forEach(item => {
-        const text = (item.getAttribute('data-search') + ' ' + item.textContent).toLowerCase();
-        item.style.display = (!query || text.includes(query)) ? 'flex' : 'none';
-      });
-      document.querySelectorAll('.parallel-group-container').forEach(container => {
-        let anyVisible = false;
-        container.querySelectorAll('.agent-box').forEach(child => {
-          const text = child.textContent.toLowerCase();
-          const match = !query || text.includes(query);
-          child.style.display = match ? 'block' : 'none';
-          if (match) anyVisible = true;
-        });
-        container.style.display = (!anyVisible && query !== '') ? 'none' : 'block';
-      });
+      applyTimelineFilter();
+      renderGantt();
     }
 
     renderHeader();
@@ -1226,24 +1334,28 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     telemetry: Optional[Dict[str, Any]] = None
-    if not args.legacy:
-        selected_id = select_agy_run(agy_dir, workspace_root, args.conversation_id)
-        if selected_id:
-            telemetry = parse_agy_run(agy_dir, selected_id, workspace_root)
-        elif args.conversation_id:
-            sys.stderr.write(f"Error: conversation '{args.conversation_id}' not found under {agy_dir}\n")
-            return 1
+    try:
+        if not args.legacy:
+            selected_id = select_agy_run(agy_dir, workspace_root, args.conversation_id)
+            if selected_id:
+                telemetry = parse_agy_run(agy_dir, selected_id, workspace_root)
+            elif args.conversation_id:
+                sys.stderr.write(f"Error: conversation '{args.conversation_id}' not found under {agy_dir}\n")
+                return 1
 
-    if telemetry is None:
-        agents_dir = os.path.join(workspace_root, ".agents")
-        if os.path.isdir(agents_dir):
-            telemetry = parse_legacy_agents_dir(agents_dir, workspace_root)
-        else:
-            sys.stderr.write(
-                f"Error: no AGY runs found for workspace '{workspace_root}' in '{agy_dir}' "
-                f"and no legacy '{agents_dir}' directory exists.\n"
-            )
-            return 1
+        if telemetry is None:
+            agents_dir = os.path.join(workspace_root, ".agents")
+            if os.path.isdir(agents_dir):
+                telemetry = parse_legacy_agents_dir(agents_dir, workspace_root)
+            else:
+                sys.stderr.write(
+                    f"Error: no AGY runs found for workspace '{workspace_root}' in '{agy_dir}' "
+                    f"and no legacy '{agents_dir}' directory exists.\n"
+                )
+                return 1
+    except ValueError as exc:
+        sys.stderr.write(f"Error: {exc}\n")
+        return 1
 
     default_out = os.path.join(workspace_root, ".agents", "trajectory.html")
     output_path = os.path.abspath(args.output or default_out)

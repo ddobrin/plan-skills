@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
 DEFAULT_IDLE_GAP_S = 120.0
 DEFAULT_GANTT_CLUSTER_GAP_S = 300.0
+HANDOFF_OVERLAP_TOLERANCE_S = 3.0
 
 
 def parse_iso_timestamp(value: Optional[str]) -> Optional[datetime]:
@@ -76,6 +78,34 @@ def get_local_tz_label() -> str:
     return f"{tz_name} (UTC{sign}{hh:02d}:{mm:02d})"
 
 
+def _is_sdk_reminder(step: Dict[str, Any]) -> bool:
+    return step.get("type") == "SYSTEM_MESSAGE" and step.get("source") == "SYSTEM_SDK"
+
+
+def _is_system_notice(step: Dict[str, Any]) -> bool:
+    if step.get("type") == "SYSTEM_MESSAGE" and step.get("source") == "SYSTEM":
+        content = str(step.get("content") or "")
+        header = content.split("content=", 1)[0]
+        sender_match = re.search(r"\bsender=([^\s]+)", header)
+        sender_id = sender_match.group(1).strip() if sender_match else ""
+        if sender_id.lower() == "system":
+            return True
+        if "[Notice]" in header and not sender_id:
+            return True
+    return False
+
+
+def _is_agent_wakeup(step: Dict[str, Any]) -> bool:
+    if step.get("type") == "USER_INPUT":
+        return True
+    if step.get("type") == "SYSTEM_MESSAGE" and step.get("source") == "SYSTEM":
+        if _is_system_notice(step):
+            return False
+        content = str(step.get("content") or "")
+        return "sender=" in content or "[Message]" in content
+    return False
+
+
 def segment_active_turns(
     steps: Sequence[Dict[str, Any]],
     spawn_ts: Optional[datetime] = None,
@@ -83,12 +113,10 @@ def segment_active_turns(
 ) -> List[Dict[str, Any]]:
     """Split a conversation's transcript steps into active execution turns.
 
-    A new turn begins on:
-    - the first step,
-    - a USER_INPUT step (after any prior step), or
-    - a SYSTEM_MESSAGE arriving from a parent/sender after an idle boundary
-      (previous step was a final PLANNER_RESPONSE without tool_calls, or the gap
-      between steps exceeds ``idle_gap_s`` while no tool is executing).
+    Preserves idle boundary state across ``SYSTEM_SDK`` reminders and
+    ``sender=system`` ``[Notice]`` steps, ignores ``[Notice]`` steps as
+    wakeups, splits wakeups across idle boundaries at ``>= 0.5s``, and
+    measures ``USER_INPUT`` gaps against ``cur_end``.
     """
     timed_steps: List[Tuple[datetime, Dict[str, Any]]] = []
     for step in steps:
@@ -106,45 +134,68 @@ def segment_active_turns(
     cur_end: Optional[datetime] = None
     cur_steps: List[Dict[str, Any]] = []
     cur_label = "Turn 1"
-    prev_dt: Optional[datetime] = None
-    prev_idle_boundary = False
+    idle_since_dt: Optional[datetime] = None
+    pending_sdk_steps: List[Tuple[datetime, Dict[str, Any]]] = []
 
     for dt, step in timed_steps:
         step_type = step.get("type", "")
-        source = step.get("source", "")
-        content = str(step.get("content") or "")
-        is_wakeup = step_type == "USER_INPUT" or (
-            step_type == "SYSTEM_MESSAGE"
-            and source == "SYSTEM"
-            and ("sender=" in content or "[Message]" in content)
-        )
-        gap = (dt - prev_dt).total_seconds() if prev_dt is not None else 0.0
-        should_split = False
+        is_passive_system = _is_sdk_reminder(step) or _is_system_notice(step)
+        is_wakeup = _is_agent_wakeup(step)
 
+        if is_passive_system and (cur_start is None or idle_since_dt is not None):
+            pending_sdk_steps.append((dt, step))
+            continue
+
+        should_split = False
         if cur_start is not None:
-            if step_type == "USER_INPUT" and prev_dt is not None and gap >= 1.0:
+            if step_type == "USER_INPUT" and (dt - (cur_end or cur_start)).total_seconds() >= 1.0:
                 should_split = True
-            elif is_wakeup and prev_idle_boundary and gap >= 5.0:
+            elif is_wakeup and idle_since_dt is not None and (dt - idle_since_dt).total_seconds() >= 0.5:
                 should_split = True
-            elif prev_idle_boundary and gap >= idle_gap_s:
+            elif idle_since_dt is not None and (dt - idle_since_dt).total_seconds() >= idle_gap_s:
                 should_split = True
 
         if should_split and cur_start is not None and cur_end is not None:
             turns.append(_finalize_turn(len(turns) + 1, cur_start, cur_end, cur_steps, cur_label))
             cur_start = dt
             cur_end = dt
-            cur_steps = [step]
+            cur_steps = [s for _, s in pending_sdk_steps] + [step]
             cur_label = _infer_turn_label(len(turns) + 1, step)
+            pending_sdk_steps.clear()
+            idle_since_dt = None
         else:
             if cur_start is None:
                 cur_start = spawn_ts if (spawn_ts is not None and spawn_ts < dt and (dt - spawn_ts).total_seconds() <= 60.0) else dt
+                cur_end = dt
                 cur_label = _infer_turn_label(1, step)
-            cur_end = dt if cur_end is None or dt >= cur_end else cur_end
+            if pending_sdk_steps:
+                for p_dt, p_step in pending_sdk_steps:
+                    cur_steps.append(p_step)
+                    if cur_end is None or p_dt > cur_end:
+                        cur_end = p_dt
+                pending_sdk_steps.clear()
+            if cur_end is None or dt >= cur_end:
+                cur_end = dt
             cur_steps.append(step)
 
         tool_calls = step.get("tool_calls") or []
-        prev_idle_boundary = step_type == "PLANNER_RESPONSE" and len(tool_calls) == 0
-        prev_dt = dt
+        if step_type == "PLANNER_RESPONSE" and len(tool_calls) == 0:
+            idle_since_dt = dt
+        elif not is_passive_system:
+            idle_since_dt = None
+
+    if cur_start is None and pending_sdk_steps:
+        cur_start = spawn_ts if (spawn_ts is not None and spawn_ts < pending_sdk_steps[0][0] and (pending_sdk_steps[0][0] - spawn_ts).total_seconds() <= 60.0) else pending_sdk_steps[0][0]
+        cur_end = pending_sdk_steps[-1][0]
+        cur_steps = [s for _, s in pending_sdk_steps]
+        cur_label = _infer_turn_label(1, cur_steps[0])
+        pending_sdk_steps.clear()
+    elif pending_sdk_steps and cur_start is not None and cur_end is not None:
+        for p_dt, p_step in pending_sdk_steps:
+            if idle_since_dt is None or (p_dt - idle_since_dt).total_seconds() <= 5.0:
+                cur_steps.append(p_step)
+                if p_dt > cur_end:
+                    cur_end = p_dt
 
     if cur_start is not None and cur_end is not None:
         turns.append(_finalize_turn(len(turns) + 1, cur_start, cur_end, cur_steps, cur_label))
@@ -214,8 +265,37 @@ def total_merged_duration(intervals: Sequence[Tuple[float, float]]) -> float:
     return sum(max(0.0, end - start) for start, end in merge_intervals(intervals))
 
 
+def subtract_intervals(
+    intervals: Sequence[Tuple[float, float]],
+    masks: Sequence[Tuple[float, float]],
+) -> List[Tuple[float, float]]:
+    """Subtract merged mask intervals from each interval in ``intervals``."""
+    merged_masks = merge_intervals(masks)
+    if not merged_masks:
+        return list(intervals)
+    result: List[Tuple[float, float]] = []
+    for start, end in intervals:
+        cur = min(start, end)
+        hi = max(start, end)
+        for m_start, m_end in merged_masks:
+            if m_end <= cur:
+                continue
+            if m_start >= hi:
+                break
+            if m_start > cur:
+                result.append((cur, m_start))
+            cur = max(cur, m_end)
+            if cur >= hi:
+                break
+        if cur < hi:
+            result.append((cur, hi))
+    return result
+
+
 def compute_peak_concurrency(intervals: Sequence[Tuple[float, float]]) -> int:
     """Compute maximum number of simultaneously active intervals."""
+    if not intervals:
+        return 0
     events: List[Tuple[float, int]] = []
     for start, end in intervals:
         if end <= start:
@@ -234,6 +314,59 @@ def compute_peak_concurrency(intervals: Sequence[Tuple[float, float]]) -> int:
         if cur > peak:
             peak = cur
     return peak
+
+
+def compute_worker_concurrency(
+    agents: Sequence[Dict[str, Any]],
+    handoff_tolerance_s: float = HANDOFF_OVERLAP_TOLERANCE_S,
+) -> int:
+    """Compute peak concurrent execution excluding parent-child wait/handoff overlap."""
+    if not agents:
+        return 0
+
+    children_by_parent: Dict[str, List[str]] = {}
+    by_id: Dict[str, Dict[str, Any]] = {}
+    for a in agents:
+        cid = a["conv_id"]
+        by_id[cid] = a
+        pid = a.get("parent_id") or ""
+        if pid:
+            children_by_parent.setdefault(pid, []).append(cid)
+
+    def _descendant_intervals(cid: str) -> List[Tuple[float, float]]:
+        out: List[Tuple[float, float]] = []
+        stack = list(children_by_parent.get(cid, []))
+        seen = {cid}
+        while stack:
+            cur = stack.pop()
+            if cur in seen or cur not in by_id:
+                continue
+            seen.add(cur)
+            for t in by_id[cur].get("turns") or []:
+                s_s = t["start_ms"] / 1000.0 - handoff_tolerance_s
+                e_s = max(t["start_ms"], t["end_ms"]) / 1000.0 + handoff_tolerance_s
+                out.append((s_s, e_s))
+            stack.extend(children_by_parent.get(cur, []))
+        return out
+
+    effective_intervals: List[Tuple[float, float]] = []
+    for a in agents:
+        cid = a["conv_id"]
+        raw = [
+            (t["start_ms"] / 1000.0, max(t["start_ms"], t["end_ms"]) / 1000.0)
+            for t in (a.get("turns") or [])
+        ]
+        if not raw:
+            continue
+        desc_masks = _descendant_intervals(cid)
+        if desc_masks:
+            effective_intervals.extend(subtract_intervals(raw, desc_masks))
+        else:
+            effective_intervals.extend(raw)
+
+    if not effective_intervals:
+        return 1 if any(a.get("turns") for a in agents) else 0
+    return max(1, compute_peak_concurrency(effective_intervals))
 
 
 def compute_gantt_layout(
