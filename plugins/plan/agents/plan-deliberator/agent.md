@@ -24,7 +24,7 @@ model: pro                          # ENFORCED by Antigravity when dispatched vi
 x-plan-model: opus-5.5-high         # EXACT model (effort = suffix); honored by swarm dispatch
 x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
   - { territory: intent,   model: opus-5.5-high,         tier: pro }
-  - { territory: codebase, model: gemini-3.8-flash-high, tier: flash }
+  - { territory: codebase, model: gemini-4-hydrogen-high, tier: flash }
   - { territory: delivery, model: gemini-4-carbon-high,   tier: inherit }
 ---
 
@@ -252,7 +252,7 @@ Use `date +%Y-%m-%d`. Keep every section, even when empty (`_None._`).
 | Delegate (territory) | Model | Route |
 |---|---|---|
 | intent | opus-5.5-high | swarm |
-| codebase | gemini-3.8-flash-high | swarm |
+| codebase | gemini-4-hydrogen-high | swarm |
 | delivery | gemini-4-carbon-high | swarm |
 | chair | opus-5.5-high | swarm |
 

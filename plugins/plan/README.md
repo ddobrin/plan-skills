@@ -173,13 +173,7 @@ Runs **after code is written, before merge**. Reasons about the code (it does *n
 - **Attack surface:** claim vs. reality, broken/swallowed failure paths, edge cases, concurrency races, resource/correctness, regressions.
 - **Signature output — severity calibration:** the panel's most valuable product isn't deletion but *corrected severity* (e.g. three reviewers call a singleton race "Critical"; it's confirmed real but downgraded to "High" because impact is gated on concurrent requests). Always surface the calibration delta.
 
-### Utility
-
-#### `teamwork-trajectory` — Visualize the Swarm
-An out-of-band **utility** skill (not part of the lifecycle) that scans the `.agents/` directory, parses each agent's briefing and hand-off records, and compiles an interactive, dark-mode HTML timeline of everything the swarm executed.
-
-- **Produces:** `.agents/trajectory.html` (self-contained, browsable).
-- **Triggers:** "generate trajectory", "visualize teamwork", "trace agents", "update trajectory dashboard".
+> **Looking for `teamwork-trajectory`?** The trajectory and timing dashboard viewer now lives in the companion [`viewers` plugin](../viewers/README.md).
 
 ---
 
@@ -239,18 +233,18 @@ Every role declares the model it runs on in its own frontmatter — in **both** 
 
 | Role | `x-plan-model` | `model:` |
 |---|---|---|
-| `supervisor` / `starter` | `gemini-3.8-flash-high` | `flash` |
+| `supervisor` / `starter` | `gemini-4-hydrogen-high` | `flash` |
 | `product-owner`, `visual-product-owner` | `opus-5.5-high` | `pro` |
 | `architect`, `visual-architect` | `opus-5.5-high` | `pro` |
-| `engineer` | `gemini-3.8-flash-high` (fallback `opus-5.5-medium`) | `flash` |
+| `engineer` | `gemini-4-hydrogen-high` (fallback `opus-5.5-medium`) | `flash` |
 | `auditor` | `opus-5.5-high` | `pro` |
 | `simplifier` | `gemini-3.8-flash-medium` | `flash` |
-| `visual-implementation-recap` | `gemini-3.8-flash-high` | `flash` |
-| `spec-validator` chair | `opus-5.5-high` — seats: `opus-5.5-high` · `gemini-3.1-pro-high` · `opus-5.5-high` | `pro` |
-| `plan-validator` chair | `opus-5.5-high` — seats: `opus-5.5-high` · `gemini-3.8-flash-high` · `gemini-3.1-pro-high` | `pro` |
-| `implementation-validator` chair | `opus-5.5-high` — seats: `opus-5.5-high` · `gemini-3.1-pro-high` · `gemini-3.8-flash-high` | `pro` |
-| `spec-deliberator` chair | `opus-5.5-high` — delegates: `opus-5.5-high` · `gemini-3.1-pro-high` · `opus-5.5-high` | `pro` |
-| `plan-deliberator` chair | `opus-5.5-high` — delegates: `opus-5.5-high` · `gemini-3.8-flash-high` · `gemini-3.1-pro-high` | `pro` |
+| `visual-implementation-recap` | `gemini-4-hydrogen-high` | `flash` |
+| `spec-validator` chair | `opus-5.5-high` — seats: `opus-5.5-high` · `gemini-4-carbon-high` · `opus-5.5-high` | `pro` |
+| `plan-validator` chair | `opus-5.5-high` — seats: `opus-5.5-high` · `gemini-4-hydrogen-high` · `gemini-4-carbon-high` | `pro` |
+| `implementation-validator` chair | `opus-5.5-high` — seats: `opus-5.5-high` · `gemini-4-carbon-high` · `gemini-4-hydrogen-high` | `pro` |
+| `spec-deliberator` chair | `opus-5.5-high` — delegates: `opus-5.5-high` · `gemini-4-carbon-high` · `opus-5.5-high` | `pro` |
+| `plan-deliberator` chair | `opus-5.5-high` — delegates: `opus-5.5-high` · `gemini-4-hydrogen-high` · `gemini-4-carbon-high` | `pro` |
 
 ### Two routes
 
@@ -270,7 +264,7 @@ The portable route is the graceful degradation: same files, same roles, less pre
 
 **Run a milestone**
 1. Open a **normal** conversation — not the `supervisor` custom agent. The `swarm` tool is mounted only on the default agent, so a custom agent selected as the main agent can never coordinate and would silently fall back to the portable route.
-2. `/model gemini-3.8-flash-high` — the supervisor's own declared model.
+2. `/model gemini-4-hydrogen-high` — the supervisor's own declared model.
 3. Say "be the supervisor". The supervisor compares its model with `starter`'s `x-plan-model` (if they differ it says so and asks you to switch with `/model`), prints the routing table — every role and seat with the model it will get, and which route is active — and only then dispatches.
 4. At any point, `swarm{action:"status"}` shows the live roster and models.
 

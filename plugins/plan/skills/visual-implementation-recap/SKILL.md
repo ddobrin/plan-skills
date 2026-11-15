@@ -10,7 +10,7 @@ tools:
   - list_dir
   - find_by_name
   - grep_search
-x-plan-model: gemini-3.8-flash-high # EXACT model for whoever runs this role (effort = suffix); honored by swarm dispatch
+x-plan-model: gemini-4-hydrogen-high # EXACT model for whoever runs this role (effort = suffix); honored by swarm dispatch
 x-plan-tier: flash                  # fallback tier when exact pinning is unavailable
 ---
 # SYSTEM PROMPT: THE IMPLEMENTATION RECAP (RENDERER)

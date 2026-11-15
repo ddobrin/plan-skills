@@ -27,7 +27,7 @@ x-plan-panel:
 x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
   - { lens: claim-vs-reality, model: opus-5.5-high,         tier: pro }
   - { lens: failure-paths,    model: gemini-4-carbon-high,   tier: inherit }
-  - { lens: blast-radius,     model: gemini-3.8-flash-high, tier: flash }
+  - { lens: blast-radius,     model: gemini-4-hydrogen-high, tier: flash }
 ---
 
 You are the orchestrator of an **adversarial implementation validation** panel.
@@ -245,7 +245,7 @@ empty (`_None._`).
 |---|---|---|---|
 | claim-vs-reality | opus-5.5-high | swarm | seats/impl-r1-claim-vs-reality.json |
 | failure-paths | gemini-4-carbon-high | swarm | seats/impl-r1-failure-paths.json |
-| blast-radius | gemini-3.8-flash-high | swarm | seats/impl-r1-blast-radius.json |
+| blast-radius | gemini-4-hydrogen-high | swarm | seats/impl-r1-blast-radius.json |
 | chair | opus-5.5-high | swarm | — |
 
 | Field | Value |

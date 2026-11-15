@@ -18,7 +18,7 @@ tools:
 mainAgent: true
 subagent: true
 model: flash                        # ENFORCED by Antigravity when dispatched via invoke_subagent (tier only)
-x-plan-model: gemini-3.8-flash-high # EXACT model (effort = suffix); honored by swarm dispatch
+x-plan-model: gemini-4-hydrogen-high # EXACT model (effort = suffix); honored by swarm dispatch
 x-plan-fallback-model: opus-5.5-medium   # escalation after 2 failed audits of the same task; quota fallback
 ---
 

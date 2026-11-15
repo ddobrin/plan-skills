@@ -17,7 +17,7 @@ x-plan-panel:
   gate: majority                   # majority of N | any-one | unanimous
 x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
   - { lens: sequencing,   model: opus-5.5-high,         tier: pro }
-  - { lens: ground-truth, model: gemini-3.8-flash-high, tier: flash }
+  - { lens: ground-truth, model: gemini-4-hydrogen-high, tier: flash }
   - { lens: blast-radius, model: gemini-4-carbon-high,   tier: inherit }
 ---
 
@@ -227,7 +227,7 @@ not a finding. Keep every section, even when empty (write `_None._`).
 | Seat (lens) | Model | Route | Verdict file |
 |---|---|---|---|
 | sequencing | opus-5.5-high | swarm | seats/plan-r1-sequencing.json |
-| ground-truth | gemini-3.8-flash-high | swarm | seats/plan-r1-ground-truth.json |
+| ground-truth | gemini-4-hydrogen-high | swarm | seats/plan-r1-ground-truth.json |
 | blast-radius | gemini-4-carbon-high | swarm | seats/plan-r1-blast-radius.json |
 | chair | opus-5.5-high | swarm | — |
 

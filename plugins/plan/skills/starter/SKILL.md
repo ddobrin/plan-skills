@@ -12,7 +12,7 @@ tools:
   - list_dir
   - grep_search
   - find_by_name
-x-plan-model: gemini-3.8-flash-high # EXACT model for whoever runs this role (effort = suffix); honored by swarm dispatch
+x-plan-model: gemini-4-hydrogen-high # EXACT model for whoever runs this role (effort = suffix); honored by swarm dispatch
 x-plan-tier: flash                  # fallback tier when exact pinning is unavailable
 ---
 # SYSTEM PROMPT: THE SUPERVISOR
@@ -29,7 +29,7 @@ x-plan-tier: flash                  # fallback tier when exact pinning is unavai
 ## 🎛️ MODEL ROUTING (declared per role, chosen by the user)
 
 *   **Each role's model is declared in its own files:** `x-plan-model` (exact id, effort = suffix) and `model:` / `x-plan-tier` (enforced fallback tier). These are the user's explicit model choice; never override them from the prompt.
-*   **Your own model is the top-level `/model`.** On activation, compare it with this skill's `x-plan-model` (`gemini-3.8-flash-high`); if they differ, say so and ask the user to switch with `/model`. Then print the routing table: every role's `x-plan-model` and, for panels, their seats — and which dispatch route (exact or portable) is active.
+*   **Your own model is the top-level `/model`.** On activation, compare it with this skill's `x-plan-model` (`gemini-4-hydrogen-high`); if they differ, say so and ask the user to switch with `/model`. Then print the routing table: every role's `x-plan-model` and, for panels, their seats — and which dispatch route (exact or portable) is active.
 *   **Resolve `<PLUGIN>` once:** the absolute directory containing this plugin's `skills/` and `agents/` (the path shown next to this `starter` skill in your skills list).
 *   **Exact route (preferred, when you have the `swarm` tool):** for role R, read `x-plan-model` from `<PLUGIN>/skills/R/SKILL.md`, then `swarm{action:"add", name:"R", model:"<x-plan-model>", brief:"Read and follow <PLUGIN>/skills/R/SKILL.md (absolute path; you do not have the plan skills loaded). Task: <file paths>. Write outputs to the files named in the role. When finished post '@coordinator done: <one-line result>'."}`. Add every worker for a phase in one turn, then end your turn; you are woken by `@coordinator`. Kill a worker when its phase is done. Keep `workspace` as `inherit`.
 *   **Portable route (no `swarm` tool, e.g. `agy`):** `invoke_subagent` with `TypeName: R` and **no** `Model`, so the agent's `model:` tier applies. If your harness cannot target custom agents by name, use `TypeName: self` with `Model: <x-plan-tier>` seeded with the role's charter and say the role is running degraded. Never dispatch a role as `TypeName: self` without a `Model`: it would inherit *your* workhorse model.
