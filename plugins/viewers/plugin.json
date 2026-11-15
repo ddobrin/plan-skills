@@ -1,0 +1,5 @@
+{
+  "name": "viewers",
+  "description": "Trajectory and execution visualization viewer skills for Antigravity (AGY CLI)",
+  "version": "1.0.0"
+}
