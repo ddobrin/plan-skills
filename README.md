@@ -68,50 +68,95 @@ The swarm's structure is declared in [`plugins/plan/graph.json`](./plugins/plan/
 
 ## 🚀 Quick Start & Installation
 
-### 1. How to Install Custom Agents in AGY CLI
-> 📖 See [plugins/plan/agents/README.md](./plugins/plan/agents/README.md) for the complete reference.
+This repository ships two AGY plugins under `plugins/`:
+- **`plugins/plan`** — Core planning swarm (14 skills + 13 custom agents)
+- **`plugins/viewers`** — Trajectory & timing viewers (`teamwork-trajectory` and `boost-trajectory` skills)
 
-Antigravity CLI discovers custom agents as directories, each named after the agent and containing a single `agent.md` file (whose body acts as the system prompt and frontmatter specifies available tools). You can install the swarm agents globally or workspace-locally.
+### 1. Install as AGY Plugins (Recommended)
+> 📖 See [plugins/plan/README.md](./plugins/plan/README.md) and [plugins/viewers/README.md](./plugins/viewers/README.md) for details on each plugin's skills.
 
-#### Method A: Loose Global Agents (Recommended)
-This method installs the roles globally in AGY CLI, making them available across all of your projects:
+#### From a Local Folder
+From the repository root, validate and install each plugin directory directly into AGY:
+
 ```bash
-mkdir -p "$HOME/.gemini/config/agents"
+# Optional: validate plugin manifests and layouts
+agy plugin validate ./plugins/plan
+agy plugin validate ./plugins/viewers
+
+# Install both plugins into ~/.gemini/config/plugins/
+agy plugin install ./plugins/plan
+agy plugin install ./plugins/viewers
+
+# Verify installed plugins and components
+agy plugin list
+```
+
+To update an already-installed local copy after pulling or editing files:
+```bash
+agy plugin uninstall plan && agy plugin install ./plugins/plan
+agy plugin uninstall viewers && agy plugin install ./plugins/viewers
+```
+
+> [!TIP]
+> If you are actively developing this repo and want AGY to read directly from the local folder without reinstalling, add `{"entries": [{"path": "/absolute/path/to/plan-skills/plugins"}]}` to `~/.gemini/config/plugins.json` (global) or `.agents/plugins.json` (project-scoped).
+
+#### From the GitHub Repository
+Clone the repository and install the plugin subdirectories:
+
+```bash
+git clone https://github.com/ddobrin/plan-skills.git
+cd plan-skills
+
+agy plugin install ./plugins/plan
+agy plugin install ./plugins/viewers
+```
+
+---
+
+### 2. Install as Loose Agents & Viewer Skills (Optional)
+> 📖 See [plugins/plan/agents/README.md](./plugins/plan/agents/README.md) for the complete agent reference.
+
+Antigravity CLI discovers custom agents as directories, each named after the agent and containing a single `agent.md` file (whose body acts as the system prompt and frontmatter specifies available tools). If you prefer loose installations instead of AGY plugins, you can copy the swarm agents and the viewer skills globally or workspace-locally.
+
+> [!NOTE]
+> The `plan` skills are not installed loose: `starter` reads `graph.json` and `lib/graph/STATE.md` from the plugin root, so install them through the `plan` plugin above. The viewer skills are self-contained and work either way.
+
+#### Method A: Loose Global Agents & Viewer Skills
+This installs the roles and the viewer skills globally in AGY CLI, making them available across all of your projects:
+```bash
+mkdir -p "$HOME/.gemini/config/agents" "$HOME/.gemini/config/skills"
+
 for d in plugins/plan/agents/*/; do
   name=$(basename "$d")
   rm -rf "$HOME/.gemini/config/agents/$name"
   cp -R "plugins/plan/agents/$name" "$HOME/.gemini/config/agents/$name"
 done
+
+for d in plugins/viewers/skills/*/; do
+  name=$(basename "$d")
+  rm -rf "$HOME/.gemini/config/skills/$name"
+  cp -R "$d" "$HOME/.gemini/config/skills/$name"
+done
 ```
 > [!IMPORTANT]
-> Always copy the **entire directory** (`cp -R`), not just individual files. Visual agents (`visual-architect`, `visual-product-owner`, `visual-implementation-recap`) carry bundled assets (such as `assets/template.html` and `references/`) that must remain relatively aligned inside their installation directories to prevent rendering errors.
+> Always copy the **entire directory** (`cp -R`), not just individual files. Visual agents (`visual-architect`, `visual-product-owner`, `visual-implementation-recap`) carry bundled assets (such as `assets/template.html` and `references/`), and viewer skills (`teamwork-trajectory`, `boost-trajectory`) carry helper scripts next to their `generator.py`; these must remain relatively aligned inside their installation directories.
 
-#### Method B: Project-Scoped (Workspace) Agents
-To make the swarm agents available only within a specific project, place them in a `.agents/agents` subfolder:
+#### Method B: Project-Scoped (Workspace) Agents & Viewer Skills
+To make them available only within a specific project, copy them into `.agents/agents` and `.agents/skills`:
 ```bash
-mkdir -p ".agents/agents"
+mkdir -p ".agents/agents" ".agents/skills"
+
 for d in plugins/plan/agents/*/; do
   name=$(basename "$d")
   rm -rf ".agents/agents/$name"
   cp -R "plugins/plan/agents/$name" ".agents/agents/$name"
 done
-```
 
----
-
-### 2. How to Install Skills & Agents as an AGY Plugin
-> 📖 See [plugins/plan/README.md](./plugins/plan/README.md) for details on the skill set.
-
-Skills and agents in AGY CLI are registered via Antigravity plugins. You can install the `plan` plugin directly into AGY using `agy plugin install`:
-
-```bash
-# Install the core planning swarm plugin (skills + agents)
-agy plugin install plugins/plan
-```
-
-Or install the repository plugin bundle directly from GitHub:
-```bash
-agy plugin install https://github.com/ddobrin/plan-skills
+for d in plugins/viewers/skills/*/; do
+  name=$(basename "$d")
+  rm -rf ".agents/skills/$name"
+  cp -R "$d" ".agents/skills/$name"
+done
 ```
 
 ---
@@ -148,3 +193,4 @@ Explore the underlying documentation for details on individual roles, lifecycle 
 * **Planning Skills (AGY CLI):** Complete guide to skills, artifacts, lifecycle, topology, and state is documented in [plugins/plan/README.md](./plugins/plan/README.md).
 * **Topology (`graph.json`):** The declared nodes, edges, gates, and node contracts live in [plugins/plan/graph.json](./plugins/plan/graph.json).
 * **State Schema (`state.json`):** The per-milestone state file and its field semantics are documented in [plugins/plan/lib/graph/STATE.md](./plugins/plan/lib/graph/STATE.md).
+* **Viewers Plugin (AGY CLI):** Trajectory and timing dashboard skills (`teamwork-trajectory`, `boost-trajectory`) are documented in [plugins/viewers/README.md](./plugins/viewers/README.md).
