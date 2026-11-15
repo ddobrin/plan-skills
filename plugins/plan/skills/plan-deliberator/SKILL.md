@@ -16,7 +16,7 @@ x-plan-tier: pro                    # fallback tier when exact pinning is unavai
 x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
   - { territory: intent,   model: opus-5.5-high,         tier: pro }
   - { territory: codebase, model: gemini-3.8-flash-high, tier: flash }
-  - { territory: delivery, model: gemini-3.1-pro-high,   tier: inherit }
+  - { territory: delivery, model: gemini-4-carbon-high,   tier: inherit }
 ---
 
 # Deliberative Plan Improvement
@@ -279,7 +279,7 @@ section, even when empty (write `_None._`).
 |---|---|---|
 | intent | opus-5.5-high | swarm |
 | codebase | gemini-3.8-flash-high | swarm |
-| delivery | gemini-3.1-pro-high | swarm |
+| delivery | gemini-4-carbon-high | swarm |
 | chair | opus-5.5-high | swarm |
 
 | Field | Value |

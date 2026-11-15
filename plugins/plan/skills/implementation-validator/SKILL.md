@@ -18,7 +18,7 @@ x-plan-panel:
   gate: majority                   # majority of N | any-one | unanimous
 x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
   - { lens: claim-vs-reality, model: opus-5.5-high,         tier: pro }
-  - { lens: failure-paths,    model: gemini-3.1-pro-high,   tier: inherit }
+  - { lens: failure-paths,    model: gemini-4-carbon-high,   tier: inherit }
   - { lens: blast-radius,     model: gemini-3.8-flash-high, tier: flash }
 ---
 
@@ -277,7 +277,7 @@ the **Failed Claims** section in finding-hunt mode. Keep the other sections even
 | Seat (lens) | Model | Route | Verdict file |
 |---|---|---|---|
 | claim-vs-reality | opus-5.5-high | swarm | seats/impl-r1-claim-vs-reality.json |
-| failure-paths | gemini-3.1-pro-high | swarm | seats/impl-r1-failure-paths.json |
+| failure-paths | gemini-4-carbon-high | swarm | seats/impl-r1-failure-paths.json |
 | blast-radius | gemini-3.8-flash-high | swarm | seats/impl-r1-blast-radius.json |
 | chair | opus-5.5-high | swarm | — |
 

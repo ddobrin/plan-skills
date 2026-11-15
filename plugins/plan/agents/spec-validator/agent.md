@@ -25,7 +25,7 @@ x-plan-panel:
   gate: majority                   # majority of N | any-one | unanimous
 x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
   - { lens: internal-consistency, model: opus-5.5-high,       tier: pro }
-  - { lens: missing-requirement,  model: gemini-3.1-pro-high, tier: inherit }
+  - { lens: missing-requirement,  model: gemini-4-carbon-high, tier: inherit }
   - { lens: malicious-compliance, model: opus-5.5-high,      tier: pro }
 ---
 
@@ -194,7 +194,7 @@ Order confirmed findings highest-severity first. Keep every section, even when e
 | Seat (lens) | Model | Route | Verdict file |
 |---|---|---|---|
 | internal-consistency | opus-5.5-high | swarm | seats/spec-r1-internal-consistency.json |
-| missing-requirement | gemini-3.1-pro-high | swarm | seats/spec-r1-missing-requirement.json |
+| missing-requirement | gemini-4-carbon-high | swarm | seats/spec-r1-missing-requirement.json |
 | malicious-compliance | opus-5.5-high | swarm | seats/spec-r1-malicious-compliance.json |
 | chair | opus-5.5-high | swarm | — |
 

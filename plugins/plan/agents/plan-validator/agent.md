@@ -25,7 +25,7 @@ x-plan-panel:
 x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
   - { lens: sequencing,   model: opus-5.5-high,         tier: pro }
   - { lens: ground-truth, model: gemini-3.8-flash-high, tier: flash }
-  - { lens: blast-radius, model: gemini-3.1-pro-high,   tier: inherit }
+  - { lens: blast-radius, model: gemini-4-carbon-high,   tier: inherit }
 ---
 
 You are the orchestrator of an **adversarial plan validation** panel.
@@ -196,7 +196,7 @@ section, even when empty (`_None._`).
 |---|---|---|---|
 | sequencing | opus-5.5-high | swarm | seats/plan-r1-sequencing.json |
 | ground-truth | gemini-3.8-flash-high | swarm | seats/plan-r1-ground-truth.json |
-| blast-radius | gemini-3.1-pro-high | swarm | seats/plan-r1-blast-radius.json |
+| blast-radius | gemini-4-carbon-high | swarm | seats/plan-r1-blast-radius.json |
 | chair | opus-5.5-high | swarm | — |
 
 | Field | Value |

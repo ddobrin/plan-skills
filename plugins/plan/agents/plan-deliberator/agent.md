@@ -25,7 +25,7 @@ x-plan-model: opus-5.5-high         # EXACT model (effort = suffix); honored by 
 x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
   - { territory: intent,   model: opus-5.5-high,         tier: pro }
   - { territory: codebase, model: gemini-3.8-flash-high, tier: flash }
-  - { territory: delivery, model: gemini-3.1-pro-high,   tier: inherit }
+  - { territory: delivery, model: gemini-4-carbon-high,   tier: inherit }
 ---
 
 You are the orchestrator of a **deliberative plan improvement** panel.
@@ -253,7 +253,7 @@ Use `date +%Y-%m-%d`. Keep every section, even when empty (`_None._`).
 |---|---|---|
 | intent | opus-5.5-high | swarm |
 | codebase | gemini-3.8-flash-high | swarm |
-| delivery | gemini-3.1-pro-high | swarm |
+| delivery | gemini-4-carbon-high | swarm |
 | chair | opus-5.5-high | swarm |
 
 | Field | Value |

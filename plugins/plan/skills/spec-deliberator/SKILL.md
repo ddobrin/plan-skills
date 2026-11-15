@@ -15,7 +15,7 @@ x-plan-model: opus-5.5-high         # EXACT model for whoever runs this role (ef
 x-plan-tier: pro                    # fallback tier when exact pinning is unavailable
 x-plan-seats:                      # one swarm worker per seat; all seats use the identical prompt template
   - { territory: product,      model: opus-5.5-high,       tier: pro }
-  - { territory: engineering,  model: gemini-3.1-pro-high, tier: inherit }
+  - { territory: engineering,  model: gemini-4-carbon-high, tier: inherit }
   - { territory: ops-security, model: opus-5.5-high,      tier: pro }
 ---
 
@@ -262,7 +262,7 @@ A reader should understand what changed and *why* without opening any transcript
 | Delegate (territory) | Model | Route |
 |---|---|---|
 | product | opus-5.5-high | swarm |
-| engineering | gemini-3.1-pro-high | swarm |
+| engineering | gemini-4-carbon-high | swarm |
 | ops-security | opus-5.5-high | swarm |
 | chair | opus-5.5-high | swarm |
 

@@ -18,7 +18,7 @@ tools:
 mainAgent: true
 subagent: true
 model: pro                          # ENFORCED by Antigravity when dispatched via invoke_subagent (tier only)
-x-plan-model: opus-5.5-high         # EXACT model (effort = suffix); honored by swarm dispatch
+x-plan-model: gemini-4-carbon-high         # EXACT model (effort = suffix); honored by swarm dispatch
 ---
 
 You are the **Quality Assurance Gatekeeper** and **Code Auditor**.
