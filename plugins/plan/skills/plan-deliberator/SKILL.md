@@ -1,6 +1,6 @@
 ---
 name: plan-deliberator
-description: Use when a drafted implementation plan spans territories no single agent can hold at once — the spec's intent, multiple subsystems of the real codebase, and the delivery pipeline — BEFORE plan-validator, to improve the plan by deliberation rather than attack. Dispatches delegate agents each assigned a different territory to deep-read and speak for, who deliberate over bounded rounds until they converge on a single jointly revised plan, negotiating the trade-offs (migration strategy, group boundaries, scope) that a validator can only flag, never decide. Symptoms - "deliberate on this plan", "improve this plan from multiple perspectives", "the plan touches three subsystems", "we need to pick a migration strategy", plan.md spans code no one context window can deep-read whole, resolving the unconfirmed tail of a plan-validator run.
+description: Use when a drafted implementation plan spans territories no single agent can hold at once — the spec's intent, multiple subsystems of the real codebase, and the delivery pipeline — BEFORE plan-validator, to improve the plan by deliberation rather than attack. Dispatches delegate agents each assigned a different territory to deep-read and speak for, who deliberate over bounded rounds until they converge on a single jointly revised plan, negotiating the trade-offs (migration strategy, group boundaries, scope) that a validator can only flag, never decide. Symptoms - "deliberate on this plan", "improve this plan from multiple perspectives", "the plan touches three subsystems", "we need to pick a migration strategy", plan.md spans code no one context window can deep-read whole, resolving the single-vote tail of a plan-validator run.
 tools:
   - invoke_subagent
   - send_message
@@ -41,7 +41,7 @@ each territory's constraints on the record.
 - The plan contains an **open or contestable trade-off**: migration strategy, execution
   group boundaries, build-vs-reuse, sequencing under a deploy window, test depth vs.
   schedule.
-- A `plan-validator` run left **unconfirmed 1-vote findings** that need adjudication,
+- A `plan-validator` run left **single-vote findings** that need adjudication,
   not another vote (see **Relationship to plan-validator**).
 
 ## When NOT to Use
@@ -102,8 +102,10 @@ plan depends on**.
 - Collect the plan text, the spec it implements, and the repository root.
 - List every territory the plan depends on and partition it across 2–4 delegates.
   Overlap is tolerable; identical assignments are not.
-- Run the **asymmetry test** (Core Principle 1). If it fails, revise centrally and say
-  so to the user.
+- Run the **asymmetry test** (Core Principle 1). If it fails, **refuse deliberation**:
+  stop, do not convene delegates, and revise centrally instead — say so to the user, and
+  report the refusal so the Supervisor records this node as `skipped` (with the reason)
+  in the milestone's `state.json`.
 
 ### 2. Author delegate prompts
 Fill the **Delegate Prompt Template** below once per delegate, varying the territory,
@@ -323,7 +325,7 @@ The two skills are inverses; use them in sequence, not as alternatives.
 evidence, decide trade-offs) → `plan-validator` (attack) → fold fixes → 🛑 human gate →
 execute.
 
-**The hybrid round:** after a `plan-validator` run, its *unconfirmed 1-vote findings*
+**The hybrid round:** after a `plan-validator` run, its *single-vote findings*
 are where independent judgment ran out. Convene a mini-panel (2 delegates, 2 rounds
 max) over only those findings — one delegate briefed to defend the plan's approach, one
 assigned the territory the finding concerns, both citing evidence. Record it as

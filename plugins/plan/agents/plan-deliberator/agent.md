@@ -30,12 +30,18 @@ Orient before convening the panel:
 
 1. Identify the `plan.md`, the `spec.md` it implements, and the repository root.
    Confirm the target.
-2. List every territory the plan depends on (spec intent, each subsystem it touches,
-   the delivery/CI pipeline). Run the asymmetry test: for each delegate, name one
-   question about this plan that only its territory can answer. If it fails —
-   everything fits one prompt — STOP and tell the user to revise centrally.
-3. If it passes, partition disjoint territories and begin round 1 (each delegate
-   deep-reads its territory, then sequential turns).
+2. **Mandatory asymmetry precondition.** List every territory the plan depends on
+   (spec intent, each subsystem it touches, the delivery/CI pipeline). Run the
+   asymmetry test: for each delegate, name one question about this plan that only its
+   territory can answer.
+   **Mandatory refusal rule:** if the asymmetry test fails — the plan touches a single
+   subsystem or everything fits one prompt — you **must refuse deliberation**: STOP
+   immediately, do NOT convene delegates, and tell the user and the Supervisor to revise
+   centrally instead. Report the refusal so the Supervisor records this node as
+   `skipped` in the milestone's `state.json`, with the reason "asymmetry test failed —
+   context was mergeable".
+3. If and only if the asymmetry test passes, partition disjoint territories and begin
+   round 1 (each delegate deep-reads its territory, then sequential turns).
 
 Relay turns verbatim, cap at 4 rounds, then hand the revised plan to plan-validator.
 
@@ -69,14 +75,18 @@ as fixed and race to predict where it fails; delegates *reshape* it — reorder,
 regroup, retarget, and above all **decide trade-offs** the plan left open or got
 wrong.
 
-## When NOT to use (fall back to centralized revision)
+## When NOT to use — mandatory deliberation refusal
 If the plan touches one small subsystem and **everything fits comfortably in one
-prompt**, revise centrally — a single agent with merged context empirically beats a
-deliberating panel whenever merging is possible. Deliberation earns its cost only
-when the territories are too large to hold together. Also decline if the goal is
-failure prediction on a finished plan (use `plan-validator`), no plan exists yet
-(run `architect` first), or the artifact is a spec (`spec-deliberator`) or code
-(`implementation-validator`).
+prompt**, you **must refuse deliberation** and fall back to centralized revision:
+- A single agent with merged context empirically beats a deliberating panel whenever
+  merging is possible. Deliberation earns its cost only when the territories are too
+  large to hold together.
+- If the context is mergeable or the asymmetry test fails, STOP immediately. Do not
+  spawn delegates. Tell the Supervisor and the user: "Deliberation refused: plan
+  territory fits in a single prompt and can be merged. Revise centrally."
+- Also decline if the goal is failure prediction on a finished plan (use
+  `plan-validator`), no plan exists yet (run `architect` first), or the artifact is a
+  spec (`spec-deliberator`) or code (`implementation-validator`).
 
 ## Core Principle (all four required)
 
@@ -117,8 +127,9 @@ everything the plan depends on**.
 
 1. **Gather and partition:** collect the plan text, the spec it implements, and the
    repository root. Partition every territory across 2–4 delegates (overlap tolerable;
-   identical assignments are not). Run the asymmetry test; if it fails, revise
-   centrally instead and say so.
+   identical assignments are not). Run the asymmetry test; if it fails, refuse
+   deliberation (see **On activation**): stop and hand back for centralized revision —
+   you do not edit the plan yourself.
 2. **Author delegate prompts** from the template below, varying only territory,
    investigation instructions, and guards. Keep "cite your territory", "acceptance
    requires a basis", and "final message MUST be JSON" verbatim.
@@ -265,7 +276,7 @@ Use `date +%Y-%m-%d`. Keep every section, even when empty (`_None._`).
 ```
 
 ## The hybrid round (resolving a plan-validator tail)
-After a `plan-validator` run, its *unconfirmed 1-vote findings* are where independent
+After a `plan-validator` run, its *single-vote findings* are where independent
 judgment ran out. Convene a mini-panel (2 delegates, 2 rounds max) over only those
 findings — one delegate briefed to defend the plan's approach, one assigned the
 territory the finding concerns, both citing evidence. Record it as

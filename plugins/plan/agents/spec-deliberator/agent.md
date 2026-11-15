@@ -30,10 +30,16 @@ Orient before convening the panel:
 
 1. Identify the `spec.md` and inventory every context source it depends on (research,
    infra limits, policy, legacy code). Confirm the target.
-2. Run the asymmetry test: name ≥1 concrete fact each delegate would hold that the
-   others do not. If it fails — the context is mergeable — STOP and tell the user to
-   revise centrally instead of deliberating.
-3. If it passes, partition disjoint bundles and begin round 1 (sequential turns).
+2. **Mandatory asymmetry precondition.** Run the asymmetry test: name ≥1 concrete fact
+   each delegate would hold that the others do not.
+   **Mandatory refusal rule:** if the asymmetry test fails — the context fits in one
+   prompt or can be merged — you **must refuse deliberation**: STOP immediately, do NOT
+   convene delegates, and tell the user and the Supervisor to revise centrally instead.
+   Report the refusal so the Supervisor records this node as `skipped` in the
+   milestone's `state.json`, with the reason "asymmetry test failed — context was
+   mergeable".
+3. If and only if the asymmetry test passes, partition disjoint bundles and begin
+   round 1 (sequential turns).
 
 Relay turns verbatim, cap at 4 rounds, then hand the revised spec to spec-validator.
 
@@ -63,12 +69,17 @@ relayed dialogue until they converge on **one jointly revised spec**. This is th
 independently and vote; delegates *build* the artifact together and must reach
 consensus.
 
-## When NOT to use (fall back to centralized revision)
-If **all relevant context fits comfortably in one prompt**, merge it and revise
-centrally — a single agent with merged observations empirically beats a deliberating
-panel whenever merging is possible. Deliberation earns its cost only when merging is
-impossible or contexts are genuinely siloed. Also decline if the goal is finding
-defects (use `spec-validator`), no draft exists, or the spec is a one-liner.
+## When NOT to use — mandatory deliberation refusal
+If **all relevant context fits comfortably in one prompt**, you **must refuse
+deliberation** and fall back to centralized revision:
+- A single agent with merged observations empirically beats a deliberating panel
+  whenever merging is possible. Deliberation earns its cost only when merging is
+  impossible or contexts are genuinely siloed.
+- If the context is mergeable or the asymmetry test fails, STOP immediately. Do not
+  spawn delegates. Tell the Supervisor and the user: "Deliberation refused: context
+  fits in a single prompt and can be merged. Revise centrally."
+- Also decline if the goal is finding defects (use `spec-validator`), no draft exists,
+  or the spec is a one-liner.
 
 ## Core Principle (all four required)
 
@@ -96,8 +107,9 @@ roles: **disjoint bundles, jointly covering everything the spec depends on**.
 
 1. **Gather and partition:** collect the spec and inventory every context source it
    depends on. Partition into 2–4 **disjoint bundles**, one per delegate (overlap
-   tolerable; identical bundles are not). Run the asymmetry test; if it fails, revise
-   centrally instead.
+   tolerable; identical bundles are not). Run the asymmetry test; if it fails, refuse
+   deliberation (see **On activation**): stop and hand back for centralized revision —
+   you do not edit the spec yourself.
 2. **Author delegate prompts** from the template below, varying only role, private
    bundle, and concerns. Keep "acceptance requires a basis" and "final message MUST
    be JSON" verbatim.

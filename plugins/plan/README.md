@@ -2,7 +2,9 @@
 
 A swarm of role-based agents and adversarial validation gates that drive a feature, bug fix, or refactor through a disciplined **spec → plan → execute → audit → commit** lifecycle.
 
-These skills are designed to be used together. A single orchestrator (`starter`) dispatches the role agents in sequence, stops for human approval at defined gates, and treats files in `plans/` — not chat messages — as the single source of truth. Three independent *validator* skills slot in at the boundary between each phase to attack the artifact (spec, plan, or diff) before the next phase consumes it.
+These skills are designed to be used together. A single orchestrator (`starter`) dispatches the role agents in sequence, stops for human approval at defined gates, and treats files in `plans/` — not chat messages — as the single source of truth. Three *validator* skills slot in at the boundary between each phase to attack the artifact (spec, plan, or diff) before the next phase consumes it, each running a **lens-partitioned** panel whose skeptics hunt different categories from different evidence.
+
+The swarm's structure is itself declared rather than described: [`graph.json`](./graph.json) holds the nodes, edges, gates and node contracts, the lifecycle diagrams below are generated from it, and each milestone's `state.json` records where a run actually is. See [Topology & State](#topology--state).
 
 > **Skills or subagents?** This document describes the **skills** form. The same swarm is also packaged as **Antigravity agents** under [`agents/`](./agents/README.md) — configured with per-role system prompts and tool specifications for AGY CLI. See [`agents/README.md`](./agents/README.md) for the agent-specific details.
 
@@ -13,55 +15,63 @@ These skills are designed to be used together. A single orchestrator (`starter`)
 | Family | Skills | Purpose |
 |---|---|---|
 | **Swarm roles** | `starter`, `product-owner` (or `visual-product-owner`), `architect` (or `visual-architect`), `engineer`, `simplifier`, `auditor`, `visual-implementation-recap` | Perform the lifecycle — discover, spec, plan, build, refine, verify, and recap the result. |
-| **Adversarial validators** | `spec-validator`, `plan-validator`, `implementation-validator` | Attack each artifact at its phase boundary with an independent 3-skeptic panel; keep only findings confirmed by a 2-of-3 majority. |
-| **Deliberative panels** | `spec-deliberator`, `plan-deliberator` | Improve a drafted artifact via delegates holding deliberately disjoint context (stakeholder bundles for specs, codebase/intent/delivery territories for plans) who deliberate to consensus — the generative counterpart to the validators. |
+| **Adversarial validators** | `spec-validator`, `plan-validator`, `implementation-validator` | Attack each artifact at its phase boundary with an independent, lens-partitioned 3-skeptic panel; keep only findings confirmed by a 2-of-3 majority, and triage every single-vote finding. |
+| **Deliberative panels** | `spec-deliberator`, `plan-deliberator` | Improve a drafted artifact via delegates holding deliberately disjoint context (stakeholder bundles for specs, codebase/intent/delivery territories for plans) who deliberate to consensus — the generative counterpart to the validators. Refused when the asymmetry test fails. |
 
 ---
 
 ## The Lifecycle
 
-```
+> The diagram below is generated from [`graph.json`](./graph.json) — the single
+> declaration of this swarm's nodes, edges and gates. Edit that file and run
+> `python3 lib/graph/graph.py sync`; do not hand-edit the block.
+
+<!-- BEGIN GENERATED: lifecycle (python3 lib/graph/graph.py sync) -->
+<!-- graph_version: plan-swarm@2.1 — edit graph.json, then run sync. -->
+
+```text
  IDEA
-  │
-  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  starter (THE SUPERVISOR) — orchestrates everything below            │
-└─────────────────────────────────────────────────────────────────────┘
-  │
-  ▼  Phase 0  Strategic Research ─────────────► plans/research/*.md
-  │
-  ▼  Phase 1  product-owner   ── "Grill Loop" ─► spec.md + 00-ROADMAP.md
-  │                                                  │
-  │                              ┌───────────────────▼───────────────────┐
-  │                              │ spec-deliberator (optional — enrich   │
-  │                              │ spec with siloed stakeholder context) │
-  │                              └───────────────────┬───────────────────┘
-  │                                    ╔═════════════▼═════════════╗
-  │                                    ║   spec-validator (gate)   ║
-  │                                    ╚═══════════════════════════╝
-  ▼  Phase 2  architect        ── plan ────────► plan.md (+ data-model.md)
-  │                                                  │
-  │                              ┌───────────────────▼───────────────────┐
-  │                              │ plan-deliberator (optional — reshape  │
-  │                              │ plan, decide trade-offs by territory) │
-  │                              └───────────────────┬───────────────────┘
-  │                                    ╔═════════════▼═════════════╗
-  │                                    ║   plan-validator (gate)   ║
-  │                                    ╚═══════════════════════════╝
-  ▼  Phase 3  🛑 HUMAN REVIEW GATE — user must "approve"
-  │
-  ▼  Phase 4  CONSTRUCTION LOOP, per execution group:
-  │             engineer (×N parallel, TDD) ⇄ auditor (verify)
-  │                  │                            │
-  │             simplifier (optional refine)      │
-  │                                    ╔══════════▼══════════════════════╗
-  │                                    ║ implementation-validator (gate) ║
-  │                                    ╚═════════════════════════════════╝
-  │             🛑 git commit — only on green audit + explicit user "yes"
-  │
-  ▼  Phase 5  RELEASE & TAG — product-owner marks release "Shipped"
-COMMIT / TAG
+  |
+  v  Phase 0   research -- plans/research/*.md
+  |
+  v  Phase 1   product-owner -- spec.md · 00-ROADMAP.md
+  |            +- (optional) spec-deliberator -- 3 delegates · disjoint bundles
+  |            === GATE spec-validator [3-lens majority gate: internal-consistency · missing-requirement · malicious-compliance]
+  |                 -> plans/active_milestones/{moniker}/adversarial-reviews/spec-validation.md
+  |
+  v  Phase 2   architect -- plan.md · parallel groups
+  |            +- (optional) plan-deliberator -- intent · codebase · delivery
+  |            === GATE plan-validator [3-lens majority gate: sequencing · ground-truth · blast-radius]
+  |                 -> plans/active_milestones/{moniker}/adversarial-reviews/plan-validation.md
+  |
+  v  Phase 3  *** HUMAN REVIEW GATE *** -- user types "approve"
+  |
+  v  Phase 4   engineer × N -- ≤ 4 concurrent · disjoint files
+  |               fan-out over execution group tasks, max 4 concurrent, files-disjoint
+  |            +- (optional) simplifier -- zero behavioral change
+  |
+  v  Phase 4   auditor -- AUDIT_[Plan_Name].md
+  |            === GATE implementation-validator [3-lens majority gate: claim-vs-reality · failure-paths · blast-radius]
+  |                 -> plans/active_milestones/{moniker}/adversarial-reviews/implementation-validation.md
+  |            +- (optional) visual-implementation-recap -- visual-recap.html
+  |
+  v  Phase 4  *** COMMIT GATE *** -- green audit + explicit "yes"
+  |
+  v  Phase 5  release · tag -- product-owner marks Shipped
+
+ feedback edges (cycles):
+   spec-validator -> product-owner   when: confirmed findings — fold in tightenings
+   plan-validator -> architect   when: confirmed findings — apply fixes · first_domino
+   auditor -> engineer   when: code failure — fix the failing task
+   auditor -> architect   when: plan failure — step is impossible
+   implementation-validator -> engineer   when: confirmed defects — fix at calibrated severity
+   commit-gate -> engineer   when: more groups remain — next execution group
 ```
+
+<!-- END GENERATED: lifecycle -->
+
+`starter` (the Supervisor) orchestrates every node above: it dispatches each role, holds
+both human gates, and is the only node that commits.
 
 ---
 
@@ -72,8 +82,8 @@ COMMIT / TAG
 #### 1. `starter` — The Supervisor
 The Project Manager and Guardian of the Protocol. **Does no work itself**; it runs the state machine, dispatching the other agents in the correct order and enforcing the lifecycle above.
 
-- **Owns:** protocol enforcement, artifact management, human gating, the git protocol (sole committer in the swarm).
-- **Key rules:** never codes directly (delegates to `engineer`); passes *file paths*, not oral instructions; **must stop for user approval** after planning and before execution; never commits broken or unapproved code.
+- **Owns:** protocol enforcement, artifact management, the milestone's `state.json`, the validator gates, human gating, the git protocol (sole committer in the swarm).
+- **Key rules:** never codes directly (delegates to `engineer`); passes *file paths*, not oral instructions; **reads the phase from `state.json`** rather than inferring it from which files exist; follows the topology in `graph.json`; never skips a gate silently; **must stop for user approval** after planning and before execution; never commits broken or unapproved code.
 - **Triggers:** "be the supervisor", "orchestrate this end to end", "run the swarm", "drive this from idea to commit", or resuming a milestone in `plans/active_milestones/`.
 
 #### 2. `product-owner` — The Product Owner
@@ -137,22 +147,32 @@ An **additive** renderer — **not** a drop-in replacement for any role, and nev
 ### Deliberative Panel
 
 #### `spec-deliberator` — Deliberate the Spec
-Runs **after a spec is drafted, before `spec-validator`**, when the spec depends on knowledge siloed across stakeholders, docs, or repos. The structural inverse of the validators: delegates get *disjoint* context bundles (validators get identical full context), communication is the mechanism (validators forbid it), and the output is consensus on one revised spec (not a majority vote on findings).
+Runs **after a spec is drafted, before `spec-validator`**, when the spec depends on knowledge siloed across stakeholders, docs, or repos. The structural inverse of the validators: delegates get *disjoint* context bundles (validators each get the whole artifact, read through a different lens), communication is the mechanism (validators forbid it), and the output is consensus on one revised spec (not a majority vote on findings).
 
-- **Machinery:** 3 delegates (product · engineering · ops/security by default), each seeded with a private context bundle passing the **asymmetry test** (name a fact only that delegate knows that could change the spec — or fall back to centralized revision, which beats a clone panel). Sequential turns relayed **verbatim** by the orchestrator, same agents continued across rounds (`send_message` or full-transcript re-invocation), hard cap 4 rounds. Acceptance must be *earned* — each accepting delegate states what it verified or what changed its mind, the guard against round-1 sycophancy.
+- **Machinery:** 3 delegates (product · engineering · ops/security by default), each seeded with a private context bundle passing the **asymmetry test** (name a fact only that delegate knows that could change the spec — or **refuse deliberation** and fall back to centralized revision, which beats a clone panel; the Supervisor records the node as `skipped` with that reason). Sequential turns relayed **verbatim** by the orchestrator, same agents continued across rounds (`send_message` or full-transcript re-invocation), hard cap 4 rounds. Acceptance must be *earned* — each accepting delegate states what it verified or what changed its mind, the guard against round-1 sycophancy.
 - **Output:** the revised `spec.md` plus a deliberation record at `deliberations/spec-deliberation.md` (bundles, disclosures, edits with rationale, disputes, round log). Hard-constraint disputes escalate to the user; the revised spec still goes through `spec-validator`.
-- **Hybrid:** a 2-delegate mini-panel over a validator run's *unconfirmed 1-vote findings* adjudicates exactly where independent judgment ran out.
+- **Hybrid:** a 2-delegate mini-panel over a validator run's *single-vote findings* adjudicates exactly where independent judgment ran out.
 
 #### `plan-deliberator` — Deliberate the Plan
 Runs **after a plan is drafted, before `plan-validator`**, when the plan spans more territory — spec intent, multiple subsystems, the delivery pipeline — than one agent can deep-read at once, or leaves a trade-off open. Where the validator predicts failure of a fixed plan, the deliberator **reshapes** it and **decides trade-offs** (migration strategy, group boundaries, scope) with each territory's constraints on the record — the one thing a vote structurally cannot produce.
 
-- **Machinery:** 3 delegates (intent · codebase · delivery by default; split codebase by subsystem rather than adding role types), asymmetry engineered by **assigned investigation** — each delegate deep-reads only its territory and is the panel's sole authority on it. Every claim must cite its territory (`file:line`, spec clause, or CI command); sequential verbatim-relayed turns, same agents continued via `send_message` (or re-invoked with the full verbatim transcript), hard cap 4 rounds, acceptance requires a stated basis.
+- **Machinery:** 3 delegates (intent · codebase · delivery by default; split codebase by subsystem rather than adding role types), asymmetry engineered by **assigned investigation** — each delegate deep-reads only its territory and is the panel's sole authority on it (same asymmetry test, same refusal when it fails). Every claim must cite its territory (`file:line`, spec clause, or CI command); sequential verbatim-relayed turns, same agents continued via `send_message` (or re-invoked with the full verbatim transcript), hard cap 4 rounds, acceptance requires a stated basis.
 - **Output:** the revised `plan.md` (structure preserved: parallel groups, test-first steps) plus a deliberation record at `deliberations/plan-deliberation.md` — territories, cited disclosures, trade-offs decided, edits with rationale, disputes, round log. Hard-evidence disputes escalate to the user; the revised plan still faces `plan-validator`.
-- **Hybrid:** a 2-delegate mini-panel over a `plan-validator` run's unconfirmed tail → `deliberations/plan-deliberation-tail.md`.
+- **Hybrid:** a 2-delegate mini-panel over a `plan-validator` run's single-vote tail → `deliberations/plan-deliberation-tail.md`.
 
 ### Adversarial Validators
 
-All three share the same machinery: dispatch **3 independent skeptic agents in parallel** (no shared scratchpad), each framed to *break* the artifact with a **default-to-reject** posture, then keep only findings confirmed by a **2-of-3 majority** (1-vote findings are surfaced as "Unconfirmed (FYI)", never silently dropped). Each skeptic returns a single fenced JSON block; the orchestrator dedups by a stable kebab-case `id` before tallying. The gate is tunable: drop to **any-one** for high-stakes work, raise to **unanimous** when re-work is costly. Every panel then writes a **human-readable Markdown report** to `plans/active_milestones/{moniker}/adversarial-reviews/{stage}-validation.md` — written on every run (even a clean pass), with re-runs preserved as `-r2`/`-r3` — so the verdict is browsable without opening an agent transcript.
+All three share the same machinery: dispatch **3 lens-partitioned skeptic agents in parallel** (no shared scratchpad), each framed to *break* the artifact with a **default-to-reject** posture, then keep only findings confirmed by a **2-of-3 majority** (1-vote findings go to a **Single-Vote Findings (triage required)** section, never silently dropped).
+
+**The three skeptics are not given the same prompt.** Each owns a different slice of the attack surface *and* a different reading assignment — for the plan panel: the step graph, the source files the plan names, and the callers/tests/CI it disturbs. Three identical prompts on one model produce correlated errors: the panel is shaped like three votes and carries close to one, so a "2-of-3 majority" becomes one opinion counted twice. Each panel's `SKILL.md` therefore ships a shared preamble, three lens sections, and a shared tail, and every panel run must first pass the **asymmetry test** — name one finding only that lens could reach; if you cannot, merge it and run two.
+
+| Panel | Lens 1 | Lens 2 | Lens 3 |
+|---|---|---|---|
+| `spec-validator` | `internal-consistency` — the spec against itself | `missing-requirement` — the world outside the spec | `malicious-compliance` — the acceptance criteria alone, gamed |
+| `plan-validator` | `sequencing` — the plan's step graph | `ground-truth` — the source files the plan names | `blast-radius` — callers, tests, CI, migrations |
+| `implementation-validator` | `claim-vs-reality` — the diff against its description | `failure-paths` — error branches and tests | `blast-radius` — call sites the diff never touches |
+
+Each skeptic returns a single fenced JSON block tagged with its `lens`; the orchestrator dedups by a stable kebab-case `id` before tallying, and records **which lenses agreed**. `cross_lens` agreement — two lenses reaching one finding from different evidence — is independent corroboration and ranks above same-lens repetition. The gate is tunable: drop to **any-one** for high-stakes work, raise to **unanimous** when re-work is costly. Every panel then writes a **human-readable Markdown report** to `plans/active_milestones/{moniker}/adversarial-reviews/{stage}-validation.md` — written on every run (even a clean pass), with re-runs preserved as `-r2`/`-r3` — so the verdict is browsable without opening an agent transcript.
 
 #### 8. `spec-validator` — Attack the Spec
 Runs **after a spec is drafted, before a plan is written** — defects are cheapest to fix here.
@@ -173,14 +193,6 @@ Runs **after code is written, before merge**. Reasons about the code (it does *n
 - **Attack surface:** claim vs. reality, broken/swallowed failure paths, edge cases, concurrency races, resource/correctness, regressions.
 - **Signature output — severity calibration:** the panel's most valuable product isn't deletion but *corrected severity* (e.g. three reviewers call a singleton race "Critical"; it's confirmed real but downgraded to "High" because impact is gated on concurrent requests). Always surface the calibration delta.
 
-### Utility
-
-#### `teamwork-trajectory` — Visualize the Swarm
-An out-of-band **utility** skill (not part of the lifecycle) that scans the `.agents/` directory, parses each agent's briefing and hand-off records, and compiles an interactive, dark-mode HTML timeline of everything the swarm executed.
-
-- **Produces:** `.agents/trajectory.html` (self-contained, browsable).
-- **Triggers:** "generate trajectory", "visualize teamwork", "trace agents", "update trajectory dashboard".
-
 ---
 
 ## Artifact Map
@@ -192,15 +204,80 @@ The swarm communicates through files under `plans/`. Knowing this layout is the 
 | `plans/research/*.md` | Phase 0 investigator | Context report: affected domain, existing patterns, constraints. |
 | `plans/00-ROADMAP.md` | `product-owner` | Master roadmap — releases, milestones, and their status. |
 | `plans/active_milestones/{moniker}/context.md` | `product-owner` | The context report, moved in once the milestone is opened. |
+| `plans/active_milestones/{moniker}/state.json` | `starter` | The run's declared state — phase, gate decisions, per-node status and reports, per-group task and commit status. `starter` **reads** this to resume rather than inferring the phase from which files exist. Schema: [`lib/graph/STATE.md`](./lib/graph/STATE.md). |
 | `plans/active_milestones/{moniker}/spec.md` | `product-owner` | The specification (Gherkin acceptance criteria). |
 | `plans/active_milestones/{moniker}/visual-spec.html` | `visual-product-owner` | Self-contained, browsable companion to `spec.md` for spec review (zero build; opens in any browser). |
 | `plans/active_milestones/{moniker}/deliberations/{spec,plan}-deliberation.md` | `spec-deliberator` · `plan-deliberator` | Deliberation record — panel & private bundles/territories, key disclosures (cited), trade-offs decided, applied edits with rationale and acceptance bases, disputes (converged/arbitrated/escalated), round log. Written every run, even on "no changes"; re-runs append `-r2`; the hybrid tail-panel writes `-tail`. |
 | `plans/active_milestones/{moniker}/plan.md` | `architect` | Micro-stepped plan with parallel execution groups; engineer checks off todos here. |
 | `plans/active_milestones/{moniker}/data-model.md` · `api-contracts.md` | `architect` | Optional supporting design artifacts. |
 | `plans/active_milestones/{moniker}/visual-plan.html` | `visual-architect` | Self-contained, browsable companion to `plan.md` for the human review gate (zero build; opens in any browser). |
-| `plans/active_milestones/{moniker}/adversarial-reviews/{spec,plan,implementation}-validation.md` | `spec-validator` · `plan-validator` · `implementation-validator` | Human-readable Markdown report from each skeptic panel — verdict, confirmed findings (with `file:line` evidence and fixes), unconfirmed tail, and (for implementation) the severity-calibration table. Written every run, even on a clean pass; re-runs append `-r2`, `-r3`. |
+| `plans/active_milestones/{moniker}/adversarial-reviews/{spec,plan,implementation}-validation.md` | `spec-validator` · `plan-validator` · `implementation-validator` | Human-readable Markdown report from each skeptic panel — verdict, the lenses dispatched, confirmed findings (with `file:line` evidence, fixes, and which lenses agreed), the single-vote tail for triage, and (for implementation) the severity-calibration table. Written every run, even on a clean pass; re-runs append `-r2`, `-r3`. |
 | `plans/audit/AUDIT_[Plan_Name].md` | `auditor` | Evidence-based audit report (the `plans/audit/` dir is git-ignored). |
 | `plans/active_milestones/{moniker}/visual-recap.html` | `visual-implementation-recap` | Self-contained, browsable recap of everything the milestone changed — diffstat, annotated diffs, task/audit status — for the human commit gate (zero build; opens in any browser). |
+
+---
+
+## Topology & State
+
+Two files make the swarm's structure explicit rather than remembered.
+
+### `graph.json` — the topology
+
+Every node, edge, gate and node contract in one declaration: which nodes exist, what routes
+between them and under what condition, which panels are lens-partitioned and into which
+lenses, and what each node is allowed to read and write. **The lifecycle diagrams in this
+README, in [`agents/README.md`](./agents/README.md) and in the repository README are
+generated from it** — they are not maintained by hand, because three hand-maintained copies
+of one topology is how a documented lifecycle and the dispatching state machine drift
+apart.
+
+Run the tooling from the plugin root (`plugins/plan/` in a checkout). It is stdlib-only
+Python, so it runs wherever the plugin is installed:
+
+```bash
+python3 lib/graph/graph.py validate                # topology vs. the skills and agents on disk
+python3 lib/graph/graph.py validate --agents-dir   # the same, plus every agent's own invariants
+python3 lib/graph/graph.py validate-agents         # only the agents (add --agents-dir DIR for an installed copy)
+python3 lib/graph/graph.py render ascii            # the lifecycle diagram
+python3 lib/graph/graph.py render mermaid          # the same graph, for docs
+python3 lib/graph/graph.py sync                    # rewrite the generated blocks in the three READMEs
+python3 lib/graph/graph.py sync --check            # non-zero exit if a README is stale (CI)
+python3 lib/graph/test_graph.py                    # the tooling's own test suite
+```
+
+`validate` is not decorative. It fails when a declared skill or agent is missing from disk,
+when an edge points at a node that does not exist, when a node is unreachable, when a node
+declares it writes repository source or commits without the authority to, when a panel's
+prompt file (`skills/<validator>/SKILL.md`) is missing a declared lens, lacks a prompt
+section of its own for each lens or the shared preamble and tail around them, or does not
+tag verdicts with the declared lenses — and specifically when a panel's prompt file has
+reverted to dispatching identical skeptics, which is the defect the lens partition exists
+to prevent.
+
+`validate-agents` checks the agent family against the same declaration: exactly the
+thirteen swarm agents, each self-contained; every validator carrying its declared lenses
+and no copy-the-prompt dispatch; the auditor barred from committing; the supervisor named
+as sole committer, requiring a passing audit and explicit user approval, and managing
+`state.json`; both deliberators mandating the asymmetry test and refusing when it fails.
+
+### `state.json` — the declared state
+
+Per milestone, at `plans/active_milestones/{moniker}/state.json`. The artifacts under
+`plans/` remain the payload; this file is the index over them, recording the phase, each
+gate's decision, each node's status and report, and each group's tasks and commit SHA. It
+exists so `starter` can **read** where a run is instead of inferring it from which files
+happen to be present — an inference in which a validator that ran and failed looks exactly
+like one that never ran. A skipped gate is recorded as skipped, with a reason; an unrecorded
+skip is indistinguishable from a pass. Full schema and field semantics:
+[`lib/graph/STATE.md`](./lib/graph/STATE.md).
+
+### The five principles
+
+1. **Declared topology** — `graph.json` is the single source of truth; diagrams are generated, and tooling checks the declaration against disk.
+2. **Declared state** — `state.json` is read and written at every transition; the phase is never inferred from a directory listing.
+3. **Lens-partitioned panels** — each validator dispatches three skeptics with three different prompts and reading assignments; copies of one prompt are a defect; single-vote findings are triaged, not dropped.
+4. **Asymmetry preconditions** — a deliberator runs only if each delegate holds something the others do not; otherwise it refuses and the revision is done centrally.
+5. **Sole committer** — only `starter` / `supervisor` runs `git commit`, and only after a passing audit and an explicit user "yes".
 
 ---
 
@@ -211,15 +288,17 @@ A typical end-to-end run:
 1. **`starter`** receives the request and dispatches a codebase investigation → `plans/research/`.
 2. **`product-owner`** reads the context report, runs the Grill Loop, and writes `spec.md` + roadmap entry.
    - *(optional)* **`spec-deliberator`** convenes a delegate panel with disjoint context bundles to enrich the spec with siloed constraints before it faces the gate.
-3. **`spec-validator`** attacks the spec; confirmed `tightening`s are folded back in.
+3. **`spec-validator`** attacks the spec with three lens-partitioned skeptics (internal-consistency · missing-requirement · malicious-compliance); confirmed `tightening`s are folded back in by `product-owner`, and the single-vote tail is triaged rather than dropped.
 4. **`architect`** investigates the code and writes `plan.md` with parallel groups.
    - *(optional)* **`plan-deliberator`** convenes a territory panel (intent · codebase · delivery) to reshape the plan and decide open trade-offs with cited evidence before it faces the gate.
-5. **`plan-validator`** attacks the plan against the real codebase; the `first_domino` and confirmed fixes are applied (reorder steps, add prerequisites, correct assumptions).
+5. **`plan-validator`** attacks the plan against the real codebase with three lens-partitioned skeptics (sequencing · ground-truth · blast-radius, each reading different evidence); the `first_domino` and confirmed fixes are applied by `architect` (reorder steps, add prerequisites, correct assumptions).
 6. **🛑 Human review gate** — the user reviews `spec.md` + `plan.md` and types "approve".
-7. **`engineer`** (up to ~4 in parallel per group) implements each group under TDD; **`simplifier`** optionally refines; **`auditor`** verifies each group and writes an audit report.
-8. **`implementation-validator`** attacks the diff before merge; confirmed defects (at calibrated severity) are fixed.
+7. **`engineer`** (up to ~4 in parallel per group) implements each group under TDD; **`simplifier`** optionally refines; **`auditor`** verifies each group and writes an audit report. The engineer ⇄ auditor cycle is capped at 3 rounds per group.
+8. **`implementation-validator`** attacks the group's diff — still uncommitted at this point, so the working tree against the last commit — with three lens-partitioned skeptics (claim-vs-reality · failure-paths · blast-radius); confirmed defects are fixed at their *calibrated* severity, and cross-lens agreement ranks above same-lens repetition.
 9. **🛑 Commit gate** — `visual-implementation-recap` renders `visual-recap.html` so the human can review every change at altitude; the Supervisor (`starter` / `supervisor`) commits only on a green audit **and** explicit user approval.
 10. **`product-owner`** marks the release "Shipped" and activates the next.
+
+Throughout, `starter` records each transition, gate decision and node verdict in the milestone's `state.json`, so a resumed run reads its phase instead of guessing it.
 
 ---
 

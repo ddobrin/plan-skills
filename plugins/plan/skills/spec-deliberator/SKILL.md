@@ -1,6 +1,6 @@
 ---
 name: spec-deliberator
-description: Use when a drafted spec depends on knowledge that is siloed across stakeholders, documents, or repos — BEFORE adversarial validation — to improve the spec by deliberation rather than attack. Dispatches delegate agents with deliberately DISJOINT context bundles (product, engineering, ops/security) who deliberate over bounded rounds, relayed verbatim by the orchestrator, until they converge on a single jointly revised spec. Symptoms - "deliberate on this spec", "improve this spec from multiple perspectives", "get product/eng/security input on the spec", "the constraints live in different places", spec touches systems whose limits no single context window can hold, resolving the unconfirmed tail of a spec-validator run.
+description: Use when a drafted spec depends on knowledge that is siloed across stakeholders, documents, or repos — BEFORE adversarial validation — to improve the spec by deliberation rather than attack. Dispatches delegate agents with deliberately DISJOINT context bundles (product, engineering, ops/security) who deliberate over bounded rounds, relayed verbatim by the orchestrator, until they converge on a single jointly revised spec. Symptoms - "deliberate on this spec", "improve this spec from multiple perspectives", "get product/eng/security input on the spec", "the constraints live in different places", spec touches systems whose limits no single context window can hold, resolving the single-vote tail of a spec-validator run.
 tools:
   - invoke_subagent
   - send_message
@@ -38,7 +38,7 @@ entire mechanism.
   policy, a legacy repo's real behavior.
 - Stakeholder perspectives genuinely conflict and the spec must reconcile them
   (latency vs. cost, UX vs. security) rather than pick one silently.
-- A `spec-validator` run left **unconfirmed 1-vote findings** the author cannot
+- A `spec-validator` run left **single-vote findings** the author cannot
   adjudicate alone — deliberation over exactly that disputed tail is the highest-value
   hybrid (see **Relationship to spec-validator**).
 
@@ -98,8 +98,10 @@ the partition: **disjoint bundles, jointly covering everything the spec depends 
   constraints, research, code the delegates may need to read.
 - Partition the sources into 2–4 **disjoint bundles**, one per delegate. Overlap is
   tolerable (real observations overlap); identical bundles are not.
-- Run the **asymmetry test** (Core Principle 1). If it fails, stop and revise
-  centrally instead — say so to the user.
+- Run the **asymmetry test** (Core Principle 1). If it fails, **refuse deliberation**:
+  stop, do not convene delegates, and revise centrally instead — say so to the user, and
+  report the refusal so the Supervisor records this node as `skipped` (with the reason)
+  in the milestone's `state.json`.
 
 ### 2. Author delegate prompts
 Fill the **Delegate Prompt Template** below once per delegate, varying only the role,
@@ -291,7 +293,7 @@ The two skills are inverses; use them in sequence, not as alternatives.
 | | `spec-deliberator` | `spec-validator` |
 |---|---|---|
 | Mode | Generative — improve the spec | Evaluative — break the spec |
-| Information | Partial, disjoint bundles — dialogue transports it | Complete, identical — communication forbidden |
+| Information | Partial, disjoint bundles — dialogue transports it | Complete, read through partitioned lenses — communication forbidden |
 | Interaction | Multi-turn, sequential, verbatim relay | One-shot, parallel, independent |
 | Convergence | Consensus on one versioned proposal | 2-of-3 majority vote on findings |
 | Error control | Reflection — a partner's challenge | Statistics — uncorrelated votes |
@@ -299,7 +301,7 @@ The two skills are inverses; use them in sequence, not as alternatives.
 **Pipeline:** `product-owner` (draft) → `spec-deliberator` (enrich with siloed
 constraints) → `spec-validator` (attack) → fold tightenings → plan.
 
-**The hybrid round:** after a `spec-validator` run, its *unconfirmed 1-vote findings*
+**The hybrid round:** after a `spec-validator` run, its *single-vote findings*
 are precisely where independent judgment ran out. Convening a mini-panel (2 delegates,
 2 rounds max) over only those findings — one delegate briefed to defend the spec's
 intent, one holding the skeptic's finding — imports deliberation's reflection benefit
