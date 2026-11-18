@@ -19,6 +19,14 @@ Reads **AGY live telemetry** (`~/.gemini/antigravity-cli/conversation_summaries.
 - **Structured `send_message` Report Cards & Models:** Extracts `PLANNER_RESPONSE` / `<USER_SETTINGS_CHANGE>` model badges, `Skepticism Disclaimer` warning callouts, `Known Issues` severity pills, and collapsible Markdown report sections alongside a toggleable Gantt waterfall and worker concurrency metrics.
 - **Triggers:** `"boost trajectory"`, `"visualize boost"`, `"trace boost"`, `"update boost trajectory"`, `"boost timeline"`, `"boost report"`.
 
+### `swarm-trajectory` — `/swarm` Post-Run Trajectory & Verification Dashboard
+Reads native **`/swarm` metadata** (`~/.gemini/antigravity-cli/brain/<swarm_id>/.system_generated/swarm/{swarm.json,members.json,board.jsonl}`) alongside **AGY live telemetry** (`conversation_summaries.db` and `brain/<id>/.system_generated/logs/transcript*.jsonl`) after a `/swarm` run completes (or stops) and compiles a self-contained, dark-mode HTML dashboard at `.agents/swarm-trajectory.html`.
+
+- **Wait-Aware Time & Cost Attribution:** Separates active execution spans from parked `swarm_wait` sleeps (fixing inflated wall-clock times), isolates background monitor tails from core work span, and breaks down active seconds and tokens by member, role, and model.
+- **Worker Deliverables & Lifecycle Semantics:** Distinguishes gracefully retired workers (`completed_retired`) from aborted workers (`killed_incomplete`) and incomplete waiters, pairs each worker's brief with its `[done]` post, files written/edited, and `run_command` outcomes.
+- **Verification & Quality Gate:** Audits verifier checks vs author edits (`VERIFIED`, `STALE`, `FAILED`, `PARTIAL`, `SELF_CHECKED`, `UNVERIFIED`), tracks board `#seq` handoffs, and overlays `[done]` pins on a toggleable Compressed-Pauses vs True Wall-Clock Gantt waterfall.
+- **Triggers:** `"swarm trajectory"`, `"visualize swarm"`, `"trace swarm"`, `"swarm report"`, `"swarm summary"`, `"swarm recap"`.
+
 ---
 
 ## Installation
@@ -106,6 +114,20 @@ python3 ~/.gemini/config/plugins/viewers/skills/boost-trajectory/generator.py --
 python3 ~/.gemini/config/plugins/viewers/skills/boost-trajectory/generator.py -c <conv-id> -o .agents/boost-trajectory.html
 ```
 
+### `swarm-trajectory`
+From any project workspace:
+
+```bash
+# Auto-select the newest /swarm run for the current workspace (prefers completed/verified runs)
+python3 ~/.gemini/config/plugins/viewers/skills/swarm-trajectory/generator.py
+
+# List all /swarm runs discovered for the current workspace
+python3 ~/.gemini/config/plugins/viewers/skills/swarm-trajectory/generator.py --list
+
+# Render a specific swarm root or member conversation ID (full UUID or unique prefix)
+python3 ~/.gemini/config/plugins/viewers/skills/swarm-trajectory/generator.py -c <conv-id> -o .agents/swarm-trajectory.html
+```
+
 ## Tests
 
 Run all `viewers` skill test suites from the repository root:
@@ -113,4 +135,5 @@ Run all `viewers` skill test suites from the repository root:
 ```bash
 python3 -B -m unittest discover -s plugins/viewers/skills/teamwork-trajectory/tests -v
 python3 -B -m unittest discover -s plugins/viewers/skills/boost-trajectory/tests -v
+python3 -B -m unittest discover -s plugins/viewers/skills/swarm-trajectory/tests -v
 ```
