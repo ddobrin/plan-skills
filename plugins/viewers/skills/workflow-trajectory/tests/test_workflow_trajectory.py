@@ -88,7 +88,7 @@ const fs = require("fs");
 const code = fs.readFileSync(process.argv[2], "utf8");
 const els = {};
 const mk = (id) => ({
-  id, textContent: "", innerHTML: "", value: "", className: "",
+  id, textContent: "", innerHTML: "", value: "", className: "", style: {},
   classList: { add(){}, remove(){}, toggle(){} },
   addEventListener(){},
 });
@@ -466,6 +466,50 @@ verdict = await auditor(f"Check {fixes}", {"type": "object", "properties": {"pas
             data2 = parse_workflow_run(agy, parent_id, ws, include_git=False)
             self.assertEqual(data2["verification"]["verdict"], "FAILED")
             self.assertEqual(data2["verification"]["unresolved_failure_count"], 1)
+
+            # Now simulate a subsequent remediation & re-verification phase starting after the earlier failure
+            remed_id = "cccc3333-0000-0000-0000-000000000004"
+            _write_transcript(
+                agy,
+                parent_id,
+                [
+                    {
+                        "step_index": 0,
+                        "type": "PLANNER_RESPONSE",
+                        "created_at": "2026-11-19T16:00:00Z",
+                        "tool_calls": [
+                            {"name": "run_workflow", "args": {"Description": "Remediated test", "Script": 'phase("Run")'}}
+                        ],
+                    },
+                    {
+                        "step_index": 1,
+                        "type": "GENERIC",
+                        "created_at": "2026-11-19T16:12:00Z",
+                        "content": (
+                            'Workflow "Remediated test" completed.\n'
+                            "Logs:\n"
+                            "- [phase] Run\n"
+                            f"- [agent:auditor] Reviewer: done ({verifier_id}): failed\n"
+                            f"- [agent:engineer] Author: done ({author_id}): edited\n"
+                            f"- [agent:auditor] Remediation Verifier: done ({remed_id}): success\n"
+                        ),
+                    },
+                ],
+            )
+            _write_transcript(
+                agy,
+                remed_id,
+                [
+                    {"step_index": 0, "type": "USER_INPUT", "created_at": "2026-11-19T16:10:00Z", "content": "Fix and re-verify"},
+                    {"step_index": 1, "type": "PLANNER_RESPONSE", "created_at": "2026-11-19T16:11:00Z", "model": "gemini-3.5-flash", "tool_calls": [{"name": "finish", "args": {"result": {"status": "SUCCESS", "notes": "Fixed and passed"}}}]},
+                ],
+            )
+            data3 = parse_workflow_run(agy, parent_id, ws, include_git=False)
+            self.assertEqual(data3["verification"]["verdict"], "VERIFIED")
+            self.assertEqual(data3["verification"]["unresolved_failure_count"], 0)
+            self.assertEqual(data3["verification"]["resolved_earlier_failure_count"], 1)
+            remed_sv = [sv for sv in data3["verification"]["structured_verdicts"] if not sv["passed"]][0]
+            self.assertTrue(remed_sv["remediated"])
 
 
 if __name__ == "__main__":

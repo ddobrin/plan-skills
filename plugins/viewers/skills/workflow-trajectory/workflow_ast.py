@@ -701,6 +701,16 @@ def analyze_workflow_script(
             }
         )
 
+    # Deduplicate identical warnings emitted when a helper is expanded from multiple call sites.
+    dedup_warnings: List[Dict[str, Any]] = []
+    seen_warnings: Set[Tuple[str, int, str]] = set()
+    for w in warnings:
+        key = (w["code"], int(w.get("line") or 0), w["message"])
+        if key not in seen_warnings:
+            seen_warnings.add(key)
+            dedup_warnings.append(w)
+    warnings = dedup_warnings
+
     # Filter out empty implicit setup phase if explicit phases exist
     clean_phases = [
         p for p in phases if p["explicit"] or p["steps"] or len(phases) == 1

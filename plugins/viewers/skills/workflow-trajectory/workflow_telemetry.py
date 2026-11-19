@@ -508,7 +508,7 @@ def _extract_structured_verdict(val: Any) -> Optional[Tuple[bool, str]]:
     if isinstance(verdict_val, str):
         u = verdict_val.strip().upper()
         notes = str(val.get("notes") or val.get("summary") or val.get("reason") or "")
-        if u in ("PASS", "PASSED", "VERIFIED", "APPROVED", "OK", "GREEN"):
+        if u in ("PASS", "PASSED", "VERIFIED", "APPROVED", "OK", "GREEN", "SUCCESS"):
             return True, notes
         if u in ("FAIL", "FAILED", "REJECTED", "RED", "ERROR"):
             return False, notes
@@ -775,6 +775,9 @@ def _build_verification_audit(workers: List[Dict[str, Any]]) -> Dict[str, Any]:
                         "passed": sv[0],
                         "notes": sv[1],
                         "raw": _format_finish_result(res),
+                        "start_ms": v.get("wall_start_ms") or 0,
+                        "ts_ms": v.get("wall_end_ms") or 0,
+                        "remediated": False,
                     }
                 )
 
@@ -796,8 +799,24 @@ def _build_verification_audit(workers: List[Dict[str, Any]]) -> Dict[str, Any]:
     unresolved_failures = [c for c in failed_v if (c.get("ts_ms") or 0, c.get("step_index") or 0) > last_pass_key]
     resolved_earlier = len(failed_v) - len(unresolved_failures)
 
-    sv_failed = [sv for sv in structured_verdicts if not sv["passed"]]
     sv_passed = [sv for sv in structured_verdicts if sv["passed"]]
+    sv_failed_all = [sv for sv in structured_verdicts if not sv["passed"]]
+    sv_failed: List[Dict[str, Any]] = []
+    sv_remediated = 0
+    for sv in sv_failed_all:
+        # An earlier review failure is considered remediated ONLY if a subsequent passing
+        # verifier started strictly after this failing verifier ended (e.g. a later
+        # Remediation & Re-Verification phase), not merely a concurrent sibling reviewer.
+        fail_end = sv.get("ts_ms") or 0
+        superseded = fail_end > 0 and any(
+            (p.get("start_ms") or 0) >= fail_end and p["agent"] != sv["agent"]
+            for p in sv_passed
+        )
+        if superseded:
+            sv["remediated"] = True
+            sv_remediated += 1
+        else:
+            sv_failed.append(sv)
     verifiers_done = [v for v in verifiers if v["status"] == "done"]
 
     if verifiers:
@@ -838,9 +857,9 @@ def _build_verification_audit(workers: List[Dict[str, Any]]) -> Dict[str, Any]:
         "last_author_edit_local": format_clock_local(last_author_edit_ms) if last_author_edit_ms else "—",
         "verifier_last_local": format_clock_local(verifier_last_ms) if verifier_last_ms else "—",
         "passed_count": len(passed_v) + len(sv_passed),
-        "failed_count": len(failed_v) + len(sv_failed),
+        "failed_count": len(failed_v) + len(sv_failed_all),
         "unresolved_failure_count": len(unresolved_failures) + len(sv_failed),
-        "resolved_earlier_failure_count": resolved_earlier,
+        "resolved_earlier_failure_count": resolved_earlier + sv_remediated,
         "structured_verdicts": structured_verdicts,
         "verifier_commands": verifier_cmds,
         "author_check_commands": author_check_cmds,

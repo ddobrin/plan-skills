@@ -72,11 +72,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
 
     header {
-      padding: 20px 20px 16px;
+      padding: 12px 20px 10px;
       text-align: center;
       border-bottom: 1px solid var(--border-color);
       backdrop-filter: blur(14px);
-      background-color: rgba(10, 15, 29, 0.84);
+      background-color: rgba(10, 15, 29, 0.88);
       position: sticky;
       top: 0;
       z-index: 100;
@@ -89,8 +89,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       justify-content: center;
       align-items: center;
       flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 9px;
+      gap: 7px;
+      margin-bottom: 6px;
     }
 
     .badge-workflow {
@@ -141,20 +141,20 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
     h1 {
       font-family: 'Outfit', sans-serif;
-      font-size: 1.95rem;
+      font-size: 1.48rem;
       font-weight: 800;
       background: linear-gradient(135deg, #ffffff 30%, #a5b4fc 70%, #5eead4 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      margin-bottom: 4px;
-      letter-spacing: -0.5px;
+      margin-bottom: 3px;
+      letter-spacing: -0.4px;
     }
 
     .subtitle {
       color: var(--text-muted);
-      font-size: 0.87rem;
-      max-width: 1000px;
-      margin: 0 auto 12px;
+      font-size: 0.80rem;
+      max-width: 1120px;
+      margin: 0 auto 9px;
     }
 
     .controls {
@@ -211,6 +211,72 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       border-color: transparent;
       color: white;
       box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+    }
+
+    .phase-select {
+      background: rgba(16, 22, 38, 0.94);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 7px 12px;
+      border-radius: 10px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.80rem;
+      font-weight: 500;
+      max-width: 320px;
+      cursor: pointer;
+      outline: none;
+    }
+    .phase-select:focus, .phase-select.active {
+      border-color: var(--glow-indigo);
+      box-shadow: 0 0 10px rgba(99, 102, 241, 0.28);
+    }
+
+    .view-tabs {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 8px auto 0;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      max-width: 1260px;
+    }
+    .view-tab {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 5px 11px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.77rem;
+      font-weight: 600;
+      transition: all 0.16s ease;
+    }
+    .view-tab:hover { color: var(--text-main); background: rgba(255, 255, 255, 0.05); }
+    .view-tab.active {
+      color: #e0e7ff;
+      background: rgba(99, 102, 241, 0.18);
+      border-color: rgba(99, 102, 241, 0.48);
+    }
+
+    .kpi-card.kpi-filtered {
+      border-color: rgba(99, 102, 241, 0.50);
+      box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.18);
+    }
+    .kpi-tag {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 6px;
+      border-radius: 5px;
+      font-size: 0.60rem;
+      background: rgba(99, 102, 241, 0.24);
+      color: #c7d2fe;
+      vertical-align: middle;
+    }
+    .cmd-scroll-wrap {
+      max-height: 360px;
+      overflow-y: auto;
+      overflow-x: auto;
     }
 
     .filter-banner {
@@ -749,6 +815,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
     .copied-toast.show { transform: translateY(0); opacity: 1; }
 
+    .hidden { display: none !important; }
+
     @media (max-width: 820px) {
       .gantt-axis, .gantt-row { grid-template-columns: 1fr; }
       .bar-row { grid-template-columns: 130px 1fr 110px; }
@@ -777,20 +845,21 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         <button type="button" class="filter-btn" data-action="role-filter" data-role="research">Research</button>
         <button type="button" class="filter-btn" data-action="role-filter" data-role="verifier">Verifiers</button>
         <button type="button" class="filter-btn" data-action="role-filter" data-role="worker">Workers</button>
-        <span id="phaseFilterButtons" style="display:contents;"></span>
+        <select id="phaseFilterSelect" class="phase-select hidden" aria-label="Filter by phase"></select>
       </div>
+      <div class="view-tabs" id="viewTabsBar"></div>
       <div class="filter-banner" id="filterBanner"></div>
     </div>
   </header>
 
-  <div class="container">
+  <div class="container" id="mainContainer" style="display:flex;flex-direction:column;">
     <section class="summary-grid" id="summaryGrid"></section>
     <section class="insights-grid" id="insightsGrid"></section>
-    <section class="section-panel" id="blueprintPanel"></section>
-    <section class="section-panel" id="verificationPanel"></section>
-    <section class="section-panel" id="resourcesPanel"></section>
-    <section class="section-panel" id="ganttPanel"></section>
     <section class="section-panel" id="deliverablesPanel"></section>
+    <section class="section-panel" id="ganttPanel"></section>
+    <section class="section-panel" id="resourcesPanel"></section>
+    <section class="section-panel" id="verificationPanel"></section>
+    <section class="section-panel" id="blueprintPanel"></section>
     <section class="section-panel" id="logsPanel"></section>
   </div>
 
@@ -800,6 +869,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     const telemetry = __TELEMETRY_DATA_PLACEHOLDER__;
     let activeRoleFilter = 'all';
     let activePhaseFilter = 'all';
+    let activeViewTab = 'all';
     let resourceMetric = 'total_tokens';
     let ganttScaleMode = (telemetry.gantt && telemetry.gantt.has_compressed_gaps) ? 'compressed' : 'true';
     let logKindFilter = 'all';
@@ -818,6 +888,20 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       if (v >= 1000000) return (v / 1000000).toFixed(2) + 'M';
       if (v >= 1000) return (v / 1000).toFixed(1) + 'k';
       return String(v);
+    }
+
+    function formatDurationSec(sec) {
+      const s = Math.max(0, Math.round(Number(sec || 0)));
+      if (s < 60) return s + 's';
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const r = s % 60;
+      if (h > 0) return m > 0 ? `${h}h ${m}m` : (r > 0 ? `${h}h ${r}s` : `${h}h`);
+      return r > 0 ? `${m}m ${r}s` : `${m}m`;
+    }
+
+    function isAnyFilterActive() {
+      return activeRoleFilter !== 'all' || activePhaseFilter !== 'all' || getSearchQuery() !== '' || logKindFilter !== 'all';
     }
 
     function getSearchQuery() {
@@ -864,8 +948,25 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     function getFilteredLogs() {
       const entries = (telemetry.workflow && telemetry.workflow.log_entries) || [];
       const q = getSearchQuery();
+      const filteredW = getFilteredWorkers();
+      const allowedConvIds = new Set(filteredW.map(w => w.conv_id));
+      const allowedRoles = new Set(filteredW.map(w => w.role));
+      const allowedPhases = new Set();
+      filteredW.forEach(w => {
+        if (w.phase) allowedPhases.add(w.phase);
+        (w.phases || []).forEach(p => allowedPhases.add(p));
+      });
       return entries.filter(e => {
         if (activePhaseFilter !== 'all' && e.phase !== activePhaseFilter) return false;
+        if (activeRoleFilter !== 'all') {
+          if (e.kind === 'agent') {
+            const matchId = e.conv_id && allowedConvIds.has(e.conv_id);
+            const matchRole = e.role && allowedRoles.has(e.role);
+            if (!matchId && !matchRole) return false;
+          } else if (e.phase && !allowedPhases.has(e.phase)) {
+            return false;
+          }
+        }
         if (logKindFilter !== 'all' && e.kind !== logKindFilter) return false;
         if (q) {
           const hay = `${e.phase || ''} ${e.role || ''} ${e.type_name || ''} ${e.text || ''}`.toLowerCase();
@@ -879,6 +980,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       const s = telemetry.summary || {};
       const v = telemetry.verification || {};
       const wf = telemetry.workflow || {};
+      const workers = telemetry.workers || [];
+      const isBP = s.mode === 'blueprint';
 
       document.getElementById('modeBadge').textContent = 'AGY run_workflow · ' + (s.mode_label || 'Report');
 
@@ -907,24 +1010,119 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       document.getElementById('runTitle').textContent = telemetry.run_title || 'Workflow Execution Report';
       const scriptName = wf.script_path ? wf.script_path.split('/').pop() : 'inline Script';
       document.getElementById('runSubtitle').textContent =
-        s.mode === 'blueprint'
+        isBP
           ? `${wf.script_path || ''} • Static AST analysis before execution`
           : `${telemetry.workspace_root || ''} • ${scriptName} • ${s.wall_start_local || '—'} → ${s.wall_end_local || '—'} (${s.wall_span_label || '—'})`;
 
-      // Dynamic Phase Filter pills
+      // Update role buttons with live counts & hide 0-count roles so every button has real matches.
+      const roleCounts = { all: workers.length, author: 0, research: 0, verifier: 0, worker: 0 };
+      workers.forEach(w => {
+        if (roleCounts[w.role_category] !== undefined) roleCounts[w.role_category] += 1;
+      });
+      const roleLabels = { all: 'All', author: 'Authors', research: 'Research', verifier: 'Verifiers', worker: 'Workers' };
+      document.querySelectorAll('[data-action="role-filter"]').forEach(btn => {
+        const r = btn.dataset.role || 'all';
+        if (isBP) {
+          btn.classList.add('hidden');
+          return;
+        }
+        const c = roleCounts[r] || 0;
+        if (r !== 'all' && c === 0) {
+          btn.classList.add('hidden');
+        } else {
+          btn.classList.remove('hidden');
+          btn.textContent = `${roleLabels[r] || r} (${c})`;
+        }
+      });
+
+      // Build compact Phase dropdown (excludes unexecuted {var} templates in post-run mode).
+      const phaseWorkerCount = {};
+      workers.forEach(w => {
+        if (w.phase) phaseWorkerCount[w.phase] = (phaseWorkerCount[w.phase] || 0) + 1;
+      });
+      const logPhaseSet = new Set(((wf.log_entries) || []).map(e => e.phase).filter(Boolean));
       const phases = [];
       ((telemetry.blueprint && telemetry.blueprint.phases) || []).forEach(p => {
-        if (p.name && !phases.includes(p.name)) phases.push(p.name);
+        if (!p.name || phases.includes(p.name)) return;
+        if (!isBP && /\{[^}]+\}/.test(p.name) && !phaseWorkerCount[p.name] && !logPhaseSet.has(p.name)) return;
+        phases.push(p.name);
       });
       (telemetry.phase_rollups || []).forEach(p => {
         if (p.phase && !phases.includes(p.phase)) phases.push(p.phase);
       });
-      const phEl = document.getElementById('phaseFilterButtons');
-      if (phEl && phases.length > 1) {
-        phEl.innerHTML = phases.map(p =>
-          `<button type="button" class="filter-btn ${activePhaseFilter === p ? 'active' : ''}" data-action="phase-filter" data-phase="${escapeHtml(p)}">Phase: ${escapeHtml(p)}</button>`
-        ).join('');
+
+      const phSel = document.getElementById('phaseFilterSelect');
+      if (phSel) {
+        if (phases.length > 1) {
+          phSel.classList.remove('hidden');
+          const opts = [`<option value="all">All Phases (${phases.length})</option>`].concat(
+            phases.map(p => {
+              const cnt = phaseWorkerCount[p] || 0;
+              const suffix = isBP ? '' : ` (${cnt} worker${cnt === 1 ? '' : 's'})`;
+              const shortName = p.length > 44 ? p.slice(0, 42) + '…' : p;
+              return `<option value="${escapeHtml(p)}">${escapeHtml(shortName + suffix)}</option>`;
+            })
+          );
+          phSel.innerHTML = opts.join('');
+          phSel.value = activePhaseFilter;
+        } else {
+          phSel.classList.add('hidden');
+        }
       }
+
+      // In Pre-Run Blueprint mode, order Blueprint before Verification.
+      const bpPanel = document.getElementById('blueprintPanel');
+      if (bpPanel) {
+        bpPanel.style.order = isBP ? '-1' : '';
+      }
+    }
+
+    function renderViewTabs() {
+      const bar = document.getElementById('viewTabsBar');
+      if (!bar) return;
+      const isBP = telemetry.mode === 'blueprint';
+      const allW = (telemetry.workers || []).length;
+      const filtW = getFilteredWorkers().length;
+      const allL = ((telemetry.workflow && telemetry.workflow.log_entries) || []).length;
+      const filtL = getFilteredLogs().length;
+      const filtCmds = getFilteredCommands().length;
+
+      const tabs = isBP ? [
+        { id: 'all', label: 'All Sections' },
+        { id: 'blueprint', label: 'Blueprint & Source' },
+        { id: 'verification', label: 'Pre-Flight & Verification' },
+      ] : [
+        { id: 'all', label: 'All Sections' },
+        { id: 'deliverables', label: `Deliverables (${filtW === allW ? allW : filtW + '/' + allW})` },
+        { id: 'gantt', label: `Gantt (${filtW})` },
+        { id: 'resources', label: 'Time & Tokens' },
+        { id: 'verification', label: `Verification (${filtCmds})` },
+        { id: 'blueprint', label: 'Blueprint & Code' },
+        { id: 'logs', label: `Logs (${filtL === allL ? allL : filtL + '/' + allL})` },
+      ];
+
+      bar.innerHTML = tabs.map(t =>
+        `<button type="button" class="view-tab ${activeViewTab === t.id ? 'active' : ''}" data-action="view-tab" data-tab="${escapeHtml(t.id)}">${escapeHtml(t.label)}</button>`
+      ).join('');
+    }
+
+    function applyViewTabVisibility() {
+      const isBP = telemetry.mode === 'blueprint';
+      const map = {
+        deliverables: 'deliverablesPanel',
+        gantt: 'ganttPanel',
+        resources: 'resourcesPanel',
+        verification: 'verificationPanel',
+        blueprint: 'blueprintPanel',
+        logs: 'logsPanel',
+      };
+      Object.entries(map).forEach(([tabId, panelId]) => {
+        const el = document.getElementById(panelId);
+        if (!el) return;
+        const bpHidden = isBP && ['deliverables', 'gantt', 'resources', 'logs'].includes(tabId);
+        const tabHidden = activeViewTab !== 'all' && activeViewTab !== tabId;
+        el.classList.toggle('hidden', bpHidden || tabHidden);
+      });
     }
 
     function renderSummary() {
@@ -935,80 +1133,176 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       const inv = telemetry.inventory || {};
       const tok = s.tokens || {};
       const isBP = s.mode === 'blueprint';
+      const allWorkers = telemetry.workers || [];
+      const filtWorkers = getFilteredWorkers();
+      const filtered = !isBP && isAnyFilterActive();
 
-      const cards = isBP ? [
-        {
-          label: 'Script Phases',
-          value: `${cnt.phases || 0} Phases`,
-          sub: `${bp.line_count || 0} lines · ${cnt.helpers || 0} helper fn(s)`
-        },
-        {
-          label: 'Orchestration Graph',
-          value: `${cnt.parallel_blocks || 0} Parallel · ${cnt.pipeline_blocks || 0} Pipe`,
-          sub: `${cnt.agents || 0} agent def(s) · ${cnt.tool_calls || 0} call_tool()`
-        },
-        {
-          label: 'Skills & Agent Types',
-          value: `${(inv.skills_declared || []).length} Declared`,
-          sub: ((inv.skills_declared || []).slice(0, 3).join(', ') || 'No explicit skills')
-        },
-        {
-          label: 'Model Tiers Configured',
-          value: `${(s.models_used || []).length || 1} Tier(s)`,
-          sub: (s.models_used || ['inherit']).join(', ')
-        },
-        {
-          label: 'Script Inputs (Args)',
-          value: `${(bp.args_keys || []).length} Arg Key(s)`,
-          sub: (bp.args_keys || []).join(', ') || 'No args.get() keys'
-        },
-        {
-          label: 'Pre-Flight Checks',
-          value: `${(bp.warnings || []).length} Note(s)`,
-          sub: v.has_verifier ? `Verifier planned: ${v.verifier_names.join(', ')}` : 'No verifier phase detected'
-        }
-      ] : [
-        {
-          label: 'Workers Completed',
-          value: `${s.done_workers || 0}/${s.worker_count || 0}`,
-          sub: `${s.total_turns || 0} turn(s) · ${s.failed_workers || 0} failed · ${cnt.phases || (telemetry.phase_rollups || []).length} phase(s)`
-        },
-        {
-          label: 'Wall-Clock & Speedup',
-          value: `${s.wall_span_label || '0s'} (${s.parallelism_speedup || 1}x)`,
-          sub: `Worker sum ${s.cumulative_worker_label || '0s'} · Peak parallel: ${s.peak_worker_concurrency || 0}`
-        },
-        {
-          label: 'Total Tokens',
-          value: formatTokens(tok.total),
-          sub: `In ${formatTokens(tok.input)} · Out ${formatTokens(tok.output)} · Cache ${formatTokens(tok.cache_read)} (${tok.cache_hit_pct || 0}%)`
-        },
-        {
-          label: 'Script Components',
-          value: `${cnt.agents || 0} Defs · ${cnt.parallel_blocks || 0} Par`,
-          sub: `${cnt.pipeline_blocks || 0} pipeline · ${cnt.tool_calls || 0} call_tool · ${bp.line_count || 0} LOC`
-        },
-        {
-          label: 'Skills & Tools Used',
-          value: `${(inv.skills_observed || []).length} Skills · ${(inv.agent_tools || []).length} Tools`,
-          sub: `${s.total_tool_calls || 0} agent calls · ${(s.models_used || []).join(', ') || 'unknown'}`
-        },
-        {
-          label: 'Verification & Files',
-          value: v.verdict === 'VERIFIED' ? 'CHECKED ✓' : (v.verdict || 'UNVERIFIED'),
-          sub: `${v.passed_count || 0} passed · ${v.unresolved_failure_count || 0} unresolved · ${s.unique_file_count || 0} files`
-        }
-      ];
+      let cards;
+      if (isBP) {
+        cards = [
+          {
+            label: 'Script Phases',
+            value: `${cnt.phases || 0} Phases`,
+            sub: `${bp.line_count || 0} lines · ${cnt.helpers || 0} helper fn(s)`
+          },
+          {
+            label: 'Orchestration Graph',
+            value: `${cnt.parallel_blocks || 0} Parallel · ${cnt.pipeline_blocks || 0} Pipe`,
+            sub: `${cnt.agents || 0} agent def(s) · ${cnt.tool_calls || 0} call_tool()`
+          },
+          {
+            label: 'Skills & Agent Types',
+            value: `${(inv.skills_declared || []).length} Declared`,
+            sub: ((inv.skills_declared || []).slice(0, 3).join(', ') || 'No explicit skills')
+          },
+          {
+            label: 'Model Tiers Configured',
+            value: `${(s.models_used || []).length || 1} Tier(s)`,
+            sub: (s.models_used || ['inherit']).join(', ')
+          },
+          {
+            label: 'Script Inputs (Args)',
+            value: `${(bp.args_keys || []).length} Arg Key(s)`,
+            sub: (bp.args_keys || []).join(', ') || 'No args.get() keys'
+          },
+          {
+            label: 'Pre-Flight Checks',
+            value: `${(bp.warnings || []).length} Note(s)`,
+            sub: v.has_verifier ? `Verifier planned: ${v.verifier_names.join(', ')}` : 'No verifier phase detected'
+          }
+        ];
+      } else if (filtered) {
+        const doneF = filtWorkers.filter(w => w.status === 'done').length;
+        const turnsF = filtWorkers.reduce((a, w) => a + (w.turns ? w.turns.length : 0), 0);
+        const activeSecF = filtWorkers.reduce((a, w) => a + (w.active_duration_s || 0), 0);
+        const tokTotF = filtWorkers.reduce((a, w) => a + ((w.tokens && w.tokens.total) || 0), 0);
+        const tokInF = filtWorkers.reduce((a, w) => a + ((w.tokens && w.tokens.input) || 0), 0);
+        const tokOutF = filtWorkers.reduce((a, w) => a + ((w.tokens && w.tokens.output) || 0), 0);
+        const tokPct = tok.total > 0 ? ((tokTotF / tok.total) * 100).toFixed(1) : '0.0';
+        const toolsF = filtWorkers.reduce((a, w) => a + (w.tool_call_count || 0), 0);
+        const skillSet = new Set();
+        const toolSet = new Set();
+        const fileSet = new Set();
+        const phaseSet = new Set();
+        filtWorkers.forEach(w => {
+          if (w.phase) phaseSet.add(w.phase);
+          (w.skills_loaded || []).forEach(sk => skillSet.add(sk));
+          (w.tool_breakdown || []).forEach(tb => toolSet.add(tb.name));
+          (w.docs || []).forEach(d => fileSet.add(d.name));
+        });
+        const filtCmds = getFilteredCommands();
+        const filtPassed = filtCmds.filter(c => c.status === 'passed').length;
+        const filtFailed = filtCmds.filter(c => c.status === 'failed').length;
+
+        cards = [
+          {
+            label: 'Matching Workers',
+            filtered: true,
+            value: `${filtWorkers.length} / ${allWorkers.length}`,
+            sub: `${doneF} done · ${turnsF} turn(s) · ${phaseSet.size} phase(s)`
+          },
+          {
+            label: 'Filtered Worker Time',
+            filtered: true,
+            value: formatDurationSec(activeSecF),
+            sub: `Run wall-clock ${s.wall_span_label || '0s'} (${s.parallelism_speedup || 1}x speedup)`
+          },
+          {
+            label: 'Filtered Tokens',
+            filtered: true,
+            value: `${formatTokens(tokTotF)} (${tokPct}%)`,
+            sub: `In ${formatTokens(tokInF)} · Out ${formatTokens(tokOutF)} · of ${formatTokens(tok.total)}`
+          },
+          {
+            label: 'Phases Matched',
+            filtered: true,
+            value: `${phaseSet.size} Phase(s)`,
+            sub: Array.from(phaseSet).slice(0, 2).join(', ') || 'None matched'
+          },
+          {
+            label: 'Filtered Skills & Tools',
+            filtered: true,
+            value: `${skillSet.size} Skills · ${toolSet.size} Tools`,
+            sub: `${toolsF} agent tool call(s) in matching workers`
+          },
+          {
+            label: 'Filtered Checks & Files',
+            filtered: true,
+            value: `${fileSet.size} Files · ${filtCmds.length} Cmds`,
+            sub: `${filtPassed} passed · ${filtFailed} failed · overall ${v.verdict || 'UNVERIFIED'}`
+          }
+        ];
+      } else {
+        cards = [
+          {
+            label: 'Workers Completed',
+            value: `${s.done_workers || 0}/${s.worker_count || 0}`,
+            sub: `${s.total_turns || 0} turn(s) · ${s.failed_workers || 0} failed · ${cnt.phases || (telemetry.phase_rollups || []).length} phase(s)`
+          },
+          {
+            label: 'Wall-Clock & Speedup',
+            value: `${s.wall_span_label || '0s'} (${s.parallelism_speedup || 1}x)`,
+            sub: `Worker sum ${s.cumulative_worker_label || '0s'} · Peak parallel: ${s.peak_worker_concurrency || 0}`
+          },
+          {
+            label: 'Total Tokens',
+            value: formatTokens(tok.total),
+            sub: `In ${formatTokens(tok.input)} · Out ${formatTokens(tok.output)} · Cache ${formatTokens(tok.cache_read)} (${tok.cache_hit_pct || 0}%)`
+          },
+          {
+            label: 'Script Components',
+            value: `${cnt.agents || 0} Defs · ${cnt.parallel_blocks || 0} Par`,
+            sub: `${cnt.pipeline_blocks || 0} pipeline · ${cnt.tool_calls || 0} call_tool · ${bp.line_count || 0} LOC`
+          },
+          {
+            label: 'Skills & Tools Used',
+            value: `${(inv.skills_observed || []).length} Skills · ${(inv.agent_tools || []).length} Tools`,
+            sub: `${s.total_tool_calls || 0} agent calls · ${(s.models_used || []).join(', ') || 'unknown'}`
+          },
+          {
+            label: 'Verification & Files',
+            value: v.verdict === 'VERIFIED' ? 'CHECKED ✓' : (v.verdict || 'UNVERIFIED'),
+            sub: `${v.passed_count || 0} passed · ${v.unresolved_failure_count || 0} unresolved · ${s.unique_file_count || 0} files`
+          }
+        ];
+      }
 
       document.getElementById('summaryGrid').innerHTML = cards.map(c => `
-        <div class="kpi-card">
-          <div class="kpi-label">${escapeHtml(c.label)}</div>
+        <div class="kpi-card ${c.filtered ? 'kpi-filtered' : ''}">
+          <div class="kpi-label">${escapeHtml(c.label)}${c.filtered ? '<span class="kpi-tag">FILTERED</span>' : ''}</div>
           <div class="kpi-value">${escapeHtml(c.value)}</div>
           <div class="kpi-sub">${escapeHtml(c.sub)}</div>
         </div>
       `).join('');
 
-      const ins = telemetry.insights || [];
+      let ins;
+      if (filtered) {
+        ins = [];
+        if (filtWorkers.length > 0) {
+          const topTok = [...filtWorkers].sort((a, b) => (b.tokens.total || 0) - (a.tokens.total || 0))[0];
+          const topDur = [...filtWorkers].sort((a, b) => (b.active_duration_s || 0) - (a.active_duration_s || 0))[0];
+          const sliceTot = Math.max(1, filtWorkers.reduce((a, w) => a + (w.tokens.total || 0), 0));
+          ins.push({
+            kind: 'token',
+            title: `Top Filtered Token Consumer: ${topTok.role}`,
+            detail: `${formatTokens(topTok.tokens.total)} tokens (${((topTok.tokens.total / sliceTot) * 100).toFixed(1)}% of filtered slice, ${topTok.tokens.cache_hit_pct}% cache hit) on ${topTok.model}.`,
+          });
+          ins.push({
+            kind: 'time',
+            title: `Longest Filtered Worker: ${topDur.role} (${topDur.active_duration_label})`,
+            detail: `Phase: ${topDur.phase} · ${(topDur.docs || []).length} file(s) · ${topDur.tool_call_count} tool call(s).`,
+          });
+        } else {
+          ins.push({
+            kind: 'warn',
+            title: 'No Workers Match Current Filter',
+            detail: 'Click Reset in the filter bar or select a different role/phase/search query.',
+          });
+        }
+      } else {
+        ins = telemetry.insights || [];
+      }
+
       document.getElementById('insightsGrid').innerHTML = ins.map(item => `
         <div class="insight-card kind-${escapeHtml(item.kind)}">
           <div class="insight-title">${escapeHtml(item.title)}</div>
@@ -1075,9 +1369,16 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       rollups.forEach(r => { rollupByPhase[r.phase] = r; });
 
       const q = getSearchQuery();
+      const filteredW = getFilteredWorkers();
+      const allowedPhasesByRole = new Set();
+      filteredW.forEach(w => {
+        if (w.phase) allowedPhasesByRole.add(w.phase);
+        (w.phases || []).forEach(p => allowedPhasesByRole.add(p));
+      });
       const allPhases = bp.phases || [];
       const phases = allPhases.filter(p => {
         if (activePhaseFilter !== 'all' && p.name !== activePhaseFilter) return false;
+        if (telemetry.mode !== 'blueprint' && activeRoleFilter !== 'all' && !allowedPhasesByRole.has(p.name)) return false;
         if (!q) return true;
         return JSON.stringify(p).toLowerCase().includes(q);
       });
@@ -1180,37 +1481,64 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
           ? `Verification ordered after last author edit (${v.last_author_edit_local || '—'} ≤ ${v.verifier_last_local || '—'})`
           : `Warning: author edits at ${v.last_author_edit_local || '—'} occurred after last verification (${v.verifier_last_local || '—'})`);
 
-      const svHtml = (v.structured_verdicts || []).length ? `
+      const allowedRoles = new Set(getFilteredWorkers().map(w => w.role));
+      const rolePhaseActive = activeRoleFilter !== 'all' || activePhaseFilter !== 'all';
+      const allSvs = v.structured_verdicts || [];
+      const svs = allSvs.filter(sv => {
+        if (rolePhaseActive && sv.agent && !allowedRoles.has(sv.agent)) return false;
+        if (q) {
+          const hay = `${sv.agent || ''} ${sv.notes || ''} ${sv.raw || ''}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+
+      const svHtml = svs.length ? `
         <div class="cards-grid" style="margin-bottom:10px;">
-          ${v.structured_verdicts.map(sv => `
+          ${svs.map(sv => {
+            const svPillCls = sv.passed ? 'pill-ok' : (sv.remediated ? 'pill-warn' : 'pill-fail');
+            const svPillTxt = sv.passed ? 'PASSED' : (sv.remediated ? 'REMEDIATED' : 'FAILED');
+            return `
             <div class="deliverable-box" style="margin-bottom:0;">
               <div class="deliverable-header">
                 <span>Structured Verdict · ${escapeHtml(sv.agent)}</span>
-                <span class="badge-pill ${sv.passed ? 'pill-ok' : 'pill-fail'}" style="font-size:0.65rem;padding:2px 8px;">${sv.passed ? 'PASSED' : 'FAILED'}</span>
+                <span class="badge-pill ${svPillCls}" style="font-size:0.65rem;padding:2px 8px;">${svPillTxt}</span>
               </div>
               <div class="deliverable-text" style="max-height:140px;">${escapeHtml(sv.notes || sv.raw)}</div>
-            </div>`).join('')}
+            </div>`;
+          }).join('')}
         </div>` : '';
 
+      const failedCmds = cmds.filter(c => c.status !== 'passed');
+      const passedCmds = cmds.filter(c => c.status === 'passed');
+      const renderCmdTable = (list) => `<div class="cmd-scroll-wrap"><table class="cmd-table">
+        <thead><tr><th>Time</th><th>Worker</th><th>Status</th><th>Command</th></tr></thead>
+        <tbody>
+          ${list.map(c => {
+            const stPill = c.status === 'passed' ? 'pill-ok' : (c.status === 'failed' ? 'pill-fail' : 'pill-warn');
+            const stTxt = c.status === 'passed' ? 'PASS (0)' : (c.status === 'failed' ? `FAIL (${c.exit_code})` : String(c.status || 'unknown').toUpperCase());
+            return `<tr>
+              <td>${escapeHtml(c.ts_local || '—')}</td>
+              <td>${escapeHtml(c.agent || '')}</td>
+              <td><span class="badge-pill ${stPill}" style="font-size:0.65rem;padding:2px 7px;">${escapeHtml(stTxt)}</span></td>
+              <td class="cmd-code">${escapeHtml(c.command)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table></div>`;
+
+      const failedBlock = failedCmds.length ? `
+        <details class="sub-details" ${v.verdict === 'FAILED' ? 'open' : ''}>
+          <summary>Non-Passing / Earlier Failed Commands (${failedCmds.length})</summary>
+          <div class="sub-details-body">${renderCmdTable(failedCmds)}</div>
+        </details>` : '';
+
       const cmdRows = allCmds.length ? `
-        <details class="sub-details" ${(v.verdict !== 'VERIFIED' || q) ? 'open' : ''}>
-          <summary>Executed Check Commands (${isFiltered ? `${cmds.length} of ${allCmds.length} matching` : `${allCmds.length} total`})</summary>
-          <div class="sub-details-body" style="overflow-x:auto;">
-            ${cmds.length ? `<table class="cmd-table">
-              <thead><tr><th>Time</th><th>Worker</th><th>Status</th><th>Command</th></tr></thead>
-              <tbody>
-                ${cmds.map(c => {
-                  const stPill = c.status === 'passed' ? 'pill-ok' : (c.status === 'failed' ? 'pill-fail' : 'pill-warn');
-                  const stTxt = c.status === 'passed' ? 'PASS (0)' : (c.status === 'failed' ? `FAIL (${c.exit_code})` : String(c.status || 'unknown').toUpperCase());
-                  return `<tr>
-                    <td>${escapeHtml(c.ts_local || '—')}</td>
-                    <td>${escapeHtml(c.agent || '')}</td>
-                    <td><span class="badge-pill ${stPill}" style="font-size:0.65rem;padding:2px 7px;">${escapeHtml(stTxt)}</span></td>
-                    <td class="cmd-code">${escapeHtml(c.command)}</td>
-                  </tr>`;
-                }).join('')}
-              </tbody>
-            </table>` : '<div class="section-sub">No check commands match current filter.</div>'}
+        ${failedBlock}
+        <details class="sub-details" ${(q && cmds.length <= 20) ? 'open' : ''}>
+          <summary>Passed Check Commands (${passedCmds.length}${isFiltered ? ` of ${allCmds.length} total` : ''})</summary>
+          <div class="sub-details-body">
+            ${passedCmds.length ? renderCmdTable(passedCmds) : '<div class="section-sub">No passed check commands match current filter.</div>'}
           </div>
         </details>` : '';
 
@@ -1243,7 +1571,17 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
       const allWorkers = telemetry.workers || [];
       const workers = getFilteredWorkers();
-      const phases = (telemetry.phase_rollups || []).filter(p => activePhaseFilter === 'all' || p.phase === activePhaseFilter);
+      const matchedPhaseSet = new Set();
+      workers.forEach(w => {
+        if (w.phase) matchedPhaseSet.add(w.phase);
+        (w.phases || []).forEach(p => matchedPhaseSet.add(p));
+      });
+      const roleOrSearch = activeRoleFilter !== 'all' || getSearchQuery() !== '';
+      const phases = (telemetry.phase_rollups || []).filter(p => {
+        if (activePhaseFilter !== 'all' && p.phase !== activePhaseFilter) return false;
+        if (roleOrSearch && !matchedPhaseSet.has(p.phase)) return false;
+        return true;
+      });
       const totTokens = Math.max(1, (telemetry.summary && telemetry.summary.tokens && telemetry.summary.tokens.total) || 1);
 
       function metricVal(w) {
@@ -1599,11 +1937,19 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
 
     function setPhaseFilter(phase) {
-      activePhaseFilter = (activePhaseFilter === phase) ? 'all' : phase;
-      document.querySelectorAll('[data-action="phase-filter"]').forEach(b => {
-        b.classList.toggle('active', b.dataset.phase === activePhaseFilter);
-      });
+      activePhaseFilter = phase || 'all';
+      const sel = document.getElementById('phaseFilterSelect');
+      if (sel) {
+        sel.value = activePhaseFilter;
+        sel.classList.toggle('active', activePhaseFilter !== 'all');
+      }
       applyFilters();
+    }
+
+    function setViewTab(tab) {
+      activeViewTab = tab || 'all';
+      renderViewTabs();
+      applyViewTabVisibility();
     }
 
     function resetAllFilters() {
@@ -1612,16 +1958,20 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       logKindFilter = 'all';
       const inp = document.getElementById('searchInput');
       if (inp) inp.value = '';
+      const sel = document.getElementById('phaseFilterSelect');
+      if (sel) {
+        sel.value = 'all';
+        sel.classList.remove('active');
+      }
       document.querySelectorAll('[data-action="role-filter"]').forEach(b => {
         b.classList.toggle('active', b.dataset.role === 'all');
-      });
-      document.querySelectorAll('[data-action="phase-filter"]').forEach(b => {
-        b.classList.remove('active');
       });
       applyFilters();
     }
 
     function applyFilters() {
+      renderSummary();
+      renderViewTabs();
       renderFilterBanner();
       renderBlueprint();
       renderVerification();
@@ -1629,9 +1979,13 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       renderGantt();
       renderDeliverables();
       renderLogs();
+      applyViewTabVisibility();
     }
 
     function jumpToWorker(convId) {
+      if (activeViewTab !== 'all' && activeViewTab !== 'deliverables') {
+        setViewTab('deliverables');
+      }
       const el = document.getElementById('worker-' + convId);
       if (!el) return;
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1662,6 +2016,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         setRoleFilter(target.dataset.role || 'all');
       } else if (action === 'phase-filter') {
         setPhaseFilter(target.dataset.phase || 'all');
+      } else if (action === 'view-tab') {
+        setViewTab(target.dataset.tab || 'all');
       } else if (action === 'res-metric') {
         resourceMetric = target.dataset.metric || 'total_tokens';
         renderResources();
@@ -1670,6 +2026,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         renderGantt();
       } else if (action === 'log-filter') {
         logKindFilter = target.dataset.kind || 'all';
+        renderViewTabs();
         renderFilterBanner();
         renderLogs();
       } else if (action === 'jump-agent') {
@@ -1680,6 +2037,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       }
     });
 
+    const phaseSelEl = document.getElementById('phaseFilterSelect');
+    if (phaseSelEl) {
+      phaseSelEl.addEventListener('change', (e) => setPhaseFilter(e.target.value || 'all'));
+    }
+
     const searchEl = document.getElementById('searchInput');
     if (searchEl) {
       searchEl.addEventListener('input', applyFilters);
@@ -1687,7 +2049,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
 
     renderHeader();
-    renderSummary();
     applyFilters();
   </script>
 </body>
