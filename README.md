@@ -70,7 +70,7 @@ The swarm's structure is declared in [`plugins/plan/graph.json`](./plugins/plan/
 
 This repository ships two AGY plugins under `plugins/`:
 - **`plugins/plan`** — Core planning swarm (14 skills + 13 custom agents)
-- **`plugins/viewers`** — Trajectory & timing viewers (`teamwork-trajectory`, `boost-trajectory`, and `swarm-trajectory` skills)
+- **`plugins/viewers`** — Trajectory & timing viewers (`teamwork-trajectory`, `boost-trajectory`, `swarm-trajectory`, and `workflow-trajectory` skills)
 
 ### 1. Install as AGY Plugins (Recommended)
 > 📖 See [plugins/plan/README.md](./plugins/plan/README.md) and [plugins/viewers/README.md](./plugins/viewers/README.md) for details on each plugin's skills.
@@ -139,7 +139,7 @@ for d in plugins/viewers/skills/*/; do
 done
 ```
 > [!IMPORTANT]
-> Always copy the **entire directory** (`cp -R`), not just individual files. Visual agents (`visual-architect`, `visual-product-owner`, `visual-implementation-recap`) carry bundled assets (such as `assets/template.html` and `references/`), and viewer skills (`teamwork-trajectory`, `boost-trajectory`, `swarm-trajectory`) carry helper scripts next to their `generator.py`; these must remain relatively aligned inside their installation directories.
+> Always copy the **entire directory** (`cp -R`), not just individual files. Visual agents (`visual-architect`, `visual-product-owner`, `visual-implementation-recap`) carry bundled assets (such as `assets/template.html` and `references/`), and viewer skills (`teamwork-trajectory`, `boost-trajectory`, `swarm-trajectory`, `workflow-trajectory`) carry helper scripts next to their `generator.py`; these must remain relatively aligned inside their installation directories.
 
 #### Method B: Project-Scoped (Workspace) Agents & Viewer Skills
 To make them available only within a specific project, copy them into `.agents/agents` and `.agents/skills`:

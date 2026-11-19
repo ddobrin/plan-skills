@@ -27,6 +27,14 @@ Reads native **`/swarm` metadata** (`~/.gemini/antigravity-cli/brain/<swarm_id>/
 - **Verification & Quality Gate:** Audits verifier checks vs author edits (`VERIFIED`, `STALE`, `FAILED`, `PARTIAL`, `SELF_CHECKED`, `UNVERIFIED`), tracks board `#seq` handoffs, and overlays `[done]` pins on a toggleable Compressed-Pauses vs True Wall-Clock Gantt waterfall.
 - **Triggers:** `"swarm trajectory"`, `"visualize swarm"`, `"trace swarm"`, `"swarm report"`, `"swarm summary"`, `"swarm recap"`.
 
+### `workflow-trajectory` — `run_workflow` Blueprint & Post-Run Trajectory Dashboard
+Inspects dynamic Python **`run_workflow` scripts** (`Script` / `ScriptPath` + optional sibling `workflow.json`) via static AST analysis AND merges **AGY live execution telemetry** (`tasks/task-<N>.log`, parent `transcript*.jsonl`, and each spawned worker's `brain/<uuid>/.system_generated/logs/transcript_full.jsonl`) into a self-contained, dark-mode HTML dashboard at `.agents/workflow-trajectory.html`.
+
+- **Dual-Mode Coverage (Pre-Run Blueprint + Post-Run Audit):**
+  - *Before starting a run (`--script`)*: statically visualizes `phase`, `parallel`, `pipeline`, one-shot & stateful `agent` calls, `call_tool` steps, `args` schema, declared skills, models, workspaces, and pre-flight warnings (unawaited agents, parallel write workspaces on `inherit`, missing verification stage).
+  - *During/after a run*: links spawned worker UUIDs from workflow logs (which are independent top-level conversations in AGY's DB), extracts untruncated `finish` deliverables, runtime `SKILL.md` loads, tool counts, files changed, `run_command` outcomes, phase/model time & token attribution, concurrency speedup, and a Verification Gate (`VERIFIED`, `STALE`, `FAILED`, `PARTIAL`, `SELF_CHECKED`, `UNVERIFIED`, `READ_ONLY`).
+- **Triggers:** `"workflow trajectory"`, `"visualize workflow"`, `"trace workflow"`, `"workflow report"`, `"workflow blueprint"`, `"visualize run_workflow"`, `"run-workflows report"`.
+
 ---
 
 ## Installation
@@ -128,6 +136,23 @@ python3 ~/.gemini/config/plugins/viewers/skills/swarm-trajectory/generator.py --
 python3 ~/.gemini/config/plugins/viewers/skills/swarm-trajectory/generator.py -c <conv-id> -o .agents/swarm-trajectory.html
 ```
 
+### `workflow-trajectory`
+From any project workspace:
+
+```bash
+# Auto-select the latest run_workflow execution for the current workspace
+python3 ~/.gemini/config/plugins/viewers/skills/workflow-trajectory/generator.py
+
+# Pre-run Blueprint mode: inspect a workflow script before running it
+python3 ~/.gemini/config/plugins/viewers/skills/workflow-trajectory/generator.py --script path/to/workflow.py
+
+# List all run_workflow runs discovered for the current workspace
+python3 ~/.gemini/config/plugins/viewers/skills/workflow-trajectory/generator.py --list
+
+# Render a specific parent conversation or spawned worker conversation ID (full UUID or prefix)
+python3 ~/.gemini/config/plugins/viewers/skills/workflow-trajectory/generator.py -c <conv-id> -o .agents/workflow-trajectory.html
+```
+
 ## Tests
 
 Run all `viewers` skill test suites from the repository root:
@@ -136,4 +161,5 @@ Run all `viewers` skill test suites from the repository root:
 python3 -B -m unittest discover -s plugins/viewers/skills/teamwork-trajectory/tests -v
 python3 -B -m unittest discover -s plugins/viewers/skills/boost-trajectory/tests -v
 python3 -B -m unittest discover -s plugins/viewers/skills/swarm-trajectory/tests -v
+python3 -B -m unittest discover -s plugins/viewers/skills/workflow-trajectory/tests -v
 ```
