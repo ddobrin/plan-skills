@@ -1,0 +1,5 @@
+{
+  "name": "modernize",
+  "description": "Legacy modernization and domain reverse-engineering agents for Antigravity (AGY CLI)",
+  "version": "1.0.0"
+}
